@@ -1,0 +1,663 @@
+  function ensure(p) {
+    const fs=['score','wins','losses','last','dScore','dWins','dLosses','lastD','sScore','sWins','sLosses','lastS', 'weekly','wWins','wLosses','wdScore','wsScore','wdWins','wdLosses','wsWins','wsLosses','lastW','lastWD','lastWS'];
+    fs.forEach(f=>{ if(p[f]===undefined) p[f]=0; });
+    if (p.isGuest === undefined) p.isGuest = false; // 회원/게스트 구분 기본값
+    if(!p.name) p.name = "NONAME";
+    return p;
+  }
+
+  function tab(n) {
+    tabNow = n;
+    for (let i = 1; i <= 2; i++) {
+      if ($('s' + i)) $('s' + i).style.display = (i == n ? 'block' : 'none');
+      if ($('t' + i)) $('t' + i).className = (i == n ? 'tab-btn active' : 'tab-btn');
+    }
+    if (n == 1) { updateSeason(); updateChartRange(0); }
+    if (n == 2) updateWeekly();
+    setTimeout(applyAutofitAllTables, 0);
+  }
+
+  
+  function calcRateByKeys(p, winK, lossK){
+    const t = (p[winK]||0) + (p[lossK]||0);
+    return t > 0 ? ((p[winK]||0) / t) : 0;
+  }
+
+  function computeRanksByScoreOnly(scoreK, winK, lossK){
+    const sorted = [...players].sort((a,b) => (b[scoreK]||0) - (a[scoreK]||0) || calcRateByKeys(b,winK,lossK) - calcRateByKeys(a,winK,lossK));
+    const ranks = {};
+    let currentRank = 1;
+    sorted.forEach((p, i) => {
+      if(i > 0){
+        const prev = sorted[i-1];
+        if((p[scoreK]||0) !== (prev[scoreK]||0)) currentRank = i + 1;
+      }
+      ranks[p.name] = currentRank;
+    });
+    return ranks;
+  }
+
+  function snapshotLastRanks(){
+    if(!Array.isArray(players) || players.length === 0) return;
+
+    const maps = {
+      last:   computeRanksByScoreOnly('score',  'wins',  'losses'),
+      lastD:  computeRanksByScoreOnly('dScore', 'dWins', 'dLosses'),
+      lastS:  computeRanksByScoreOnly('sScore', 'sWins', 'sLosses'),
+      lastW:  computeRanksByScoreOnly('weekly', 'wWins', 'wLosses'),
+      lastWD: computeRanksByScoreOnly('wdScore','wdWins','wdLosses'),
+      lastWS: computeRanksByScoreOnly('wsScore','wsWins','wsLosses')
+    };
+
+    players.forEach(p=>{
+      p.last   = maps.last[p.name]   || p.last   || 0;
+      p.lastD  = maps.lastD[p.name]  || p.lastD  || 0;
+      p.lastS  = maps.lastS[p.name]  || p.lastS  || 0;
+      p.lastW  = maps.lastW[p.name]  || p.lastW  || 0;
+      p.lastWD = maps.lastWD[p.name] || p.lastWD || 0;
+      p.lastWS = maps.lastWS[p.name] || p.lastWS || 0;
+    });
+  }
+
+  // round/tournament 등에서 호출하는 공용 재계산 훅 (예전 computeAll() 호환)
+  function computeAll() {
+    // 정의된 함수만 안전하게 실행 (ReferenceError/SyntaxError 방지)
+    if (typeof updateSeason === 'function') updateSeason();
+    if (typeof updateWeekly === 'function') updateWeekly();
+    if (typeof updateRankList === 'function') updateRankList();
+    if (typeof updateChart === 'function') updateChart();
+  }
+
+
+  function aggregateSeasonForNamesFromLog(nameList){
+    const set = new Set(nameList || []);
+    const out = {};
+    (nameList||[]).forEach(n=>{
+      out[n]={score:0,wins:0,losses:0,dScore:0,dWins:0,dLosses:0,sScore:0,sWins:0,sLosses:0};
+    });
+    (matchLog||[]).forEach(m=>{
+      const type = (m.type||"double");
+      const winner = m.winner || "";
+      const home = Array.isArray(m.home) ? m.home : [];
+      const away = Array.isArray(m.away) ? m.away : [];
+
+      const applyOne = (name, isHomeSide) => {
+        if(!set.has(name)) return;
+        const isWin = (winner === (isHomeSide ? "home" : "away"));
+        const d = calcDeltas(type, isWin);
+        const s = out[name];
+
+        s.score += d.total;
+        s.wins += isWin ? 1 : 0;
+        s.losses += isWin ? 0 : 1;
+
+        if(type === "double"){
+          s.dScore += d.d;
+          s.dWins += isWin ? 1 : 0;
+          s.dLosses += isWin ? 0 : 1;
+        } else {
+          s.sScore += d.s;
+          s.sWins += isWin ? 1 : 0;
+          s.sLosses += isWin ? 0 : 1;
+        }
+      };
+
+      home.forEach(n=>applyOne(n,true));
+      away.forEach(n=>applyOne(n,false));
+    });
+    return out;
+  }
+
+function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
+    const baseList = (() => {
+      if (filterMode === 'guest') {
+        // ✅ v3.816: HIDDEN_PLAYERS는 게스트 랭킹에서도 제외
+        const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name));
+        const names = guests.map(p=>p.name);
+        const agg = aggregateSeasonForNamesFromLog(names);
+        // Merge computed season stats into the current player objects (keeps last-rank fields)
+        return guests.map(p => Object.assign({}, p, agg[p.name] || {}));
+      }
+      if (filterMode === 'all') return [...players];
+      // 기본: 정식 회원(게스트가 아닌 선수)만 랭킹에 포함
+      return players.filter(p => !p.isGuest);
+    })();
+    const calcRate = (p) => {
+      const t = (p[winK]||0) + (p[lossK]||0);
+      return t > 0 ? ((p[winK]||0) / t) : 0;
+    };
+
+    const wrSorted = [...baseList].sort((a,b) => calcRate(b) - calcRate(a) || (b[winK]||0) - (a[winK]||0));
+    const wrRanks = {};
+    let currentWrRank = 1;
+    wrSorted.forEach((p, i) => {
+      if (i > 0) {
+        const prev = wrSorted[i-1];
+        if (calcRate(p) !== calcRate(prev)) currentWrRank = i + 1;
+      }
+      wrRanks[p.name] = currentWrRank;
+    });
+
+    const sorted = [...baseList].sort((a,b) => (b[scoreK]||0) - (a[scoreK]||0) || calcRate(b) - calcRate(a));
+    const table = $(tableId);
+
+    table.innerHTML = `<thead><tr>
+      <th style="width:11%;">순위</th>
+      <th style="width:34%;">이름</th>
+      <th style="width:24%;">승률</th>
+      <th style="width:12%;">승/패</th>
+      <th style="width:19%;">총점</th>
+    </tr></thead><tbody></tbody>`;
+
+    let currentRank = 1;
+    table.querySelector('tbody').innerHTML = sorted.map((p, i) => {
+      if (i > 0) {
+        const prev = sorted[i-1];
+        if ((p[scoreK]||0) !== (prev[scoreK]||0)) currentRank = i + 1;
+      }
+
+      const rankIcon = (currentRank === 1) ? '<span class="material-symbols-outlined rank-1-icon">emoji_events</span>' : currentRank;
+      const lastShown = (p[lastK] && Number(p[lastK]) > 0) ? Number(p[lastK]) : currentRank;
+
+      let df =
+        (p[lastK] && Number(p[lastK]) > 0 && lastShown !== currentRank)
+        ? (lastShown > currentRank ? `<span style="color:var(--up-red)">▲${lastShown - currentRank}</span>` : `<span style="color:var(--down-blue)">▼${currentRank - lastShown}</span>`)
+        : '-';
+
+      const shownName = displayName(p.name);
+      return `<tr>
+        <td>${rankIcon}</td>
+        <td style="text-align:left; padding-left:10px; overflow:hidden;">
+          <div data-autofit="1" class="autofit-cell" style="display:flex; align-items:center; gap:6px;">
+            <span style="font-weight:400; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(shownName)}</span>
+            <span data-autofit="1" class="sub-info autofit-cell" style="margin-left:0;">(${lastShown}위)${df}</span>
+          </div>
+        </td>
+        <td data-autofit="1" class="sub-info autofit-cell">${(calcRate(p)*100).toFixed(1)}% (${wrRanks[p.name]}위)</td>
+        <td style="font-size:11px; white-space:nowrap;">${(p[winK]||0)}/${(p[lossK]||0)}</td>
+        <td class="point-text" style="white-space:nowrap;">${Number(p[scoreK]||0).toFixed(1)}</td>
+      </tr>`;
+    }).join('');
+
+    setTimeout(()=>applyAutofit(table), 0);
+  }
+
+  // ========================================
+  // RANKING SYSTEM
+  // ========================================
+
+  function updateSeason() {
+    renderRankTable('seasonTable', 'score', 'wins', 'losses', 'last');
+    renderRankTable('seasonDoubleTable', 'dScore', 'dWins', 'dLosses', 'lastD');
+    renderRankTable('seasonSingleTable', 'sScore', 'sWins', 'sLosses', 'lastS');
+    renderRankTable('guestSeasonTotalTable', 'score', 'wins', 'losses', 'last', 'guest');
+    renderRankTable('guestSeasonDoubleTable', 'dScore', 'dWins', 'dLosses', 'lastD', 'guest');
+    renderRankTable('guestSeasonSingleTable', 'sScore', 'sWins', 'sLosses', 'lastS', 'guest');
+  }
+
+  function updateWeekly() {
+    renderRankTable('weeklyTotalTable', 'weekly', 'wWins', 'wLosses', 'lastW');
+    renderRankTable('weeklyDoubleTable', 'wdScore', 'wdWins', 'wdLosses', 'lastWD');
+    renderRankTable('weeklySingleTable', 'wsScore', 'wsWins', 'wsLosses', 'lastWS');
+  }
+
+  function updateChartRange(rangeIdx) {
+    document.querySelectorAll('.chart-nav .chart-btn').forEach((b,i) => b.className = i===rangeIdx ? 'chart-btn active' : 'chart-btn');
+
+    const emptyChart = () => {
+      if(chart) chart.destroy();
+      chart = new Chart($('seasonChart').getContext('2d'), {
+        type: 'line',
+        data: { labels: [], datasets: [] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+      });
+    };
+
+    // ✅ v3.818: 경기 기록 없으면 빈 차트
+    if (!matchLog || matchLog.length === 0) { emptyChart(); return; }
+
+    // 유효한 날짜 모두 수집 (중복 제거, 정렬)
+    const allDates = [...new Set(
+      matchLog
+        .filter(m => m.date && m.date.length >= 10)
+        .map(m => m.date.slice(0,10))
+    )].sort();
+
+    if (allDates.length === 0) { emptyChart(); return; }
+
+    // 범위별 월 필터
+    const monthRanges = [[2,3],[4,5],[6,7],[8,9],[10,11],[12,1]];
+    const [startMonth, endMonth] = monthRanges[rangeIdx];
+
+    const filteredDates = allDates.filter(d => {
+      const m = parseInt(d.slice(5,7));
+      return startMonth <= endMonth ? (m >= startMonth && m <= endMonth) : (m >= startMonth || m <= endMonth);
+    });
+
+    if (filteredDates.length === 0) { emptyChart(); return; }
+
+    // ✅ v3.818: 날짜별 누적 점수로 순위 계산
+    const members = players.filter(p => !p.isGuest);
+    const colors = ['#FF3B30','#007AFF','#34C759','#FF9500','#AF52DE','#5856D6','#FF2D55','#5AC8FA','#FFCC00'];
+
+    // 각 선수 누적 점수 초기화
+    const cumScore = {};
+    members.forEach(p => { cumScore[p.name] = 0; });
+
+    // matchLog를 날짜 오름차순으로 정렬
+    const sortedLog = [...matchLog].filter(m => m.date && m.date.length >= 10)
+      .sort((a,b) => a.date.localeCompare(b.date));
+
+    // 날짜별 순위 스냅샷 { 'YYYY-MM-DD': { 선수명: 순위 } }
+    const rankSnapshots = {};
+    let logIdx = 0;
+
+    allDates.forEach(dateStr => {
+      // 해당 날짜까지의 경기 반영
+      while(logIdx < sortedLog.length && sortedLog[logIdx].date.slice(0,10) <= dateStr) {
+        const log = sortedLog[logIdx];
+        const homeWin = log.winner === 'home';
+        const winners = homeWin ? (log.home || []) : (log.away || []);
+        const losers  = homeWin ? (log.away || []) : (log.home || []);
+        const isDouble = log.type === 'double';
+        winners.forEach(n => { if(cumScore[n] !== undefined) cumScore[n] += isDouble ? 3.0 : 4.0; });
+        losers.forEach(n  => { if(cumScore[n] !== undefined) cumScore[n] += isDouble ? 0.3 : 0.5; });
+        logIdx++;
+      }
+      // 현재 누적 점수로 순위 계산
+      const sorted = [...members].sort((a,b) => (cumScore[b.name]||0) - (cumScore[a.name]||0));
+      const snap = {};
+      sorted.forEach((p,i) => { snap[p.name] = i + 1; });
+      rankSnapshots[dateStr] = snap;
+    });
+
+    // 표시용 라벨 (MM/DD)
+    const labels = filteredDates.map(d => `${parseInt(d.slice(5,7))}/${parseInt(d.slice(8,10))}`);
+
+    const datasets = members.map((p, i) => ({
+      label: p.name,
+      data: filteredDates.map(d => rankSnapshots[d] ? (rankSnapshots[d][p.name] || null) : null),
+      borderColor: colors[i % colors.length],
+      backgroundColor: colors[i % colors.length],
+      pointRadius: 5,
+      borderWidth: 2,
+      spanGaps: true,
+      clip: false
+    }));
+
+    if(chart) chart.destroy();
+    chart = new Chart($('seasonChart').getContext('2d'), {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 50, bottom: 20, left: 10, right: 10 } },
+        scales: {
+          y: { reverse: true, min: 1, max: Math.max(members.length + 1, 10), ticks: { stepSize: 1, autoSkip: false }, grid: { color: '#eee' } },
+          x: { grid: { display: false } }
+        },
+        plugins: {
+          legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 11 } } }
+        }
+      }
+    });
+  }
+
+  
+  function nowISO() {
+    const d = new Date();
+    const ds = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0,10);
+    return { ts: d.getTime(), ds };
+  }
+
+  function calcDeltas(type, isWin) {
+    if (type === "double") return isWin ? { total: 3.0, d: 3.0, s: 0.0 } : { total: 0.3, d: 0.3, s: 0.0 };
+    return isWin ? { total: 4.0, d: 0.0, s: 4.0 } : { total: 0.5, d: 0.0, s: 0.5 };
+  }
+
+  function applyMatchToPlayers(type, homeArr, awayArr, winnerSide) {
+    // ✅ v3.8206: 당일 게스트는 players 배열에 없으므로 자동으로 집계 제외됨
+    const homeWin = winnerSide === "home";
+    const apply = (ns, isW) => ns.forEach(n => {
+      var p = players.find(x=>x.name==n);
+      if(!p) return;
+      const d = calcDeltas(type, isW);
+
+      p.score += d.total;
+      p.wins += isW ? 1 : 0;
+      p.losses += isW ? 0 : 1;
+
+      if (type === "double") {
+        p.dScore += d.d;
+        p.dWins += isW ? 1 : 0;
+        p.dLosses += isW ? 0 : 1;
+      } else {
+        p.sScore += d.s;
+        p.sWins += isW ? 1 : 0;
+        p.sLosses += isW ? 0 : 1;
+      }
+
+      p.weekly += d.total;
+      p.wWins += isW ? 1 : 0;
+      p.wLosses += isW ? 0 : 1;
+
+      if (type === "double") {
+        p.wdScore += d.d;
+        p.wdWins += isW ? 1 : 0;
+        p.wdLosses += isW ? 0 : 1;
+      } else {
+        p.wsScore += d.s;
+        p.wsWins += isW ? 1 : 0;
+        p.wsLosses += isW ? 0 : 1;
+      }
+    });
+
+    if(homeWin) { apply(homeArr,true); apply(awayArr,false); }
+    else { apply(awayArr,true); apply(homeArr,false); }
+  }
+
+
+  // ========================================
+  // STATISTICS (통계)
+  // ========================================
+  
+  function renderStatsPlayerList() {
+    const members = players.filter(p => !p.isGuest).sort((a,b)=>(b.score||0)-(a.score||0));
+    // ✅ v3.816: HIDDEN_PLAYERS 제외
+    const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name));
+
+    let html = '<div style="border: 2px solid #E5E5EA; border-radius: 15px; padding: 15px; background: white; margin-bottom: 30px;">';
+
+    // 1. 정식 회원 섹션
+    html += '<div style="font-size:12px; color:#666; margin-bottom:8px; font-weight:bold; text-align:left; padding-left:5px;">정식 회원</div>';
+    html += '<div style="display:flex !important; flex-wrap:wrap !important; justify-content:flex-start !important; gap:8px; margin-bottom:20px;">';
+    members.forEach((p, i) => {
+      html += createPlayerOption({ inputType:"radio", nameAttr:"statsPick", id:`stat_p_${i}`, value:p.name, checked:false, onClick:`viewStats('${escapeHtml(p.name).replace(/'/g,"&#39;")}')`, labelText:`${escapeHtml(displayName(p.name))}`, isGuest:false, showRank:true, rankText:`${i+1}위` });
+    });
+    html += '</div>';
+
+    // 2. 게스트 섹션 (게스트가 있을 때만 출력)
+    if (guests.length > 0) {
+      html += '<div style="width:100%; margin:10px 0 15px; border-top:1px dashed #ddd; position:relative;">';
+      html += '<span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:#fff; padding:0 10px; font-size:11px; color:#999; font-weight:bold;">GUEST LIST</span>';
+      html += '</div>';
+
+      html += '<div style="display:flex !important; flex-wrap:wrap !important; justify-content:flex-start !important; gap:8px;">';
+      guests.forEach((p, i) => {
+        html += createPlayerOption({ inputType:"radio", nameAttr:"statsPick", id:`stat_g_${i}`, value:p.name, checked:false, onClick:`viewStats('${escapeHtml(p.name).replace(/'/g,"&#39;")}')`, labelText:`[G] ${escapeHtml(displayName(p.name))}`, isGuest:true, showRank:false });
+      });
+      html += '</div>';
+    }
+
+    html += '</div>';
+
+    $('stats-pList').innerHTML = html;
+  }
+
+
+  function isInTeam(teamArr, name) {
+    return Array.isArray(teamArr) && teamArr.includes(name);
+  }
+
+  function getOpponentNames(log, name) {
+    const homeHas = isInTeam(log.home, name);
+    const awayHas = isInTeam(log.away, name);
+    if (!homeHas && !awayHas) return [];
+    return homeHas ? (log.away || []) : (log.home || []);
+  }
+
+  function getPartnerNames(log, name) {
+    if (log.type !== "double") return [];
+    const homeHas = isInTeam(log.home, name);
+    const awayHas = isInTeam(log.away, name);
+    if (!homeHas && !awayHas) return [];
+    const team = homeHas ? (log.home || []) : (log.away || []);
+    return team.filter(n => n !== name);
+  }
+
+  function didPlayerWin(log, name) {
+    const homeHas = isInTeam(log.home, name);
+    const awayHas = isInTeam(log.away, name);
+    if (!homeHas && !awayHas) return null;
+    if (log.winner === "home") return homeHas;
+    if (log.winner === "away") return awayHas;
+    const hs = Number(log.hs ?? 0), as = Number(log.as ?? 0);
+    if (hs === as) return null;
+    const homeWin = hs > as;
+    return homeWin ? homeHas : awayHas;
+  }
+
+  function rateText(w,l) {
+    const t = (w||0)+(l||0);
+    return t>0 ? (((w||0)/t)*100).toFixed(1) : "0.0";
+  }
+
+  function pickBestByRule(map, preferHigh=true) {
+    const entries = Object.entries(map);
+    if (entries.length === 0) return null;
+
+    entries.sort((a,b)=>{
+      const A=a[1], B=b[1];
+      const Ar = (A.w+A.l)>0 ? A.w/(A.w+A.l) : 0; // 내 승률
+      const Br = (B.w+B.l)>0 ? B.w/(B.w+B.l) : 0;
+
+      if (preferHigh) {
+        if (Br !== Ar) return Br - Ar;                 // 승률 높은 순
+        if (B.w !== A.w) return B.w - A.w;             // 승 수 많은 순
+        if (B.totalGames !== A.totalGames) return B.totalGames - A.totalGames; // 표본 큰 순
+      } else {
+        if (Ar !== Br) return Ar - Br;                 // 내 승률 낮은 순
+        if (B.totalGames !== A.totalGames) return B.totalGames - A.totalGames; // 표본 큰 순
+        if (B.l !== A.l) return B.l - A.l;             // 내가 더 많이 진 상대 우선
+      }
+      return a[0].localeCompare(b[0]);
+    });
+
+    return { name: entries[0][0], stat: entries[0][1] };
+  }
+
+  
+  // ✅ v3.692: 통계 계산(데이터/HTML 준비) - matchLog 기반
+  function computeStatsFromMatchLog(name) {
+    const logs = normalizeMatchLog(matchLog)
+      .filter(l => isInTeam(l.home, name) || isInTeam(l.away, name))
+      .sort((a,b)=>(b.ts||0)-(a.ts||0));
+
+    const recent = logs.slice(0,10);
+    const recentResults = recent
+      .map(l => didPlayerWin(l, name))
+      .filter(v => v === true || v === false);
+
+    const displayResults = recentResults.slice().reverse();
+
+    const dotsHTML =
+      (displayResults.length ? displayResults : Array.from({length:10},()=>false))
+        .slice(0,10)
+        .map(win => `<div class="form-dot ${win?'win-dot':'loss-dot'}"></div>`)
+        .join('');
+
+    let streak = 0;
+    let lastResult = displayResults.length ? displayResults[displayResults.length - 1] : null;
+
+    if (lastResult !== null) {
+      for (let i = displayResults.length - 1; i >= 0; i--) {
+        if (displayResults[i] === lastResult) streak++;
+        else break;
+      }
+    }
+
+    // 하단 전적표(단/복/종합) - matchLog 실시간 재집계
+    let sWins = 0, sLosses = 0, sScore = 0;
+    let dWins = 0, dLosses = 0, dScore = 0;
+
+    logs.forEach(l => {
+      const win = didPlayerWin(l, name);
+      if (win === null) return;
+
+      const t = (l.type === "double") ? "double" : "single";
+      const d = calcDeltas(t, win);
+
+      if (t === "double") {
+        dScore += (d.d || 0);
+        if (win) dWins++; else dLosses++;
+      } else {
+        sScore += (d.s || 0);
+        if (win) sWins++; else sLosses++;
+      }
+    });
+
+    const totalWins = sWins + dWins;
+    const totalLosses = sLosses + dLosses;
+    const totalPt = (Number(sScore) + Number(dScore)).toFixed(1);
+
+    const tableHTML = `
+      <tr><td>단식 전적</td><td>${rateText(sWins, sLosses)}%</td><td>${sWins}승 ${sLosses}패</td><td>${Number(sScore).toFixed(1)}</td></tr>
+      <tr><td>복식 전적</td><td>${rateText(dWins, dLosses)}%</td><td>${dWins}승 ${dLosses}패</td><td>${Number(dScore).toFixed(1)}</td></tr>
+    `;
+    const footHTML = `
+      <tr style="background:#f9f9f9; font-weight: bold; border-top: 2px solid var(--wimbledon-sage);">
+        <td>종합 전적</td><td>${rateText(totalWins, totalLosses)}%</td><td>${totalWins}승 ${totalLosses}패</td>
+        <td style="color:var(--wimbledon-sage);">${totalPt} pt</td>
+      </tr>
+    `;
+
+    // 상대/파트너/천적 맵
+    const singleOppMap = {};
+    const partnerMap = {};
+    const doubleEnemyMap = {};
+
+    logs.forEach(l => {
+      const win = didPlayerWin(l, name);
+      if (win === null) return;
+
+      if (l.type === "single") {
+        const opps = getOpponentNames(l, name);
+        opps.forEach(op => {
+          if(HIDDEN_PLAYERS.includes(op)) return;
+          if(!singleOppMap[op]) singleOppMap[op] = { w:0, l:0, totalGames:0 };
+          if(win) singleOppMap[op].w++; else singleOppMap[op].l++;
+          singleOppMap[op].totalGames++;
+        });
+      }
+
+      if (l.type === "double") {
+        const partners = getPartnerNames(l, name);
+        partners.forEach(pt => {
+          if(HIDDEN_PLAYERS.includes(pt)) return;
+          if(!partnerMap[pt]) partnerMap[pt] = { w:0, l:0, totalGames:0 };
+          if(win) partnerMap[pt].w++; else partnerMap[pt].l++;
+          partnerMap[pt].totalGames++;
+        });
+
+        const opps = getOpponentNames(l, name);
+        opps.forEach(op => {
+          if(HIDDEN_PLAYERS.includes(op)) return;
+          if(!doubleEnemyMap[op]) doubleEnemyMap[op] = { w:0, l:0, totalGames:0 };
+          if(win) doubleEnemyMap[op].w++; else doubleEnemyMap[op].l++;
+          doubleEnemyMap[op].totalGames++;
+        });
+      }
+    });
+
+    const sBestRaw = pickBestByRule(singleOppMap, true);
+    const sBest = (sBestRaw && sBestRaw.stat.w >= 1) ? sBestRaw : null;
+    const sWorst = pickBestByRule(singleOppMap, false);
+    // ✅ v3.8205_4: 최고 파트너 — 승 1개 이상인 파트너 중 승률 최고
+    const dBestPartnerRaw = pickBestByRule(partnerMap, true);
+    const dBestPartner = (dBestPartnerRaw && dBestPartnerRaw.stat.w >= 1) ? dBestPartnerRaw : null;
+
+    // ✅ v3.8205_4: 분발 파트너 — 승 0개이거나 승률 최저, 최고 파트너와 다른 사람
+    const dWorstPartnerRaw = pickBestByRule(partnerMap, false);
+    const dWorstPartner = (() => {
+      if (!dWorstPartnerRaw) return null;
+      const s = dWorstPartnerRaw.stat;
+      const hasloss = s.l >= 1;
+      const diffFromBest = !dBestPartner || dWorstPartnerRaw.name !== dBestPartner.name;
+      return (hasloss && diffFromBest) ? dWorstPartnerRaw : null;
+    })();
+
+    // ✅ v3.8202: 라이벌(천적) - 상대에게 패가 1개 이상일 때만 표시
+    const dEnemies = Object.entries(doubleEnemyMap)
+      .filter(([,s]) => s.l >= 1)  // 내가 진 적 있는 상대만
+      .sort((a,b)=>{
+        const Ar=(a[1].w+a[1].l)>0?a[1].w/(a[1].w+a[1].l):0, Br=(b[1].w+b[1].l)>0?b[1].w/(b[1].w+b[1].l):0;
+        return Ar-Br || b[1].totalGames-a[1].totalGames;
+      });
+    const dE1 = dEnemies[0], dE2 = dEnemies[1];
+
+    // ✅ v3.8202: 단식 라이벌(천적) - 패가 1개 이상일 때만
+    const sWorstFiltered = (() => {
+      if (!sWorst) return null;
+      return sWorst.stat.l >= 1 ? sWorst : null;
+    })();
+
+    return {
+      logs, dotsHTML, displayResults, streak, lastResult,
+      sWins, sLosses, sScore, dWins, dLosses, dScore, totalWins, totalLosses, totalPt,
+      tableHTML, footHTML,
+      sBest, sWorst: sWorstFiltered, dBestPartner, dWorstPartner, dE1, dE2
+    };
+  }
+
+  // ✅ v3.692: 통계 렌더(화면 반영)
+  function renderStatsHTML(name, data) {
+    // 최근 폼(점)
+    $('form-dots').innerHTML = data.dotsHTML;
+
+    // 조언 박스
+    const adviceBox = $('advice-box');
+    const adviceText = $('res-advice');
+
+    if (data.lastResult === true && data.streak >= 2) {
+      adviceBox.style.background = "var(--wimbledon-sage)";
+      adviceText.innerHTML = `🔥 최근 ${data.streak}연승 스타트! 지금 폼이 좋습니다. <br>리턴 한 번만 더 붙이면 거의 끝입니다.`;
+    } else if (data.lastResult === false && data.streak >= 2) {
+      adviceBox.style.background = "var(--up-red)";
+      adviceText.innerHTML = `😰 최근 ${data.streak}연패… 하지만 이럴 때 한 번만 끊으면 바로 반등합니다. <br>첫 2게임은 ‘실수 최소’ 모드로 가는 게 좋습니다.`;
+    } else {
+      adviceBox.style.background = "var(--aussie-blue)";
+      adviceText.innerHTML = `🎾 최근 폼이 조금 출렁입니다. <br>서브/리턴 중 하나만 안정시키면 연승 흐름이 잡힙니다.`;
+    }
+
+    // 하단 전적표
+    $('res-table').innerHTML = data.tableHTML;
+    $('res-foot').innerHTML = data.footHTML;
+
+    // 상단 분석(최고/최악/파트너/천적)
+    const isValid = (obj) => obj && (obj.w + obj.l) > 0;
+
+    $('res-s-best').innerText = (data.sBest && isValid(data.sBest.stat)) ? displayName(data.sBest.name) : "-";
+    $('res-s-best-sub').innerText = (data.sBest && isValid(data.sBest.stat)) ? `${data.sBest.stat.w}승 ${data.sBest.stat.l}패` : "0승 0패";
+
+    $('res-s-worst').innerText = (data.sWorst && isValid(data.sWorst.stat)) ? displayName(data.sWorst.name) : "-";
+    $('res-s-worst-sub').innerText = (data.sWorst && isValid(data.sWorst.stat)) ? `${data.sWorst.stat.w}승 ${data.sWorst.stat.l}패` : "0승 0패";
+
+    $('res-d-partner').innerText = (data.dBestPartner && isValid(data.dBestPartner.stat)) ? displayName(data.dBestPartner.name) : "-";
+    $('res-d-partner-sub').innerText = (data.dBestPartner && isValid(data.dBestPartner.stat)) ? `${data.dBestPartner.stat.w}승 ${data.dBestPartner.stat.l}패` : "0승 0패";
+
+    $('res-d-partner-worst').innerText = (data.dWorstPartner && isValid(data.dWorstPartner.stat)) ? displayName(data.dWorstPartner.name) : "-";
+    $('res-d-partner-worst-sub').innerText = (data.dWorstPartner && isValid(data.dWorstPartner.stat)) ? `${data.dWorstPartner.stat.w}승 ${data.dWorstPartner.stat.l}패` : "0승 0패";
+
+    $('res-d-enemy1').innerText = (data.dE1 && isValid(data.dE1[1])) ? displayName(data.dE1[0]) : "-";
+    $('res-d-enemy1-sub').innerText = (data.dE1 && isValid(data.dE1[1])) ? `${data.dE1[1].w}승 ${data.dE1[1].l}패` : "0승 0패";
+
+    $('res-d-enemy2').innerText = (data.dE2 && isValid(data.dE2[1])) ? displayName(data.dE2[0]) : "-";
+    $('res-d-enemy2-sub').innerText = (data.dE2 && isValid(data.dE2[1])) ? `${data.dE2[1].w}승 ${data.dE2[1].l}패` : "0승 0패";
+  }
+
+
+  function viewStats(name) {
+    const p = players.find(x => x.name === name);
+    if(!p) return;
+
+    $('welcome-msg').style.display = 'none';
+    const report = $('stats-report');
+    report.style.display = 'block';
+    $('target-name-text').innerText = `${displayName(name)} 분석 리포트`;
+
+    const data = computeStatsFromMatchLog(name);
+    renderStatsHTML(name, data);
+
+    report.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }

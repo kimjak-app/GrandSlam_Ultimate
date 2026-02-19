@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>GrandSlam Ultimate v3.8207_2</title>
+  <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
+  <link rel="shortcut icon" href="icon.png">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+<div id="splash">
+  <img src="icon.png" alt="GrandSlam Logo">
+  <div class="loading-text">⌛ 데이터 동기화 중...</div>
+</div>
+<div id="loading-overlay">⌛ 데이터 동기화 중...</div>
+
+<!-- ✅ v3.820: 커스텀 Alert 모달 -->
+<div id="gsAlertModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.45); z-index:25000; justify-content:center; align-items:center;">
+  <div style="background:#fff; border-radius:20px; padding:28px 24px 20px; width:300px; max-width:88vw; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+    <div id="gsAlertMsg" style="font-size:14px; color:var(--text-dark); line-height:1.6; margin-bottom:20px; white-space:pre-line;"></div>
+    <button onclick="gsAlertClose()" style="width:100%; padding:13px; background:var(--wimbledon-sage); color:white; border:none; border-radius:12px; font-size:15px; font-weight:400; cursor:pointer;">확인</button>
+  </div>
+</div>
+
+<!-- ✅ v3.820: 커스텀 Confirm 모달 -->
+<div id="gsConfirmModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.45); z-index:25000; justify-content:center; align-items:center;">
+  <div style="background:#fff; border-radius:20px; padding:28px 24px 20px; width:300px; max-width:88vw; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+    <div id="gsConfirmMsg" style="font-size:14px; color:var(--text-dark); line-height:1.6; margin-bottom:20px; white-space:pre-line;"></div>
+    <div style="display:flex; gap:10px;">
+      <button onclick="gsConfirmResolve(true)" style="flex:1; padding:13px; background:var(--wimbledon-sage); color:white; border:none; border-radius:12px; font-size:15px; font-weight:400; cursor:pointer;">확인</button>
+      <button onclick="gsConfirmResolve(false)" style="flex:1; padding:13px; background:#8E8E93; color:white; border:none; border-radius:12px; font-size:15px; font-weight:400; cursor:pointer;">취소</button>
+    </div>
+  </div>
+</div>
+<!-- ✅ v3.8204: 이름 수정 모달 (prompt 대체) -->
+<div id="gsEditNameModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.45); z-index:25000; justify-content:center; align-items:center;">
+  <div style="background:#fff; border-radius:20px; padding:28px 24px 20px; width:300px; max-width:88vw; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+    <div style="font-size:14px; color:var(--text-dark); margin-bottom:14px; font-weight:400;">이름 수정</div>
+    <input type="text" id="gsEditNameInput" style="width:100%; box-sizing:border-box; padding:12px 14px; border:2px solid var(--wimbledon-sage); border-radius:12px; font-size:15px; outline:none; margin-bottom:16px;"
+      onkeydown="if(event.key==='Enter')gsEditNameConfirm()" />
+    <div style="display:flex; gap:10px;">
+      <button onclick="gsEditNameConfirm()" style="flex:1; padding:13px; background:var(--wimbledon-sage); color:white; border:none; border-radius:12px; font-size:15px; cursor:pointer;">확인</button>
+      <button onclick="gsEditNameCancel()" style="flex:1; padding:13px; background:#8E8E93; color:white; border:none; border-radius:12px; font-size:15px; cursor:pointer;">취소</button>
+    </div>
+  </div>
+</div>
+<div id="clubPinModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.45); z-index:20000; justify-content:center; align-items:center;">
+  <div style="background:#fff; border-radius:20px; padding:32px 24px; width:320px; max-width:90vw; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+    <span class="material-symbols-outlined" style="font-size:48px; color:var(--wimbledon-sage); display:block; margin-bottom:12px;">lock</span>
+    <div style="font-size:15px; color:var(--text-dark); margin-bottom:20px; font-weight:400;">관리자 비밀번호를 입력하세요</div>
+    <input type="password" id="clubPinInput" maxlength="10" placeholder="••••"
+      style="width:100%; box-sizing:border-box; padding:14px 16px; border:2px solid var(--wimbledon-sage); border-radius:12px; font-size:16px; text-align:center; letter-spacing:4px; outline:none;"
+      onkeydown="if(event.key==='Enter')confirmClubPin()" />
+    <div style="margin-top:16px; display:flex; gap:10px;">
+      <button onclick="confirmClubPin()" style="flex:1; padding:14px; background:var(--wimbledon-sage); color:white; border:none; border-radius:12px; font-size:15px; font-weight:400; cursor:pointer;">확인</button>
+      <button onclick="cancelClubPin()" style="flex:1; padding:14px; background:#8E8E93; color:white; border:none; border-radius:12px; font-size:15px; font-weight:400; cursor:pointer;">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- ✅ v3.79: 클럽 전환 셀렉터 바 -->
+<div class="club-selector-bar" id="clubSelectorBar">
+  <button class="club-selector-btn" onclick="openClubDropdown()">
+    <span class="club-dot" id="clubDot"></span>
+    <span class="club-name-text" id="clubNameText">클럽 선택...</span>
+    <span class="material-symbols-outlined">expand_more</span>
+  </button>
+</div>
+
+<!-- ✅ v3.79: 클럽 선택 드롭다운 -->
+<div class="club-dropdown" id="clubDropdown" onclick="if(event.target===this)closeClubDropdown()">
+  <div class="club-dropdown-content">
+    <div class="club-dropdown-title">
+      <span class="material-symbols-outlined">home_work</span>
+      클럽 선택
+    </div>
+    <div id="clubDropdownList"></div>
+    <div class="club-dropdown-footer">
+      <button class="club-add-btn" onclick="openClubCreate()">
+        <span class="material-symbols-outlined" style="font-size:18px;">add_circle</span>새 클럽 추가
+      </button>
+      <button class="club-close-btn" onclick="closeClubDropdown()">
+        <span class="material-symbols-outlined" style="font-size:18px;">close</span>닫기
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ✅ v3.79: 클럽 추가/수정 모달 -->
+<div class="club-dropdown" id="clubFormModal" onclick="if(event.target===this)closeClubForm()">
+  <div class="club-dropdown-content" style="max-height:85vh;">
+    <div class="club-dropdown-title">
+      <span class="material-symbols-outlined">add_business</span>
+      <span id="clubFormTitle">새 클럽 추가</span>
+    </div>
+
+    <!-- ✅ v3.79: 시트 복사 가이드 (토글) -->
+    <div id="cfGuideToggle" style="margin-bottom:16px;">
+      <button onclick="toggleClubGuide()" style="width:100%; padding:12px; border:2px solid var(--wimbledon-sage); border-radius:12px; background:rgba(93,156,118,0.08); color:var(--wimbledon-sage); font-size:13px; font-weight:400; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+        <span class="material-symbols-outlined" style="font-size:18px;">help</span>
+        처음이신가요? 사용법 보기
+        <span class="material-symbols-outlined" id="cfGuideArrow" style="font-size:18px; transition:transform 0.3s;">expand_more</span>
+      </button>
+      <div id="cfGuideBody" style="display:none; margin-top:12px; padding:16px; background:#f8fdf9; border:1px solid #e0f0e4; border-radius:14px; font-size:12px; line-height:1.7; color:#333;">
+        <div style="font-size:14px; font-weight:700; color:var(--wimbledon-sage); margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+          <span class="material-symbols-outlined" style="font-size:20px;">menu_book</span>
+          새 클럽 추가 안내
+        </div>
+
+        <div style="background:white; border-radius:10px; padding:12px; margin-bottom:8px; border:1px solid #e8e8e8;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+            <span style="background:var(--wimbledon-sage); color:white; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0;">1</span>
+            <strong>클럽 이름 입력</strong>
+          </div>
+          <div style="padding-left:30px; color:#555;">
+            아래에 새 클럽의 이름을 입력하세요.
+          </div>
+        </div>
+
+        <div style="background:white; border-radius:10px; padding:12px; margin-bottom:8px; border:1px solid #e8e8e8;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+            <span style="background:var(--wimbledon-sage); color:white; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0;">2</span>
+            <strong>저장 버튼 누르기</strong>
+          </div>
+          <div style="padding-left:30px; color:#555;">
+            <b>Google Sheets가 자동으로 생성</b>됩니다!<br>
+            별도의 시트 복사나 URL 입력이 필요 없어요.
+          </div>
+        </div>
+
+        <div style="background:white; border-radius:10px; padding:12px; border:1px solid #e8e8e8;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+            <span style="background:var(--wimbledon-sage); color:white; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0;">3</span>
+            <strong>바로 사용 가능!</strong>
+          </div>
+          <div style="padding-left:30px; color:#555;">
+            새 클럽으로 전환하면 <b>바로 선수 등록 및 게임 시작</b> 가능합니다.
+          </div>
+        </div>
+
+        <div style="margin-top:10px; padding:10px; background:rgba(102,157,179,0.1); border-radius:8px; font-size:11px; color:var(--aussie-blue);">
+          💡 <b>자동 시트 생성:</b> 클럽마다 독립된 Google Sheets가 만들어져 데이터가 완전히 분리됩니다.
+        </div>
+      </div>
+    </div>
+
+    <div class="club-form-group">
+      <label class="club-form-label">클럽 이름 *</label>
+      <input type="text" class="club-form-input" id="cfName" placeholder="예: 광명 테니스클럽" />
+    </div>
+
+    <div class="club-form-group">
+      <label class="club-form-label">관리자 비밀번호 *</label>
+      <input type="password" class="club-form-input" id="cfPin" placeholder="예: 1234 (4자리 입력)" maxlength="20" />
+      <div class="club-form-hint">💡 4자리 숫자로 설정하세요 (예: 1234)</div>
+    </div>
+    <div class="club-form-group">
+      <label class="club-form-label">날씨 검색 도시 (한글 또는 영문)</label>
+      <input type="text" class="club-form-input" id="cfCity" placeholder="예: 광명" />
+    </div>
+    <div class="club-form-group">
+      <label class="club-form-label">날씨 도시명 (한글)</label>
+      <input type="text" class="club-form-input" id="cfCityKo" placeholder="예: 광명" />
+    </div>
+    <div class="club-form-group">
+      <label class="club-form-label">클럽 테마 색상</label>
+      <div class="club-color-row" id="cfColorRow"></div>
+    </div>
+    <input type="hidden" id="cfEditId" value="" />
+    <div style="display:flex; gap:10px; margin-top:20px;">
+      <button class="modal-btn modal-btn-primary" onclick="saveClubForm()" style="flex:1;">
+        <span class="material-symbols-outlined btn-ico">save</span>저장
+      </button>
+      <button class="modal-btn modal-btn-secondary" onclick="closeClubForm()" style="flex:1;">
+        <span class="material-symbols-outlined btn-ico">close</span>취소
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="view-home" class="app-screen active">
+  <div class="weather-card">
+    <div class="header-banner"><span class="material-symbols-outlined">wb_sunny</span>광명 날씨</div>
+    <div class="search-row">
+      <input id="city" class="w-input" value="광명" placeholder="예: 서울, 광명, 파주" />
+      <button id="btnSearch" class="w-btn" onclick="loadWeatherForNextMeeting(0)">검색</button>
+    </div>
+    <div class="btn-row">
+      <button id="btnRefresh" class="w-btn active" onclick="loadWeatherForNextMeeting(0)">이번 모임 날씨</button>
+      <button id="btnNext" class="w-btn" onclick="loadWeatherForNextMeeting(1)">다음 모임 날씨</button>
+    </div>
+    <button id="naverWeatherBtn" onclick="openNaverWeather()" class="btn-sub sky" style="width:100%; margin-bottom:15px; height:45px; font-size:14px; display:flex; align-items:center; justify-content:center; gap:8px;">
+      <span class="material-symbols-outlined" style="font-size:20px;">open_in_new</span>Naver 날씨 확인
+    </button>
+    <div id="dateDisplay" class="date-display"></div>
+    <div id="status"></div>
+    <table id="tbl" class="weather-table" style="display:none;">
+      <thead><tr><th style="width:20%;">시간</th><th style="width:20%;">날씨</th><th style="width:20%;">온도</th><th style="width:20%;">강수</th><th style="width:20%;">바람</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div id="dynamicTip" class="tip-box" style="display:none;"><div id="tipContent" class="tip-text"></div></div>
+  </div>
+
+  <!-- ✅ v3.80: 코트 정보 섹션 -->
+  <div class="home-section-card" id="courtInfoCard">
+    <div class="home-section-title">
+      <span class="material-symbols-outlined">sports_tennis</span>
+      오늘의 코트 정보
+    </div>
+    <div id="courtInfoContent" style="display:none;">
+      <div class="court-info-row">
+        <span class="material-symbols-outlined">location_on</span>
+        <span id="courtName"></span>
+      </div>
+      <div class="court-info-row">
+        <span class="material-symbols-outlined">schedule</span>
+        <span id="courtTime"></span>
+        <span id="courtNumber" style="display:none; margin-left:8px; font-size:13px; color:var(--wimbledon-sage); font-weight:400; background:rgba(93,156,118,0.1); padding:2px 8px; border-radius:8px;"></span>
+      </div>
+      <div class="court-info-row">
+        <span class="material-symbols-outlined">map</span>
+        <span id="courtAddress"></span>
+      </div>
+      <div id="courtMemo" class="court-info-memo" style="display:none;"></div>
+    </div>
+    <!-- ✅ v3.817: 공지 없을 때 안내 메시지 -->
+    <div id="courtNoNotice" style="display:block; padding:16px 0; text-align:center; color:var(--text-gray); font-size:13px;">
+      <span class="material-symbols-outlined" style="font-size:32px; display:block; margin-bottom:6px; opacity:0.4;">event_busy</span>
+      등록된 코트 공지가 없습니다
+    </div>
+    <div class="court-btn-row">
+      <button class="btn-map" onclick="openCourtMap()">
+        <span class="material-symbols-outlined" style="font-size:18px;">map</span>지도보기
+      </button>
+      <div class="btn-share-wrap" style="flex:1;">
+        <div class="share-dropdown" id="shareDropdown">
+          <div class="share-dropdown-item" onclick="shareContent('weather')">
+            <span class="material-symbols-outlined">cloud</span>날씨만
+          </div>
+          <div class="share-dropdown-item" onclick="shareContent('weather+court')">
+            <span class="material-symbols-outlined">add_location</span>날씨 + 코트
+          </div>
+          <div class="share-dropdown-item" onclick="shareContent('all')">
+            <span class="material-symbols-outlined">select_all</span>전체 (날씨+코트+공지)
+          </div>
+          <div class="share-dropdown-item" onclick="shareContent('text')">
+            <span class="material-symbols-outlined">content_copy</span>텍스트 복사
+          </div>
+        </div>
+        <button class="btn-share" onclick="toggleShareDropdown()">
+          <span class="material-symbols-outlined" style="font-size:18px;">share</span>카톡공유
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ v3.80: 공지사항 섹션 -->
+  <div class="home-section-card" id="noticeCard">
+    <div class="home-section-title">
+      <span class="material-symbols-outlined">campaign</span>
+      공지사항
+    </div>
+    <div id="noticeList">
+      <div class="notice-empty">등록된 공지가 없습니다.</div>
+    </div>
+  </div>
+
+  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v3.8207_2</div>
+</div>
+
+<div id="view-tennis" class="app-screen">
+  <div class="header-banner" onclick="location.reload()"><span class="material-symbols-outlined">emoji_events</span>GrandSlam Ranking</div>
+    <div class="tab-menu">
+    <button id="t1" class="tab-btn active" onclick="tab(1)" style="display:flex; align-items:center; justify-content:center; gap:4px;">
+      <span class="material-symbols-outlined" style="font-size:18px;">leaderboard</span>시즌랭킹
+    </button>
+    <button id="t2" class="tab-btn" onclick="tab(2)" style="display:flex; align-items:center; justify-content:center; gap:4px;">
+      <span class="material-symbols-outlined" style="font-size:18px;">calendar_month</span>주간랭킹
+    </button>
+  </div>
+
+  <div id="s1" class="section-card active">
+    <div class="sub-rank-title"><span class="material-symbols-outlined">bar_chart</span>순위 변동 추이</div>
+    <div class="chart-nav">
+      <button class="chart-btn active" onclick="updateChartRange(0)">2-3월</button>
+      <button class="chart-btn" onclick="updateChartRange(1)">4-5월</button>
+      <button class="chart-btn" onclick="updateChartRange(2)">6-7월</button>
+      <button class="chart-btn" onclick="updateChartRange(3)">8-9월</button>
+      <button class="chart-btn" onclick="updateChartRange(4)">10-11월</button>
+      <button class="chart-btn" onclick="updateChartRange(5)">12-1월</button>
+    </div>
+    <div style="height:320px; position:relative;"><canvas id="seasonChart"></canvas></div>
+    <div class="sub-rank-title"><span class="material-symbols-outlined">format_list_numbered</span>종합 순위표</div>
+    <table id="seasonTable" class="tennis-table"></table>
+    <div class="sub-rank-title"><span class="material-symbols-outlined">groups</span>복식 랭킹</div>
+    <table id="seasonDoubleTable" class="tennis-table"></table>
+    <div class="sub-rank-title"><span class="material-symbols-outlined">person</span>단식 랭킹</div>
+    <table id="seasonSingleTable" class="tennis-table"></table>
+
+    <div class="sub-rank-title"><span class="material-symbols-outlined">group_add</span>게스트 시즌 종합</div>
+    <table id="guestSeasonTotalTable" class="tennis-table"></table>
+    <div class="sub-rank-title"><span class="material-symbols-outlined">groups</span>게스트 시즌 복식</div>
+    <table id="guestSeasonDoubleTable" class="tennis-table"></table>
+    <div class="sub-rank-title"><span class="material-symbols-outlined">person</span>게스트 시즌 단식</div>
+    <table id="guestSeasonSingleTable" class="tennis-table"></table>
+  </div>
+
+  <div id="s2" class="section-card">
+    <div class="sub-rank-title">📅 주간 종합 순위</div>
+    <table id="weeklyTotalTable" class="tennis-table"></table>
+    <div class="sub-rank-title">👥 주간 복식 순위</div>
+    <table id="weeklyDoubleTable" class="tennis-table"></table>
+    <div class="sub-rank-title">👤 주간 단식 순위</div>
+    <table id="weeklySingleTable" class="tennis-table"></table>
+  </div>
+  <div style="padding: 0 15px;">
+    <button class="btn-main" onclick="showView('weather')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
+  </div>
+</div>
+
+
+<!-- 경기기록 View -->
+<div id="view-record" class="app-screen" style="display:none;">
+  <div class="header-banner"><span class="material-symbols-outlined">sports_tennis</span>단일게임</div>
+  <div class="section-card active" style="display:block;">
+    
+    <!-- ⭐ 추가: 참가 선수 선택 타이틀 -->
+    <div class="tour-section-title" style="display:flex; justify-content:space-between; align-items:center;"><span style="display:flex;align-items:center;gap:4px;"><span class="material-symbols-outlined">group_add</span>참가 선수 선택 (<span id="record-cnt">0</span>명)</span><button onclick="addOneTimePlayer()" style="font-size:11px; padding:4px 10px; border-radius:20px; border:1px solid var(--aussie-blue); background:var(--aussie-blue); color:white; cursor:pointer; font-weight:600;">+ 당일 게스트</button></div>
+    <!-- ✅ v3.8202: 1vs2용 설명 문구 (복식 모드 + 활성화 클럽만 표시) -->
+    <!-- ✅ v3.8206: hint-1v2 제거됨 -->
+    <div class="pool differ" id="pP"></div>
+
+    <div style="display:flex; gap:8px; margin-top:20px;">
+      <button id="m_db" class="type-btn selected" onclick="setM('double')"><span class="material-symbols-outlined btn-ico">groups</span>복식</button>
+      <button id="m_sg" class="type-btn" onclick="setM('single')"><span class="material-symbols-outlined btn-ico">person</span>단식</button>
+    </div>
+
+    <div class="team-box">
+      <div id="hN" style="font-weight:400;"></div>
+      <input type="number" id="hS" class="score-box" placeholder="0">
+    </div>
+    <div class="team-box">
+      <div id="aN" style="font-weight:400;"></div>
+      <input type="number" id="aS" class="score-box" placeholder="0">
+    </div>
+
+    <button class="btn-main" onclick="save()"><span class="material-symbols-outlined title-ico">save</span>결과 저장</button>
+
+    <div class="rule-box">
+      <div class="r-tt"><span class="material-symbols-outlined">info</span>점수 획득 기준</div>
+      <div class="r-mini">🎾 <b>참여</b>: +1</div>
+      <div class="r-line r-mini">👥 <b>복식</b></div>
+      <div class="r-mini">- 승리: <b>+2</b> (총점 3점) / W+1</div>
+      <div class="r-mini">- 패배: <b>-0.7</b> (총점 0.3점) / L+1</div>
+      <div class="r-line r-mini">👤 <b>단식</b></div>
+      <div class="r-mini">- 승리: <b>+3</b> (총점 4점) / W+1</div>
+      <div class="r-mini">- 패배: <b>-0.5</b> (총점 0.5점) / L+1</div>
+      <div class="r-line r-mini">🏆 <b>순위</b>: 점수 &gt; 승률 &gt; 승수 &gt; 경기참여수</div>
+    </div>
+  
+  </div>
+  <div style="padding: 0 15px;">
+    <button class="btn-main" onclick="showView('game')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
+  </div>
+</div>
+
+<!-- 선수관리 View -->
+<div id="view-player-mgmt" class="app-screen" style="display:none;">
+  <div class="header-banner"><span class="material-symbols-outlined">person_search</span>선수 관리</div>
+  <div class="section-card active" style="display:block;">
+    
+    <h3>👥 선수 등록</h3>
+    <div class="search-row" style="margin-bottom:20px;">
+      <input type="text" id="pI" class="w-input" style="width:75%;" placeholder="성함">
+      <button onclick="addP()" class="w-btn" style="background:var(--wimbledon-sage); margin-left:8px;">등록</button>
+    </div>
+    <div style="display:flex; align-items:center; gap:6px; margin:-10px 0 14px 0; font-size:11px; color:#666;">
+      <input type="checkbox" id="pIsGuest" style="margin:0;">
+      <label for="pIsGuest">준회원에 준하는 게스트로 등록 (체크 시 랭킹에서 게스트로 분리)</label>
+    </div>
+    <table id="pL" class="tennis-table player-mgmt-table"><tbody></tbody></table>
+
+    
+    
+    
+    
+    
+
+    
+
+    
+
+    <div class="rule-box" style="margin-top:16px;">
+      <div class="r-tt"><span class="material-symbols-outlined">database</span>주요 업데이트 브리핑</div>
+      <div class="r-mini">- <b>Data</b>: 전체 덮어쓰기</div>
+      <div class="r-mini">- <b>MatchLog</b>: appendRow로 누적</div>
+      <div class="r-line r-mini">- 개인통계(파트너/천적/최근폼)는 <b>MatchLog 기반</b>으로 계산</div>
+      <div class="r-line r-mini">- 토너먼트 <b>실전 모드</b>: 진행 중 버퍼 → 우승 확정 순간에만 커밋</div>
+      <div class="r-line r-mini">- ✅ v3.4: 토너먼트 버튼 클릭 버그(하단 네비 겹침) 픽스</div>
+      <div class="r-line r-mini">- ✅ v3.41: 단식 9명 출전 시 최하위 증발 버그 픽스(예선/대기석 방식)</div>
+      <div class="r-line r-mini">- ✅ v3.42: 시즌/주간 + 종목별 테이블 전부 ▲▼ 변동 표시 + (-위) 버그 픽스</div>
+      <div class="r-line r-mini">- ✅ v3.43: 개인통계 선택 버튼 활성화 + 최근폼/멘트 불일치 픽스</div>
+      <div class="r-line r-mini">- ✅ v3.44: 랭킹 승률 칸 확대 + 개인통계(단/복 분리) 개선</div>
+      <div class="r-line r-mini">- ✅ v3.52 Stable: 표에서 말줄임(...) 발생 시 자동 2줄 표시(autofit)</div>
+      <div class="r-line r-mini">- ✅ v3.54: 게스트 분리 랭킹(시즌 종합/복식/단식) + 경기 입력 풀 [G] 표시</div>
+      <div class="r-line r-mini">- ✅ v3.58: 경기 입력 선수 풀 — 회원/게스트 영역 시각 분리 (GUEST LIST 구분선)</div>
+      <div class="r-line r-mini">- ✅ v3.59: 토너/통계/사다리 Flex 레이아웃 통일 — 단일게임 스타일 적용 (상하분리+큼직버튼)</div>
+      <div class="r-line r-mini">- ✅ v3.60: CSS 클래스 충돌 제거 — 순수 인라인 스타일 + !important로 Grid 충돌 완전 해결</div>
+      <div class="r-line r-mini">- ✅ v3.61: HTML 부모 컨테이너 클래스 제거 — player-grid/pool-ladder 클래스 삭제로 Grid 완전 차단</div>
+      <div class="r-line r-mini">- ✅ v3.693: UI 통일 완성 — ① 게스트 라벨만 회색 ② 왼쪽정렬 ③ 전체 뒤로가기 버튼 ④ 차트 게스트제외</div>
+      <div class="r-line r-mini">- ✅ v3.71: 라운드 모드 추가 — Circle Method 원형 회전 방식, Kimjak Algorithm 순위 산정, 토너먼트 전환</div>
+      <div class="r-line r-mini">- ✅ v3.78428: 라운드 모드 완결. 핸드폰 화면 최적화 </div>
+      <div class="r-line r-mini">- ✅ v3.792: 다중 클럽 시스템 — 자동 시트 생성, 마스터 보안, 은은한 클럽 색상, 레이아웃 수정</div>
+      <div class="r-line r-mini">- ✅ v3.8205: 버그수정 — 단일게임/토너먼트/코트예약 결과저장 불가 버그 수정 (중괄호 누락 5건)</div>
+      <div class="r-line r-mini">- ✅ v3.8205_1: 버그수정 — 전체삭제 시 GAS 응답으로 선수 데이터 복원되는 버그 수정</div>
+      <div class="r-line r-mini">- ✅ v3.8205_2: 버그수정 — 전체삭제 후 reload→sync() 레이스컨디션 제거, UI 직접 갱신으로 변경</div>
+      <div class="r-line r-mini">- ✅ v3.8205_3: 버그수정 — 전체삭제 GAS adminResetAll+DELETE 직접 호출로 서버 데이터 완전 삭제</div>
+      <div class="r-line r-mini">- ✅ v3.8205_4: 버그수정 — 복식 최고 파트너 승1개 이상 조건 추가, 0승 파트너는 분발 파트너로 이동</div>
+      <div class="r-line r-mini">- ✅ v3.8206: 신기능 — 당일 게스트 추가 (순위/통계 제외, matchLog만 기록), 1대2대결용 버튼 대체</div>
+    </div>
+  
+    
+    <hr>
+    <button class="btn-sub sky" onclick="resetScoresKeepPlayers()">점수 초기화 (선수유지)</button>
+    <button class="btn-sub royal" onclick="resetWeeklyOnly()">주간 리셋</button>
+    <button class="btn-sub navy" onclick="adminResetAll()">전체 삭제 (초기화)</button>
+    <hr>
+    
+    <button id="btnTourMode" class="btn-sub" style="background:#34C759;" onclick="toggleTournamentMode()">🟩 전체 게임 연습 모드 (기록반영 X)</button>
+
+  </div>
+  <div style="padding: 0 15px;">
+    <button class="btn-main" onclick="showView('admin')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
+  </div>
+</div>
+
+<div id="view-stats" class="app-screen">
+  <div class="section-card" style="display:block;">
+    <div class="header-banner"><span class="material-symbols-outlined" style="font-size:30px;">monitoring</span>GrandSlam 개인통계</div>
+
+    <div class="tour-section-title">
+      <span class="material-symbols-outlined">group_add</span>참가 선수 선택
+      <span style="font-size:11px; color:var(--text-gray); font-weight:normal;">(통계 정보를 원하는 선수를 클릭!)</span>
+    </div>
+    <div id="stats-pList"></div>
+
+    <div id="stats-report" style="display:none; margin-top:30px;">
+      <div style="text-align:center; margin-bottom:20px; background:var(--aussie-blue); padding:15px; border-radius:16px;">
+        <h2 id="target-name" style="margin:0; font-weight:400; font-size: 20px; color:white;"><span class="material-symbols-outlined title-ico">query_stats</span><span id="target-name-text">선수 리포트</span></h2>
+        <div style="width:40px; height:3px; background:var(--roland-clay); margin:8px auto;"></div>
+      </div>
+
+      <div class="tour-section-title" style="justify-content:center; margin-top:0;">
+        <span class="material-symbols-outlined">reorder</span>현재 폼 (최근 10경기)
+      </div>
+      <div id="form-dots" style="display:flex; gap:6px; justify-content:center; margin-bottom:20px;"></div>
+
+      
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:20px;">
+        <div class="team-box" style="border:1px solid var(--aussie-blue); background:rgba(102, 157, 179, 0.05);">
+          <div style="font-size:11px; color:var(--aussie-blue); font-weight:bold;">단식 최고 승률 상대</div>
+          <div id="res-s-best" style="font-size:16px; margin-top:5px;">-</div>
+          <div id="res-s-best-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
+        </div>
+        <div class="team-box" style="border:1px solid var(--up-red); background:rgba(255, 59, 48, 0.05);">
+          <div style="font-size:11px; color:var(--up-red); font-weight:bold;">단식 라이벌(천적)</div>
+          <div id="res-s-worst" style="font-size:16px; margin-top:5px;">-</div>
+          <div id="res-s-worst-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
+        </div>
+        <div class="team-box" style="border:1px solid var(--wimbledon-sage); background:rgba(93, 156, 118, 0.06);">
+          <div style="font-size:11px; color:var(--wimbledon-sage); font-weight:bold;">복식 최고 파트너</div>
+          <div id="res-d-partner" style="font-size:16px; margin-top:5px;">-</div>
+          <div id="res-d-partner-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
+        </div>
+        <div class="team-box" style="border:1px solid #AF52DE; background:rgba(175, 82, 222, 0.05);">
+          <div style="font-size:11px; color:#AF52DE; font-weight:bold;">복식 분발 파트너</div>
+          <div id="res-d-partner-worst" style="font-size:16px; margin-top:5px;">-</div>
+          <div id="res-d-partner-worst-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
+        </div>
+        <div class="team-box" style="border:1px solid var(--roland-clay); background:rgba(217, 140, 115, 0.10);">
+          <div style="font-size:11px; color:var(--roland-clay); font-weight:bold;">복식 라이벌1(천적1)</div>
+          <div id="res-d-enemy1" style="font-size:16px; margin-top:5px;">-</div>
+          <div id="res-d-enemy1-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
+        </div>
+        <div class="team-box" style="border:1px solid var(--roland-clay); background:rgba(217, 140, 115, 0.10);">
+          <div style="font-size:11px; color:var(--roland-clay); font-weight:bold;">복식 라이벌2(천적2)</div>
+          <div id="res-d-enemy2" style="font-size:16px; margin-top:5px;">-</div>
+          <div id="res-d-enemy2-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
+        </div>
+      </div><table class="tour-score-table">
+        <thead><tr><th>구분</th><th>승률</th><th>승패</th><th>총점</th></tr></thead>
+        <tbody id="res-table"></tbody>
+        <tfoot id="res-foot"></tfoot>
+      </table>
+
+      <div id="advice-box" class="tip-box" style="margin-top:20px; border-radius:16px; padding:15px; color:white;">
+        <div id="res-advice">-</div>
+      </div>
+
+      <div class="rule-box" style="margin-top:14px;">
+        <div class="r-tt"><span class="material-symbols-outlined">receipt_long</span>MatchLog 기반 계산</div>
+        <div class="r-mini">- 최근 폼: 해당 선수의 MatchLog 최신 10경기(W/L)</div>
+        <div class="r-mini">- 단식 최고/최저: <b>단식 상대</b> 중 내 승률 기준</div>
+        <div class="r-mini">- 복식 파트너: <b>같은 편</b>으로 뛴 사람 중 내 승률/승수 우선</div>
+        <div class="r-mini">- 복식 천적: <b>상대편</b>으로 만난 사람 중 내 승률 낮음/표본 우선</div>
+      </div>
+    </div>
+
+    <div id="welcome-msg" style="text-align:center; padding:50px 0; color:#ccc;">
+      <span class="material-symbols-outlined" style="font-size:40px;">query_stats</span><br>선수를 클릭하면 분석이 시작됩니다.
+    </div>
+  </div>
+  <div style="padding: 0 15px;">
+    <button class="btn-main" onclick="showView('weather')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
+  </div>
+</div>
+
+<div id="view-tournament" class="app-screen">
+  <div class="section-card" style="display:block;">
+    <div class="header-banner"><span class="material-symbols-outlined" style="font-size:32px;">leaderboard</span>GrandSlam Tournament</div>
+
+    <div id="setup-area">
+      <div class="tour-section-title" style="display:flex; justify-content:space-between; align-items:center;"><span style="display:flex;align-items:center;gap:4px;"><span class="material-symbols-outlined">group_add</span>참가 선수 선택 (<span id="cnt">0</span>명)</span><button onclick="addOneTimePlayer()" style="font-size:11px; padding:4px 10px; border-radius:20px; border:1px solid var(--aussie-blue); background:var(--aussie-blue); color:white; cursor:pointer; font-weight:600;">+ 당일 게스트</button></div>
+      <div id="pList"></div>
+
+      <div id="manual-team-box" class="manual-team-box" style="display:none;">
+        <div class="manual-team-title"><span class="material-symbols-outlined">groups</span>지정 팀 미리보기</div>
+        <div id="manual-team-list" class="manual-team-list"></div>
+      </div>
+
+
+      <div class="tour-section-title"><span class="material-symbols-outlined">shuffle</span>배치 방식</div>
+      <div class="opt-row">
+        <button class="opt-btn active" onclick="setOpt('mode', 'rank', this)"><span class="material-symbols-outlined">bar_chart</span>랭킹 반영</button>
+        <button class="opt-btn" onclick="setOpt('mode', 'random', this)"><span class="material-symbols-outlined">shuffle</span>무작위</button>
+              <button class="opt-btn" onclick="setOpt('mode', 'manual', this)"><span class="material-symbols-outlined">touch_app</span>지정선택</button>
+      </div>
+
+      <div class="tour-section-title"><span class="material-symbols-outlined">category</span>경기 종목</div>
+      <div class="opt-row">
+        <button class="opt-btn active" onclick="setOpt('type', 'single', this)"><span class="material-symbols-outlined">person</span>단식 (1vs1)</button>
+        <button class="opt-btn" onclick="setOpt('type', 'double', this)"><span class="material-symbols-outlined">groups</span>복식 (2vs2)</button>
+      </div>
+
+      <button class="btn-main" onclick="makeBracket()"><span class="material-symbols-outlined title-ico">account_tree</span>대진표 생성하기</button>
+
+      <div class="rule-box" style="margin-top:14px;">
+        <div class="r-tt"><span class="material-symbols-outlined">bug_report</span>v3.4 토너 버튼 픽스</div>
+        <div class="r-mini">- 하단 네비 겹침/터치 씹힘 방지: 화면 padding-bottom 확장</div>
+        <div class="r-mini">- 버튼 클릭 안정: z-index / pointer-events / touch-action 보강</div>
+        <div class="r-line r-mini">✅ v3.41: 단식 9명 이상 → 예선(8위 vs 9위) 승자가 8강 진입</div>
+        <div class="r-line r-mini">✅ v3.42: 토너 실전 커밋 시 “지난순위 스냅샷” 저장 → 전 테이블 ▲▼ 정상 표시</div>
+      </div>
+    </div>
+
+    <div id="bracket-section">
+      <div class="bracket-title"><span class="material-symbols-outlined">emoji_events</span>대진표</div>
+      <div class="bracket-container"><div class="bracket-tree" id="tree-root"></div></div>
+
+      <div id="loser-bench" class="loser-bench">
+        <h4>🏃 패자 대기석 (클릭하여 대기팀에 투입)</h4>
+        <div id="loser-list"></div>
+      </div>
+
+      <div class="score-section">
+        <div class="tour-section-title">실시간 랭킹</div>
+        <div id="rules-display"></div>
+        <table class="tour-score-table">
+          <thead><tr><th>순위</th><th>이름</th><th>승/패</th><th>총점</th></tr></thead>
+          <tbody id="score-tbody"></tbody>
+        </table>
+      </div>
+
+      <button class="btn-sub sky" style="margin-top:20px;" onclick="resetPage()">처음부터 다시</button>
+    </div>
+  </div>
+  <div style="padding: 0 15px;">
+    <button class="btn-main" onclick="showView('game')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
+  </div>
+</div>
+
+<div id="view-ladder" class="app-screen">
+  <div class="section-card" style="display:block;">
+    <div class="header-banner"><span class="material-symbols-outlined">stairs</span>GrandSlam 사다리게임</div>
+    <div id="ladder-setup-view">
+      <div style="font-weight:400; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;"><span>1. 참여 선수 선택 (클릭)</span><button onclick="addOneTimePlayer()" style="font-size:11px; padding:4px 10px; border-radius:20px; border:1px solid var(--aussie-blue); background:var(--aussie-blue); color:white; cursor:pointer; font-weight:600;">+ 당일 게스트</button></div>
+      <div id="ladder-player-pool"></div>
+      <div style="font-weight:400; margin-bottom:10px; margin-top:30px;">2. 벌칙 입력 (미입력 시 '패스')</div>
+      <div id="ladder-punish-list"></div>
+      <button class="btn-purple-main" onclick="initLadderGame()"><span class="material-symbols-outlined title-ico">stairs</span>사다리 생성하기</button>
+    </div>
+
+    <div id="ladder-game-view" style="display:none; text-align:center;">
+      <p style="font-size:13px; color:var(--text-gray); margin-bottom:15px;">이름을 클릭하면 붉은 선이 내려갑니다!</p>
+      <div id="ladder-canvas-wrap"><canvas id="ladderCanvas"></canvas></div>
+      <div id="ladder-final-msg" class="congrats-box"><div id="congrats-content"></div></div>
+      <button class="btn-purple-main" onclick="resetLadderGame()">처음부터 다시</button>
+    </div>
+  </div>
+  <div style="padding: 0 15px;">
+    <button class="btn-main" onclick="showView('game')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
+  </div>
+</div>
+
+<!-- 라운드 모드 View -->
+<div id="view-round" class="app-screen" style="display:none;">
+  <div class="section-card" style="display:block;">
+    <div class="header-banner"><span class="material-symbols-outlined" style="font-size:32px;">cached</span>GrandSlam Round</div>
+
+    <div id="round-setup-area">
+      <div class="tour-section-title" style="display:flex; justify-content:space-between; align-items:center;"><span style="display:flex;align-items:center;gap:4px;"><span class="material-symbols-outlined">group_add</span>참가 선수 선택 (<span id="round-cnt">0</span>명)</span><button onclick="addOneTimePlayer()" style="font-size:11px; padding:4px 10px; border-radius:20px; border:1px solid var(--aussie-blue); background:var(--aussie-blue); color:white; cursor:pointer; font-weight:600;">+ 당일 게스트</button></div>
+      <div style="border: 2px solid #E5E5EA; border-radius: 15px; padding: 14px; background: white; margin-bottom: 30px;">
+        <div id="round-pList"></div>
+      </div>
+
+      <div id="round-manual-team-box" class="manual-team-box" style="display:none;">
+        <div class="manual-team-title"><span class="material-symbols-outlined">groups</span>지정 팀 미리보기</div>
+        <div id="round-manual-team-list" class="manual-team-list"></div>
+      </div>
+
+      <div class="tour-section-title" style="margin-top: 30px;"><span class="material-symbols-outlined">shuffle</span>배치 방식</div>
+      <div class="opt-row">
+        <button id="round-opt-rank" class="opt-btn active" onclick="setRoundOpt('rank')"><span class="material-symbols-outlined">leaderboard</span>랭킹순</button>
+        <button id="round-opt-random" class="opt-btn" onclick="setRoundOpt('random')"><span class="material-symbols-outlined">shuffle</span>무작위</button>
+        <button id="round-opt-manual" class="opt-btn" onclick="setRoundOpt('manual')"><span class="material-symbols-outlined">touch_app</span>지정선택</button>
+      </div>
+
+      <div class="tour-section-title"><span class="material-symbols-outlined">sports_tennis</span>경기 종목</div>
+      <div class="opt-row">
+        <button id="round-mode-single" class="opt-btn" onclick="setRoundMode('single')"><span class="material-symbols-outlined">person</span>단식</button>
+        <button id="round-mode-double" class="opt-btn active" onclick="setRoundMode('double')"><span class="material-symbols-outlined">groups</span>복식</button>
+      </div>
+
+      <button id="round-gen-btn" class="btn-purple-main" onclick="generateRoundSchedule()" style="opacity:0.6; background:var(--roland-clay);"><span class="material-symbols-outlined title-ico">description</span>대진표 생성하기</button>
+    </div>
+
+    <div id="round-match-area" style="display:none;">
+      <div class="tour-section-title"><span class="material-symbols-outlined">emoji_events</span>실시간 랭킹 (Kimjak Algorithm)</div>
+      
+      <!-- ⭐ 점수 계산 안내 추가 -->
+      <div class="rule-box" style="margin-bottom:15px;">
+        <div class="r-tt"><span class="material-symbols-outlined">calculate</span>점수 계산 방식</div>
+        <div class="r-mini">📊 <b>라운드 로빈</b>: 승리 +3점(단식)/+2점(복식), 패배 -0.5점(단식)/-0.7점(복식), 참가 +1점</div>
+        <div class="r-mini">🏆 <b>미니 토너먼트</b>: 승리당 +1점, 부전승 +1점</div>
+      </div>
+      
+      <div id="round-rank-table"></div>
+
+      <div class="tour-section-title" style="margin-top:30px;"><span class="material-symbols-outlined">list_alt</span>대진표 (전체 매치)</div>
+      <div id="round-match-list"></div>
+
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button class="btn-purple-main" onclick="resetRound()" style="flex:1; background:var(--text-gray);"><span class="material-symbols-outlined title-ico">restart_alt</span>초기화</button>
+        <button id="round-save-btn" class="btn-purple-main" onclick="saveRoundResults()" style="flex:1; opacity:0.6; background:var(--roland-clay);"><span class="material-symbols-outlined title-ico">save</span>완료</button>
+      </div>
+      
+      <button id="round-tournament-btn" class="btn-purple-main" onclick="convertRoundToTournament()" style="opacity:0.6; background:var(--roland-clay); margin-top:10px;"><span class="material-symbols-outlined title-ico">tour</span>토너먼트 Go</button>
+    </div>
+  </div>
+  <div style="padding: 0 15px;">
+    <button class="btn-main" onclick="showView('game')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
+  </div>
+</div>
+
+
+<div id="view-game" class="app-screen" style="display:none;">
+  <div class="header-banner"><span class="material-symbols-outlined">sports_tennis</span>Game Hub</div>
+  <div style="padding:14px;">
+    <div class="section-card active" style="display:block;">
+      <div class="sub-rank-title"><span class="material-symbols-outlined" style="vertical-align:middle; font-size:20px; margin-right:5px;">sports_tennis</span>게임 선택</div>
+            <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
+        <button class="btn-purple-main" onclick="showView('record')" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+          <span class="material-symbols-outlined">scoreboard</span> 단일게임 (단/복)
+        </button>
+        <button class="btn-purple-main" onclick="openTournament()" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+          <span class="material-symbols-outlined">tour</span> 토너먼트
+        </button>
+        <button class="btn-purple-main" onclick="openRound()" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+          <span class="material-symbols-outlined">cached</span> 라운드
+        </button>
+        <button class="btn-purple-main" onclick="openLadder()" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+          <span class="material-symbols-outlined">stairs</span> 사다리 (번외)
+        </button>
+        <button class="btn-purple-main" onclick="comingSoon('교류전')" style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--text-gray);">
+          <span class="material-symbols-outlined">handshake</span> 교류전 (4.0 예정)
+        </button>
+      </div>
+      <p style="margin-top:12px; color:#8E8E93; font-size:12px; line-height:1.4;">
+        ※ v3.80: 홈 화면 개편! 교류전은 v4.0에서 본격 도입.
+      </p>
+    </div>
+  <div style="padding: 0 15px;">
+    <button class="btn-main" onclick="showView('weather')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
+  </div>
+  </div>
+</div>
+
+<div id="view-admin" class="app-screen" style="display:none;">
+  <div class="header-banner"><span class="material-symbols-outlined">settings</span>운영</div>
+  <div style="padding:14px;">
+    <div class="section-card active" style="display:block;">
+      <div class="sub-rank-title"><span class="material-symbols-outlined" style="vertical-align:middle; font-size:20px; margin-right:5px;">list_alt</span>관리 메뉴</div>
+            <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
+        <button class="btn-purple-main" onclick="checkAdminAndShow('player-mgmt')" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+          <span class="material-symbols-outlined">person_search</span> 선수 관리
+        </button>
+        <button class="btn-purple-main" onclick="showView('club-mgmt')" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+          <span class="material-symbols-outlined">home_work</span> 클럽 관리
+        </button>
+        <button class="btn-purple-main" onclick="enterTreasurer()" style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--roland-clay);">
+          <span class="material-symbols-outlined">lock</span> 총무 모드
+        </button>
+        <button class="btn-purple-main" onclick="comingSoon('데이터 백업')" style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--text-gray);">
+          <span class="material-symbols-outlined">cloud_sync</span> 데이터 백업 (추가 예정)
+        </button>
+      </div>
+            <p style="margin-top:12px; color:#8E8E93; font-size:12px; line-height:1.4;">
+        ※ v3.81: 총무 모드 추가! (회비·재정·코트공지·공지사항 관리)
+      </p>
+    </div>
+  </div>
+  <div style="padding: 0 15px;">
+    <button class="btn-main" onclick="showView('weather')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
+  </div>
+</div>
+
+<!-- ✅ v3.79: 클럽 관리 View -->
+<div id="view-club-mgmt" class="app-screen" style="display:none;">
+  <div class="header-banner"><span class="material-symbols-outlined">home_work</span>클럽 관리</div>
+  <div style="padding:14px;">
+    <div class="section-card active" style="display:block;">
+      <div class="sub-rank-title"><span class="material-symbols-outlined">list_alt</span>등록된 클럽 목록</div>
+      <div id="clubManageList"></div>
+      <button class="btn-main" onclick="openClubCreate()" style="margin-top:15px; display:flex; align-items:center; justify-content:center; gap:8px;">
+        <span class="material-symbols-outlined">add_circle</span>새 클럽 추가
+      </button>
+
+      <div class="rule-box" style="margin-top:20px;">
+        <div class="r-tt"><span class="material-symbols-outlined">info</span>다중 클럽 안내</div>
+        <div class="r-line">• 각 클럽은 <b>독립된 Google Sheets</b>를 사용합니다.</div>
+        <div class="r-line">• 상단 클럽 셀렉터로 언제든 클럽을 전환할 수 있습니다.</div>
+        <div class="r-line">• 클럽 전환 시 해당 클럽의 데이터가 자동으로 불러와집니다.</div>
+        <div class="r-line">• 클럽 삭제 시 앱 내 등록만 해제되며, <b>Google Sheets 데이터는 보존</b>됩니다.</div>
+        <div class="r-line">• 클럽 생성/수정/삭제는 <b>총괄 관리자 비밀번호</b>가 필요합니다.</div>
+        <div class="r-line">• 총괄 비번은 모든 클럽의 관리자 기능에도 접근 가능합니다.</div>
+        <div class="r-line r-mini">v3.80 | 다중 클럽 시스템 + 홈 화면 개편</div>
+      </div>
+    </div>
+  </div>
+  <div style="padding: 0 15px;">
+    <button class="btn-main" onclick="showView('admin')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
+  </div>
+</div>
+
+
+<!-- ✅ v3.81: 총무 모드 View -->
+<div id="view-treasurer" class="app-screen" style="display:none;">
+  <div class="header-banner"><span class="material-symbols-outlined">lock</span>총무 모드</div>
+  <div style="padding:14px;">
+
+    <!-- PIN 진입 화면 -->
+    <div id="treasurer-pin-screen" class="section-card active" style="display:block;">
+      <div class="treasurer-pin-wrap">
+        <span class="material-symbols-outlined" style="font-size:48px; color:var(--wimbledon-sage); display:block; margin-bottom:16px;">lock</span>
+        <div style="font-size:15px; color:var(--text-dark); margin-bottom:20px;">총무 비밀번호를 입력하세요</div>
+        <input type="password" id="treasurerPinInput" maxlength="10" placeholder="••••" onkeydown="if(event.key==='Enter')verifyTreasurerPin()" />
+        <div style="margin-top:16px; display:flex; gap:10px; justify-content:center;">
+          <button class="modal-btn modal-btn-primary" onclick="verifyTreasurerPin()" style="width:100px;">확인</button>
+          <button class="modal-btn modal-btn-secondary" onclick="showView('admin')" style="width:100px;">취소</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 총무 메인 메뉴 -->
+    <div id="treasurer-main" style="display:none;">
+      <div class="section-card active" style="display:block;">
+        <div class="sub-rank-title"><span class="material-symbols-outlined">list_alt</span>총무 메뉴</div>
+        <div class="treasurer-menu">
+          <button class="btn-purple-main" onclick="showTreasurerSection('fee')" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+            <span class="material-symbols-outlined">checklist</span> 회비 납부 현황
+          </button>
+          <button class="btn-purple-main" onclick="showTreasurerSection('finance')" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+            <span class="material-symbols-outlined">account_balance</span> 재정 관리
+          </button>
+          <button class="btn-purple-main" onclick="showTreasurerSection('court-mgmt')" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+            <span class="material-symbols-outlined">edit_calendar</span> 코트 공지 관리
+          </button>
+          <button class="btn-purple-main" onclick="showTreasurerSection('notice-mgmt')" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+            <span class="material-symbols-outlined">campaign</span> 공지사항 관리
+          </button>
+        </div>
+        <!-- ✅ v3.816: 1대2대결용 활성화 토글 -->
+        <div style="margin-top:20px; padding:15px; background:#f9f9f9; border-radius:14px; border:1px solid #eee;">
+          <div style="font-size:13px; font-weight:700; color:var(--text-dark); margin-bottom:8px;">⚙️ 클럽 게임 설정</div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+            <div>
+              <div style="font-size:13px; color:var(--text-dark); font-weight:400;">[1vs2]용 활성화</div>
+              <div style="font-size:11px; color:var(--text-gray); margin-top:2px;">게임 풀에 고정 버튼 표시 (랭킹/통계 제외)</div>
+            </div>
+            <label id="use1v2Toggle" onclick="toggle1v2()" style="position:relative; display:inline-block; width:48px; height:26px; cursor:pointer;">
+              <span id="use1v2Track" style="position:absolute; inset:0; border-radius:13px; background:#ccc; transition:background 0.2s;"></span>
+              <span id="use1v2Thumb" style="position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:white; box-shadow:0 1px 3px rgba(0,0,0,0.3); transition:transform 0.2s;"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 회비 납부 현황 -->
+    <div id="treasurer-fee" style="display:none;">
+      <div class="section-card active" style="display:block;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <div class="sub-rank-title" style="margin:0;"><span class="material-symbols-outlined">checklist</span>회비 납부 현황</div>
+          <select id="feeYear" onchange="renderFeeTable()" style="padding:8px 12px; border:2px solid #E5E5EA; border-radius:10px; font-size:14px; font-weight:400;">
+          </select>
+        </div>
+        <!-- ✅ v3.81: 월회비 금액 + 완납/해제 버튼 -->
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+          <span style="font-size:13px; color:var(--text-dark); white-space:nowrap;">월회비</span>
+          <input type="number" id="monthlyFeeAmount" class="w-input" placeholder="10000" style="width:100px; padding:8px; text-align:right; font-size:14px;" onchange="saveMonthlyFee()" />
+          <span style="font-size:13px; color:var(--text-dark);">원</span>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px;">
+          <button class="crud-btn crud-btn-edit" onclick="feeSetAll('Y','year')" style="padding:8px 10px; font-size:12px;">✅ 연완납</button>
+          <button class="crud-btn crud-btn-edit" onclick="feeSetAll('Y','month')" style="padding:8px 10px; font-size:12px;">✅ 월완납</button>
+          <button class="crud-btn crud-btn-del" onclick="feeSetAll('N','year')" style="padding:8px 10px; font-size:12px;">↩️ 연해제</button>
+          <button class="crud-btn crud-btn-del" onclick="feeSetAll('N','month')" style="padding:8px 10px; font-size:12px;">↩️ 월해제</button>
+        </div>
+        <div class="fee-table-wrap">
+          <table class="fee-table" id="feeTable">
+            <thead id="feeHead"></thead>
+            <tbody id="feeBody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:12px; font-size:12px; color:var(--text-gray);">
+          ✅ 납부완료 &nbsp; ❌ 미납 &nbsp; | 셀 터치로 변경
+        </div>
+        <button class="btn-sub sky" onclick="copyFeeStatus()" style="width:100%; margin-top:12px; display:flex; align-items:center; justify-content:center; gap:6px;">
+          <span class="material-symbols-outlined" style="font-size:18px;">content_copy</span>카톡 복사
+        </button>
+        <button class="btn-sub royal" onclick="showTreasurerMenu()" style="width:100%; margin-top:8px;">← 총무 메뉴</button>
+      </div>
+    </div>
+
+    <!-- 재정 관리 -->
+    <div id="treasurer-finance" style="display:none;">
+      <div class="section-card active" style="display:block;">
+        <div class="sub-rank-title"><span class="material-symbols-outlined">account_balance</span>재정 관리</div>
+        <div class="finance-tab-row">
+          <button class="finance-tab active" id="finTabIncome" onclick="setFinanceTab('income')">📥 수입</button>
+          <button class="finance-tab" id="finTabExpense" onclick="setFinanceTab('expense')">📤 지출</button>
+        </div>
+
+        <!-- 입력 폼 -->
+        <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+          <input type="date" id="finDate" class="w-input" style="width:auto; flex:1; min-width:120px; padding:10px;" />
+          <input type="text" id="finDesc" class="w-input" placeholder="내용" style="flex:2; min-width:100px; padding:10px;" />
+          <input type="number" id="finAmount" class="w-input" placeholder="금액" style="width:100px; padding:10px;" />
+          <button class="w-btn" id="btnSearch" style="background:var(--wimbledon-sage); padding:10px 14px;" onclick="addFinanceItem()">
+            <span class="material-symbols-outlined" style="font-size:18px;">add</span>
+          </button>
+        </div>
+
+        <div id="financeListArea"></div>
+
+        <div class="finance-summary" id="financeSummary">
+          <div style="display:flex; justify-content:space-around; margin-bottom:10px;">
+            <div><div class="fs-label">총 수입</div><div id="fsTotalIncome" style="color:var(--wimbledon-sage); font-size:18px; margin-top:4px;">0원</div></div>
+            <div><div class="fs-label">총 지출</div><div id="fsTotalExpense" style="color:var(--up-red); font-size:18px; margin-top:4px;">0원</div></div>
+          </div>
+          <div style="border-top:2px solid var(--wimbledon-sage); padding-top:10px;">
+            <div class="fs-label">잔액</div>
+            <div class="fs-amount" id="fsBalance">0원</div>
+          </div>
+        </div>
+
+        <button class="btn-sub sky" onclick="copyFinanceStatus()" style="width:100%; margin-top:12px; display:flex; align-items:center; justify-content:center; gap:6px;">
+          <span class="material-symbols-outlined" style="font-size:18px;">content_copy</span>카톡 복사
+        </button>
+        <button class="btn-sub royal" onclick="showTreasurerMenu()" style="width:100%; margin-top:8px;">← 총무 메뉴</button>
+      </div>
+    </div>
+
+    <!-- 코트 공지 관리 -->
+    <div id="treasurer-court-mgmt" style="display:none;">
+      <div class="section-card active" style="display:block;">
+        <div class="sub-rank-title"><span class="material-symbols-outlined">edit_calendar</span>코트 공지 관리</div>
+
+        <!-- 입력 폼 -->
+        <div style="background:#f8f8f8; padding:14px; border-radius:14px; margin-bottom:14px;">
+          <!-- ✅ v3.81: 코트 프리셋 셀렉터 -->
+          <div style="margin-bottom:10px;">
+            <select id="courtPresetSelect" onchange="applyCourtPreset()" class="w-input" style="width:100%; padding:10px; box-sizing:border-box;">
+              <option value="">📌 저장된 코트 선택 (직접 입력)</option>
+            </select>
+          </div>
+          <div style="display:flex; gap:8px; margin-bottom:8px;">
+            <input type="date" id="courtNoticeDate" class="w-input" style="flex:1; padding:10px;" />
+            <input type="text" id="courtNoticeName" class="w-input" placeholder="코트명" style="flex:1; padding:10px;" />
+          </div>
+          <input type="text" id="courtNoticeAddr" class="w-input" placeholder="주소" style="width:100%; padding:10px; margin-bottom:8px; box-sizing:border-box;" />
+          <!-- ✅ v3.811: 시간대+코트번호 최대 3줄 -->
+          <div id="courtSlotRows">
+            <div class="court-slot-row" style="display:flex; gap:8px; margin-bottom:6px;">
+              <input type="text" class="w-input court-slot-time" placeholder="시간 (예: 07:00-11:00)" style="flex:1; padding:10px;" />
+              <input type="text" class="w-input court-slot-court" placeholder="코트번호 (예: 11,12번)" style="flex:1; padding:10px;" />
+            </div>
+          </div>
+          <button type="button" id="btnAddSlot" onclick="addCourtSlotRow()" style="border:none; background:none; color:var(--aussie-blue); font-size:13px; cursor:pointer; padding:4px 0; margin-bottom:8px;">+ 시간대 추가 (최대 3개)</button>
+          <button class="btn-main" onclick="addCourtNotice()" style="margin-top:4px; font-size:14px; padding:12px; display:flex; align-items:center; justify-content:center; gap:6px;">
+            <span class="material-symbols-outlined" style="font-size:18px;">add_circle</span>코트 공지 추가
+          </button>
+        </div>
+
+        <div id="courtNoticeList"></div>
+        <button class="btn-sub royal" onclick="showTreasurerMenu()" style="width:100%; margin-top:12px;">← 총무 메뉴</button>
+      </div>
+    </div>
+
+    <!-- 공지사항 관리 -->
+    <div id="treasurer-notice-mgmt" style="display:none;">
+      <div class="section-card active" style="display:block;">
+        <div class="sub-rank-title"><span class="material-symbols-outlined">campaign</span>공지사항 관리 <span style="font-size:12px; color:var(--text-gray);">(최대 5개)</span></div>
+
+        <!-- 입력 폼 -->
+        <div style="background:#f8f8f8; padding:14px; border-radius:14px; margin-bottom:14px;">
+          <textarea id="announcementTitle" class="w-input" rows="3" placeholder="공지 내용" style="width:100%; padding:10px; margin-bottom:8px; box-sizing:border-box; resize:vertical; font-family:inherit;"></textarea>
+          <label style="display:flex; align-items:center; gap:8px; font-size:14px; color:var(--text-dark); cursor:pointer;">
+            <input type="checkbox" id="announcementImportant" style="width:18px; height:18px;" />
+            ⭐ 중요 공지
+          </label>
+          <button class="btn-main" onclick="addAnnouncement()" style="margin-top:10px; font-size:14px; padding:12px; display:flex; align-items:center; justify-content:center; gap:6px;">
+            <span class="material-symbols-outlined" style="font-size:18px;">add_circle</span>공지 추가
+          </button>
+        </div>
+
+        <div id="announcementMgmtList"></div>
+        <button class="btn-sub royal" onclick="showTreasurerMenu()" style="width:100%; margin-top:12px;">← 총무 메뉴</button>
+      </div>
+    </div>
+
+  </div>
+  <div style="padding: 0 15px;">
+    <button class="btn-main" onclick="showView('admin')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
+  </div>
+</div>
+
+
+<script src="js/state.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/club.js"></script>
+<script src="js/game.js"></script>
+<script src="js/tournament.js"></script>
+<script src="js/round.js"></script>
+<script src="js/ladder.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/treasurer.js"></script>
+<script src="js/main.js"></script>
+<nav class="bottom-nav">
+  <div class="nav-item active" onclick="switchView('home', this)"><span class="material-symbols-outlined nav-icon">home</span>홈</div>
+  <div class="nav-item" onclick="switchView('game', this)"><span class="material-symbols-outlined nav-icon">sports_tennis</span>게임</div>
+  <div class="nav-item" onclick="switchView('tennis', this)"><span class="material-symbols-outlined nav-icon">emoji_events</span>랭킹</div>
+  <div class="nav-item" onclick="switchView('stats', this)"><span class="material-symbols-outlined nav-icon">monitoring</span>통계</div>
+  <div class="nav-item" onclick="switchView('admin', this)"><span class="material-symbols-outlined nav-icon">settings</span>운영</div>
+</nav>
+
+<!-- ========================================
+     미니 토너먼트 참가자 선택 모달
+     ======================================== -->
+<div id="tournament-modal" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span class="material-symbols-outlined">emoji_events</span>
+      미니 토너먼트 참가자 선택
+    </div>
+    <div class="modal-body">
+      <div class="modal-info">
+        <strong>💡 선택 가이드</strong><br>
+        • 원하는 인원을 자유롭게 선택하세요<br>
+        • 2, 4, 8명: 정규 토너먼트<br>
+        • 그 외 인원: 상위 랭커 부전승 자동 배정
+      </div>
+      <div id="modal-participant-list" class="modal-participant-list"></div>
+      <div style="margin-top: 15px; text-align: center; color: var(--aussie-blue); font-weight: 400;">
+        선택된 인원: <strong><span id="modal-selected-count">0</span>명/팀</strong>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn modal-btn-secondary" onclick="closeTournamentModal()">
+        <span class="material-symbols-outlined btn-ico">close</span>취소
+      </button>
+      <button class="modal-btn modal-btn-primary" onclick="startTournamentFromModal()">
+        <span class="material-symbols-outlined btn-ico">play_arrow</span>시작하기
+      </button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
