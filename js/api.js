@@ -225,40 +225,114 @@
     try { announcements = JSON.parse(localStorage.getItem(getLocalAnnouncementKey())) || []; } catch(e) { announcements = []; }
   }
 
-  // 코트공지 저장
+  // 코트공지 저장 (단건 — 하위호환용)
   async function saveCourtNotice(notice) {
     persistCourtNoticesLocal(); // 항상 로컬 먼저
+    // ✅ v3.83: 전체 배열을 GAS에 저장 (단건이 아니라 전체 동기화)
+    return await pushCourtNoticesToGAS();
+  }
+
+  // 공지사항 저장 (단건 — 하위호환용)
+  async function saveAnnouncement(announcement) {
+    persistAnnouncementsLocal(); // 항상 로컬 먼저
+    // ✅ v3.83: 전체 배열을 GAS에 저장 (단건이 아니라 전체 동기화)
+    return await pushAnnouncementsToGAS();
+  }
+
+  // ✅ v3.83: 공지사항 전체 배열을 GAS에 저장
+  async function pushAnnouncementsToGAS() {
+    persistAnnouncementsLocal(); // 항상 로컬 먼저
     if(!currentClub) return false;
     try {
-      const url = MASTER_GAS_URL + '?action=saveCourtNotice&clubId=' + encodeURIComponent(getActiveClubId());
-      const r = await fetchWithTimeout(url, {
+      const r = await fetchWithTimeout(MASTER_GAS_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(notice)
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'saveAnnouncements',
+          clubId: getActiveClubId(),
+          announcements: announcements
+        })
       }, 12000);
       const resp = await r.json();
       return resp.ok || false;
     } catch(e) {
-      console.warn('saveCourtNotice error:', e);
+      console.warn('pushAnnouncementsToGAS error:', e);
       return false;
     }
   }
 
-  // 공지사항 저장
-  async function saveAnnouncement(announcement) {
-    persistAnnouncementsLocal(); // 항상 로컬 먼저
+  // ✅ v3.83: 코트공지 전체 배열을 GAS에 저장
+  async function pushCourtNoticesToGAS() {
+    persistCourtNoticesLocal(); // 항상 로컬 먼저
     if(!currentClub) return false;
     try {
-      const url = MASTER_GAS_URL + '?action=saveAnnouncement&clubId=' + encodeURIComponent(getActiveClubId());
-      const r = await fetchWithTimeout(url, {
+      const r = await fetchWithTimeout(MASTER_GAS_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(announcement)
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'saveCourtNotices',
+          clubId: getActiveClubId(),
+          notices: courtNotices
+        })
       }, 12000);
       const resp = await r.json();
       return resp.ok || false;
     } catch(e) {
-      console.warn('saveAnnouncement error:', e);
+      console.warn('pushCourtNoticesToGAS error:', e);
+      return false;
+    }
+  }
+
+  // ✅ v3.83: 회비 데이터를 GAS에서 로드
+  async function fetchFeeData() {
+    if(!currentClub) return;
+    const cid = getActiveClubId();
+    try {
+      const url = MASTER_GAS_URL + '?action=getFeeData&clubId=' + encodeURIComponent(cid);
+      const r = await fetchWithTimeout(url, {}, 12000);
+      if(!r.ok) throw new Error('not ok');
+      const resp = await r.json();
+      if(resp.ok) {
+        feeData = resp.feeData || {};
+        monthlyFeeAmount = resp.monthlyFeeAmount || 0;
+        // localStorage에도 캐시
+        localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
+        localStorage.setItem('grandslam_monthly_fee_' + cid, monthlyFeeAmount);
+        return;
+      }
+    } catch(e) {
+      console.warn('fetchFeeData GAS error, using local:', e);
+    }
+    // GAS 실패 시 localStorage fallback
+    try { feeData = JSON.parse(localStorage.getItem('grandslam_fee_data_' + cid)) || {}; } catch(e) { feeData = {}; }
+    const savedFee = localStorage.getItem('grandslam_monthly_fee_' + cid);
+    if(savedFee) monthlyFeeAmount = parseInt(savedFee) || 0;
+  }
+
+  // ✅ v3.83: 회비 데이터를 GAS에 저장
+  async function pushFeeData() {
+    const cid = getActiveClubId();
+    // 항상 로컬 먼저
+    if(cid) {
+      localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
+      localStorage.setItem('grandslam_monthly_fee_' + cid, monthlyFeeAmount);
+    }
+    if(!currentClub) return false;
+    try {
+      const r = await fetchWithTimeout(MASTER_GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'saveFeeData',
+          clubId: cid,
+          feeData: feeData,
+          monthlyFeeAmount: monthlyFeeAmount
+        })
+      }, 12000);
+      const resp = await r.json();
+      return resp.ok || false;
+    } catch(e) {
+      console.warn('pushFeeData error:', e);
       return false;
     }
   }

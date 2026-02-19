@@ -53,6 +53,8 @@
     // ✅ v3.818: currentClub 바꾸기 전에 이전 클럽 ID로 먼저 저장 (버그 수정)
     if(currentClub && currentClub.clubId) {
       localStorage.setItem('grandslam_fee_data_' + currentClub.clubId, JSON.stringify(feeData));
+      // ✅ v3.83: GAS에도 저장 (비동기, 에러 무시)
+      pushFeeData().catch(e => console.warn('activateClub pushFeeData error:', e));
     }
 
     currentClub = club;
@@ -712,6 +714,8 @@
       persistCourtNoticesLocal();
       renderCourtNoticeList();
       loadCourtInfo();
+      // ✅ v3.83: GAS에도 저장
+      pushCourtNoticesToGAS();
     });
   }
 
@@ -785,6 +789,8 @@
       persistAnnouncementsLocal();
       renderAnnouncementMgmtList();
       loadNotices();
+      // ✅ v3.83: GAS에도 저장
+      pushAnnouncementsToGAS();
     });
   }
 

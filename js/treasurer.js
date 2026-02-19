@@ -131,26 +131,20 @@
     for(let y = curYear; y >= curYear - 2; y--) {
       sel.innerHTML += `<option value="${y}" ${y===curYear?'selected':''}>${y}년</option>`;
     }
-    // 월회비 복원
-    const savedFee = localStorage.getItem('grandslam_monthly_fee_' + getActiveClubId());
-    if(savedFee) { monthlyFeeAmount = parseInt(savedFee) || 0; }
-    $('monthlyFeeAmount').value = monthlyFeeAmount || '';
-    // ✅ v3.816: 회비 납부 현황 localStorage 복원 (clubId 있을 때만)
-    const cid = getActiveClubId();
-    if(cid) {
-      const savedFeeData = localStorage.getItem('grandslam_fee_data_' + cid);
-      if(savedFeeData) {
-        try { feeData = JSON.parse(savedFeeData); } catch(e) { feeData = {}; }
-      }
-    }
-    syncFeeToFinance(); // ✅ v3.8191: 복원 후 재정 연동 즉시 갱신
-    renderFeeTable();
+    // ✅ v3.83: GAS에서 회비 데이터 로드 (localStorage는 fallback)
+    fetchFeeData().then(() => {
+      $('monthlyFeeAmount').value = monthlyFeeAmount || '';
+      syncFeeToFinance();
+      renderFeeTable();
+    });
   }
 
   function saveMonthlyFee() {
     monthlyFeeAmount = parseInt($('monthlyFeeAmount').value) || 0;
     localStorage.setItem('grandslam_monthly_fee_' + getActiveClubId(), monthlyFeeAmount);
     syncFeeToFinance(); // 재정 연동 재계산
+    // ✅ v3.83: GAS에도 저장
+    pushFeeData();
   }
 
   function renderFeeTable() {
@@ -191,6 +185,8 @@
     if(cid) localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
     renderFeeTable();
     syncFeeToFinance();
+    // ✅ v3.83: GAS에도 저장
+    pushFeeData();
   }
 
   // ✅ 완납/해제 버튼 (연/월)
@@ -221,6 +217,8 @@
     // ✅ v3.816: 완납/해제 후 localStorage 저장 (clubId 있을 때만)
     const cid = getActiveClubId();
     if(cid) localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
+    // ✅ v3.83: GAS에도 저장
+    pushFeeData();
   }
 
   // ✅ 회비 → 재정 수입 자동 연동
@@ -290,17 +288,12 @@
     $('finDate').value = today;
     $('finDesc').value = '';
     $('finAmount').value = '';
-    // ✅ v3.8191: feeData + monthlyFeeAmount 복원 확실히 보장 (모든 클럽 공통)
-    const cid = getActiveClubId();
-    if(cid) {
-      const savedFeeData = localStorage.getItem('grandslam_fee_data_' + cid);
-      if(savedFeeData) { try { feeData = JSON.parse(savedFeeData); } catch(e) { feeData = {}; } }
-      const savedFee = localStorage.getItem('grandslam_monthly_fee_' + cid);
-      if(savedFee) { monthlyFeeAmount = parseInt(savedFee) || 0; }
-    }
-    syncFeeToFinance();
-    setFinanceTab('income');
-    renderFinanceList();
+    // ✅ v3.83: GAS에서 회비 데이터 로드 (localStorage는 fallback)
+    fetchFeeData().then(() => {
+      syncFeeToFinance();
+      setFinanceTab('income');
+      renderFinanceList();
+    });
   }
 
   function setFinanceTab(tab) {
