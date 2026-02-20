@@ -14,10 +14,14 @@
 
     // 1. 정식 회원 섹션
     html += '<div style="font-size:12px; color:#666; margin-bottom:8px; font-weight:bold; text-align:left; padding-left:5px;">정식 회원</div>';
-    html += '<div style="display:flex !important; flex-wrap:wrap !important; justify-content:flex-start !important; gap:8px; margin-bottom:20px;">';
+    html += '<div class="player-pool" style="margin-bottom:20px;">';
     members.forEach((p, i) => {
+      // ✅ v3.93: Material Symbols 아이콘
+      const gIcon = (p.gender === 'F')
+        ? '<span class="material-symbols-outlined" style="font-size:12px; color:#E8437A; vertical-align:middle;">female</span>'
+        : '<span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5; vertical-align:middle;">male</span>';
       html += `<input type="checkbox" id="tp${i}" class="p-chk" value="${escapeHtml(p.name)}" onclick="tourPick(this)">`;
-      html += `<label for="tp${i}" class="p-label" style="min-width:80px; flex:0 0 auto;">${escapeHtml(p.name)}<span class="p-rank">${i+1}위</span></label>`;
+      html += `<label for="tp${i}" class="p-label" style="min-width:80px; flex:0 0 auto;">${gIcon}${escapeHtml(p.name)}<span class="p-rank">${i+1}위</span></label>`;
     });
     html += '</div>';
 
@@ -27,7 +31,7 @@
       html += '<span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:#fff; padding:0 10px; font-size:11px; color:#999; font-weight:bold;">GUEST LIST</span>';
       html += '</div>';
 
-      html += '<div style="display:flex !important; flex-wrap:wrap !important; justify-content:flex-start !important; gap:8px;">';
+      html += '<div class="player-pool">';
       guests.forEach((p, i) => {
         html += `<input type="checkbox" id="tgp${i}" class="p-chk" value="${escapeHtml(p.name)}" onclick="tourPick(this)">`;
         html += `<label for="tgp${i}" class="p-label guest-label" style="min-width:80px; flex:0 0 auto;">[G] ${escapeHtml(p.name)}</label>`;
@@ -40,7 +44,7 @@
       html += '<div style="width:100%; margin:10px 0 15px; border-top:1px dashed #ddd; position:relative;">';
       html += '<span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:white; padding:0 10px; font-size:11px; color:var(--aussie-blue); font-weight:bold;">당일 게스트</span>';
       html += '</div>';
-      html += '<div style="display:flex !important; flex-wrap:wrap !important; justify-content:flex-start !important; gap:8px;">';
+      html += '<div class="player-pool">';
       oneTimePlayers.forEach((name, i) => {
         html += `<input type="checkbox" id="tp_ot${i}" class="p-chk" value="${escapeHtml(name)}" onclick="tourPick(this)">`;
         html += `<label for="tp_ot${i}" class="p-label day-guest-label" style="min-width:80px; flex:0 0 auto;">[당일] ${escapeHtml(name)}</label>`;

@@ -109,11 +109,15 @@
     // ✅ v3.816: HIDDEN_PLAYERS 제외
     const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name));
 
-    let html = '<div style="display:flex; flex-wrap:wrap; gap:8px;">';
+    let html = '<div class="player-pool">';
 
     // 2) 회원 버튼
     members.forEach((p, idx) => {
       const rankStr = `${p.rank || (idx+1)}위`;
+      // ✅ v3.93: Material Symbols 아이콘
+      const gIcon = (p.gender === 'F')
+        ? '<span class="material-symbols-outlined" style="font-size:12px; color:#E8437A; vertical-align:middle;">female</span>'
+        : '<span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5; vertical-align:middle;">male</span>';
       html += createPlayerOption({
         inputType: 'checkbox',
         nameAttr: 'round-player',
@@ -121,7 +125,7 @@
         value: p.name,
         checked: false,
         onClick: 'updateRoundCount(); checkRoundGenButton();',
-        labelText: displayName(p.name),
+        labelText: gIcon + displayName(p.name),
         isGuest: false,
         showRank: true,
         rankText: rankStr
@@ -134,7 +138,7 @@
       html += '<div style="width:100%; margin:10px 0 15px; border-top:1px dashed #ddd; position:relative;">';
       html += '<span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:white; padding:0 10px; font-size:11px; color:#999; font-weight:bold;">GUEST LIST</span>';
       html += '</div>';
-      html += '<div style="display:flex; flex-wrap:wrap; gap:8px;">';
+      html += '<div class="player-pool">';
       guests.forEach(p => {
         html += createPlayerOption({
           inputType: 'checkbox',
@@ -157,7 +161,7 @@
       html += '<div style="width:100%; margin:10px 0 15px; border-top:1px dashed #ddd; position:relative;">';
       html += '<span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:white; padding:0 10px; font-size:11px; color:var(--aussie-blue); font-weight:bold;">당일 게스트</span>';
       html += '</div>';
-      html += '<div style="display:flex; flex-wrap:wrap; gap:8px;">';
+      html += '<div class="player-pool">';
       oneTimePlayers.forEach((name, i) => {
         html += createPlayerOption({
           inputType: 'checkbox',

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v3.92</title>
+  <title>GrandSlam Ultimate v3.943</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -270,7 +270,7 @@
     </div>
   </div>
 
-  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v3.92</div>
+  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v3.943</div>
 </div>
 
 <div id="view-tennis" class="app-screen">
@@ -285,6 +285,19 @@
   </div>
 
   <div id="s1" class="section-card active">
+    <!-- ✅ v3.94: 성별 랭킹 서브탭 — Material Symbols -->
+    <div style="display:flex; gap:6px; margin-bottom:16px; background:#F2F2F7; border-radius:12px; padding:4px;">
+      <button id="gender-rank-tab-all" class="gender-tab-btn active" onclick="switchGenderRankTab('all')">
+        <span class="material-symbols-outlined" style="font-size:14px; vertical-align:middle;">leaderboard</span> 종합
+      </button>
+      <button id="gender-rank-tab-male" class="gender-tab-btn" onclick="switchGenderRankTab('male')">
+        <span class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; color:#3A7BD5;">male</span> 남자부
+      </button>
+      <button id="gender-rank-tab-female" class="gender-tab-btn" onclick="switchGenderRankTab('female')">
+        <span class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; color:#E8437A;">female</span> 여자부
+      </button>
+    </div>
+
     <div class="sub-rank-title"><span class="material-symbols-outlined">bar_chart</span>순위 변동 추이</div>
     <div class="chart-nav">
       <button class="chart-btn active" onclick="updateChartRange(0)">2-3월</button>
@@ -295,19 +308,57 @@
       <button class="chart-btn" onclick="updateChartRange(5)">12-1월</button>
     </div>
     <div style="height:320px; position:relative;"><canvas id="seasonChart"></canvas></div>
+
+    <!-- 종합 순위 — 탭에 따라 필터 적용 -->
     <div class="sub-rank-title"><span class="material-symbols-outlined">format_list_numbered</span>종합 순위표</div>
     <table id="seasonTable" class="tennis-table"></table>
-    <div class="sub-rank-title"><span class="material-symbols-outlined">groups</span>복식 랭킹</div>
-    <table id="seasonDoubleTable" class="tennis-table"></table>
-    <div class="sub-rank-title"><span class="material-symbols-outlined">person</span>단식 랭킹</div>
-    <table id="seasonSingleTable" class="tennis-table"></table>
 
+    <!-- 복식 랭킹 — 남자 -->
+    <div id="sec-double-male">
+      <div class="sub-rank-title"><span class="material-symbols-outlined">groups</span>복식 랭킹
+        <span class="material-symbols-outlined" style="font-size:14px; color:#3A7BD5; vertical-align:middle;">male</span> 남자
+      </div>
+      <table id="seasonDoubleTableM" class="tennis-table"></table>
+    </div>
+
+    <!-- 복식 랭킹 — 여자 -->
+    <div id="sec-double-female">
+      <div class="sub-rank-title"><span class="material-symbols-outlined">groups</span>복식 랭킹
+        <span class="material-symbols-outlined" style="font-size:14px; color:#E8437A; vertical-align:middle;">female</span> 여자
+      </div>
+      <table id="seasonDoubleTableF" class="tennis-table"></table>
+    </div>
+
+    <!-- 혼합 복식 랭킹 -->
+    <div id="sec-mixed">
+      <div class="sub-rank-title"><span class="material-symbols-outlined" style="color:#3A7BD5;">male</span><span class="material-symbols-outlined" style="color:#E8437A;">female</span> 혼합 복식 랭킹</div>
+      <table id="seasonMixedTable" class="tennis-table"></table>
+    </div>
+
+    <!-- 단식 랭킹 — 남자 -->
+    <div id="sec-single-male">
+      <div class="sub-rank-title"><span class="material-symbols-outlined">person</span>단식 랭킹
+        <span class="material-symbols-outlined" style="font-size:14px; color:#3A7BD5; vertical-align:middle;">male</span> 남자
+      </div>
+      <table id="seasonSingleTableM" class="tennis-table"></table>
+    </div>
+
+    <!-- 단식 랭킹 — 여자 -->
+    <div id="sec-single-female">
+      <div class="sub-rank-title"><span class="material-symbols-outlined">person</span>단식 랭킹
+        <span class="material-symbols-outlined" style="font-size:14px; color:#E8437A; vertical-align:middle;">female</span> 여자
+      </div>
+      <table id="seasonSingleTableF" class="tennis-table"></table>
+    </div>
+
+    <div id="guest-rank-section">
     <div class="sub-rank-title"><span class="material-symbols-outlined">group_add</span>게스트 시즌 종합</div>
     <table id="guestSeasonTotalTable" class="tennis-table"></table>
     <div class="sub-rank-title"><span class="material-symbols-outlined">groups</span>게스트 시즌 복식</div>
     <table id="guestSeasonDoubleTable" class="tennis-table"></table>
     <div class="sub-rank-title"><span class="material-symbols-outlined">person</span>게스트 시즌 단식</div>
     <table id="guestSeasonSingleTable" class="tennis-table"></table>
+    </div>
   </div>
 
   <div id="s2" class="section-card">
@@ -331,6 +382,14 @@
     
     <!-- ⭐ 추가: 참가 선수 선택 타이틀 -->
     <div class="tour-section-title" style="display:flex; justify-content:space-between; align-items:center;"><span style="display:flex;align-items:center;gap:4px;"><span class="material-symbols-outlined">group_add</span>참가 선수 선택 (<span id="record-cnt">0</span>명)</span><button onclick="addOneTimePlayer()" style="font-size:11px; padding:4px 10px; border-radius:20px; border:1px solid var(--aussie-blue); background:var(--aussie-blue); color:white; cursor:pointer; font-weight:600;">+ 당일 게스트</button></div>
+    <!-- ✅ v3.93: 혼성 복식 자동배치 버튼 — Material Symbols -->
+    <div id="mixed-double-btn-area" style="margin-bottom:8px; display:none;">
+      <button onclick="autoMixedDouble()" style="width:100%; padding:9px; border:2px dashed #9B59B6; border-radius:12px; background:#faf5ff; color:#555; font-size:12px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+        <span class="material-symbols-outlined" style="font-size:16px; color:#3A7BD5;">male</span>
+        <span class="material-symbols-outlined" style="font-size:16px; color:#E8437A;">female</span>
+        혼성 복식 자동 배치 (남1+여1 vs 남1+여1)
+      </button>
+    </div>
     <!-- ✅ v3.8202: 1vs2용 설명 문구 (복식 모드 + 활성화 클럽만 표시) -->
     <!-- ✅ v3.8206: hint-1v2 제거됨 -->
     <div class="pool differ" id="pP"></div>
@@ -379,6 +438,20 @@
       <input type="text" id="pI" class="w-input" style="width:75%;" placeholder="성함">
       <button onclick="addP()" class="w-btn" style="background:var(--wimbledon-sage); margin-left:8px;">등록</button>
     </div>
+    <!-- ✅ v3.93: 성별 선택 — Material Symbols 아이콘 -->
+    <div style="display:flex; align-items:center; gap:16px; margin:-10px 0 10px 0; font-size:12px;">
+      <span style="color:#666; font-weight:bold;">성별:</span>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="radio" name="pGender" value="M" checked style="margin:0; accent-color:#3A7BD5;">
+        <span class="material-symbols-outlined" style="font-size:18px; color:#3A7BD5; vertical-align:middle;">male</span>
+        <span style="font-size:12px; color:#3A7BD5; font-weight:600;">남</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="radio" name="pGender" value="F" style="margin:0; accent-color:#E8437A;">
+        <span class="material-symbols-outlined" style="font-size:18px; color:#E8437A; vertical-align:middle;">female</span>
+        <span style="font-size:12px; color:#E8437A; font-weight:600;">여</span>
+      </label>
+    </div>
     <div style="display:flex; align-items:center; gap:6px; margin:-10px 0 14px 0; font-size:11px; color:#666;">
       <input type="checkbox" id="pIsGuest" style="margin:0;">
       <label for="pIsGuest">준회원에 준하는 게스트로 등록 (체크 시 랭킹에서 게스트로 분리)</label>
@@ -419,6 +492,12 @@
       <div class="r-line r-mini">- ✅ v3.8206: 신기능 — 당일 게스트 추가 (순위/통계 제외, matchLog만 기록), 1대2대결용 버튼 대체</div>
       <div class="r-line r-mini">- ✅ v3.90: 코드분리작업, 데이타 클라우드 시스템 도입</div>
       <div class="r-line r-mini">- ✅ v3.92: 프로급 이벤트 아키텍처 보강</div>
+      <div class="r-line r-mini">- ✅ v3.92 남/녀 성별 시스템 — 등록/목록/풀 뱃지, 랭킹 종합·남자부·여자부 탭 분리, 혼성 복식 자동배치, 토너먼트·라운드 기존 배치방식(랭킹/무작위/지정) 동작 확인</div>
+      <div class="r-line r-mini">- ✅ v3.93 디자인 통일 — 이모지 전면 제거, Material Symbols Outlined(male/female 아이콘)으로 교체. 랭킹 테이블 성별 컬럼 제거 → 이름 셀 인라인 아이콘. state.js gender 필드('M'|'F') 명세 정규화</div>
+      <div class="r-line r-mini">- ✅ v3.94 gender 시스템 완결 — gender 저장버그 수정(pushPayload race condition), 사다리 아이콘 제거, 혼복 필드(mScore/mWins/mLosses) 신설, 랭킹 종합고정+복식남녀분리+혼복랭킹+단식남녀분리, 주간 자동리셋(월요일 기준)</div>
+      <div class="r-line r-mini">- ✅ v3.941 gender 근본 수정 — GAS DATA_FIELDS에 gender 컬럼 추가, 기존 시트 자동 마이그레이션('M' 기본값), 혼복 판별 개선(한 팀이라도 남+여면 해당 팀 혼복 점수 취득)</div>
+      <div class="r-line r-mini">- ✅ v3.942 랭킹 탭 버그 수정(남자부/여자부 섹션 분리 show/hide), 선수 분석 리포트 이성간 단식(최고승률/천적) + 혼복 최고/분발 파트너 + 혼복 남자/여자 천적 카드 추가</div>
+      <div class="r-line r-mini">- ✅ v3.943 동성 필터링(단식/복식 파트너/천적 동성만 집계), 이성간/혼복 카드 제목 가운데정렬, 선수풀 CSS Grid 반응형(3열→2열→1열 자동, 버튼 균등 확장)</div>
     </div>
   
     
@@ -469,6 +548,25 @@
           <div id="res-s-worst" style="font-size:16px; margin-top:5px;">-</div>
           <div id="res-s-worst-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
         </div>
+        <!-- ✅ v3.942: 이성간 단식 카드 -->
+        <div class="team-box" style="border:1px solid #3A7BD5; background:rgba(58,123,213,0.05);">
+          <div style="font-size:11px; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:2px;">
+            <span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5;">male</span>
+            <span class="material-symbols-outlined" style="font-size:12px; color:#E8437A;">female</span>
+            <span style="color:#3A7BD5;">이성간 단식 최고 승률</span>
+          </div>
+          <div id="res-cross-best" style="font-size:16px; margin-top:5px;">-</div>
+          <div id="res-cross-best-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
+        </div>
+        <div class="team-box" style="border:1px solid #E8437A; background:rgba(232,67,122,0.05);">
+          <div style="font-size:11px; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:2px;">
+            <span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5;">male</span>
+            <span class="material-symbols-outlined" style="font-size:12px; color:#E8437A;">female</span>
+            <span style="color:#E8437A;">이성간 단식 천적</span>
+          </div>
+          <div id="res-cross-worst" style="font-size:16px; margin-top:5px;">-</div>
+          <div id="res-cross-worst-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
+        </div>
         <div class="team-box" style="border:1px solid var(--wimbledon-sage); background:rgba(93, 156, 118, 0.06);">
           <div style="font-size:11px; color:var(--wimbledon-sage); font-weight:bold;">복식 최고 파트너</div>
           <div id="res-d-partner" style="font-size:16px; margin-top:5px;">-</div>
@@ -478,6 +576,42 @@
           <div style="font-size:11px; color:#AF52DE; font-weight:bold;">복식 분발 파트너</div>
           <div id="res-d-partner-worst" style="font-size:16px; margin-top:5px;">-</div>
           <div id="res-d-partner-worst-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
+        </div>
+        <!-- ✅ v3.942: 혼복 파트너 카드 -->
+        <div class="team-box" style="border:1px solid #5AC8FA; background:rgba(90,200,250,0.06);">
+          <div style="font-size:11px; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:2px;">
+            <span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5;">male</span>
+            <span class="material-symbols-outlined" style="font-size:12px; color:#E8437A;">female</span>
+            <span style="color:#5AC8FA;">혼복 최고 파트너</span>
+          </div>
+          <div id="res-mixed-partner" style="font-size:16px; margin-top:5px;">-</div>
+          <div id="res-mixed-partner-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
+        </div>
+        <div class="team-box" style="border:1px solid #FF9500; background:rgba(255,149,0,0.05);">
+          <div style="font-size:11px; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:2px;">
+            <span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5;">male</span>
+            <span class="material-symbols-outlined" style="font-size:12px; color:#E8437A;">female</span>
+            <span style="color:#FF9500;">혼복 분발 파트너</span>
+          </div>
+          <div id="res-mixed-partner-worst" style="font-size:16px; margin-top:5px;">-</div>
+          <div id="res-mixed-partner-worst-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
+        </div>
+        <!-- ✅ v3.942: 혼복 남자천적 / 여자천적 카드 -->
+        <div class="team-box" style="border:1px solid #3A7BD5; background:rgba(58,123,213,0.08);">
+          <div style="font-size:11px; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:2px;">
+            <span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5;">male</span>
+            <span style="color:#3A7BD5;">혼복 남자 천적</span>
+          </div>
+          <div id="res-mixed-enemy-m" style="font-size:16px; margin-top:5px;">-</div>
+          <div id="res-mixed-enemy-m-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
+        </div>
+        <div class="team-box" style="border:1px solid #E8437A; background:rgba(232,67,122,0.08);">
+          <div style="font-size:11px; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:2px;">
+            <span class="material-symbols-outlined" style="font-size:12px; color:#E8437A;">female</span>
+            <span style="color:#E8437A;">혼복 여자 천적</span>
+          </div>
+          <div id="res-mixed-enemy-f" style="font-size:16px; margin-top:5px;">-</div>
+          <div id="res-mixed-enemy-f-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
         </div>
         <div class="team-box" style="border:1px solid var(--roland-clay); background:rgba(217, 140, 115, 0.10);">
           <div style="font-size:11px; color:var(--roland-clay); font-weight:bold;">복식 라이벌1(천적1)</div>

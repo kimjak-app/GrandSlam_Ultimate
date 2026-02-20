@@ -150,7 +150,10 @@ async function pushPayload(payload) {
     let resp = null;
     try { resp = await r.json(); } catch (_) { }
     if (resp && typeof resp === "object") {
-      if (Array.isArray(resp.data)) players = resp.data.map(ensure);
+      if (Array.isArray(resp.data)) {
+        // ✅ v3.941: GAS가 gender 필드를 직접 저장/반환하므로 ensure()만으로 충분
+        players = resp.data.map(ensure);
+      }
       if (Array.isArray(resp.matchLog)) matchLog = normalizeMatchLog(resp.matchLog);
     }
     setStatus('');

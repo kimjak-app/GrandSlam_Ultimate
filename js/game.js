@@ -83,10 +83,16 @@
     var n=$('pI').value.trim();
     if(n && !players.find(p=>p.name==n)){
       var isGuest = $('pIsGuest') ? $('pIsGuest').checked : false;
-      players.push(ensure({name:n, isGuest:isGuest}));
+      // ✅ v3.92: 성별 선택 (라디오 버튼)
+      var genderRadio = document.querySelector('input[name="pGender"]:checked');
+      var gender = genderRadio ? genderRadio.value : 'M';
+      players.push(ensure({name:n, isGuest:isGuest, gender:gender}));
       pushDataOnly();
       $('pI').value='';
       if($('pIsGuest')) $('pIsGuest').checked = false;
+      // ✅ v3.92: 성별 라디오 남자로 초기화
+      var mRadio = document.querySelector('input[name="pGender"][value="M"]');
+      if(mRadio) mRadio.checked = true;
       updatePlayerList();
       gsAlert(n + (isGuest ? ' (게스트) 등록!' : ' 등록!'));
       renderLadderPlayerPool();
@@ -122,6 +128,20 @@
     gsAlert(p.name + '은(는) 이제 ' + (p.isGuest ? '게스트' : '회원') + '입니다.');
   }
 
+  // ✅ v3.94: async로 변경 — push 완료 후 UI 업데이트, race condition 방지
+  async function toggleGender(n){
+    var p = players.find(x => x.name === n);
+    if(!p) return;
+    p.gender = (p.gender === 'F') ? 'M' : 'F';
+    // UI 즉시 반영
+    updatePlayerList();
+    renderPool();
+    renderStatsPlayerList();
+    // push 완료 후 알럿 (push 중 다른 액션으로 덮어쓰기 방지)
+    await pushDataOnly();
+    gsAlert(p.name + ' → ' + (p.gender === 'F' ? '여자(F)' : '남자(M)') + '로 변경됐습니다.');
+  }
+
   function renderPool(){
     const members = players.filter(p => !p.isGuest).sort((a, b) => (b.score || 0) - (a.score || 0));
     // ✅ v3.816: HIDDEN_PLAYERS 제외 (일반 게스트만), 1대2대결용은 별도 처리
@@ -135,13 +155,17 @@
 
     // 1. 정식 회원 섹션
     html += '<div style="font-size:12px; color:#666; margin-bottom:8px; font-weight:bold; text-align:left; padding-left:5px;">정식 회원</div>';
-    html += '<div style="display:flex !important; flex-wrap:wrap !important; justify-content:flex-start !important; gap:8px; margin-bottom:20px;">';
+    html += '<div class="player-pool" style="margin-bottom:20px;">';
     
     members.forEach((p, index) => {
       const isSelected = (window.hT && window.hT.includes(p.name)) || (window.aT && window.aT.includes(p.name));
       const chkId = `pool_p_${index}`;
+      // ✅ v3.93: Material Symbols 아이콘
+      const gIcon = (p.gender === 'F')
+        ? '<span class="material-symbols-outlined" style="font-size:12px; color:#E8437A; vertical-align:middle;">female</span>'
+        : '<span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5; vertical-align:middle;">male</span>';
       html += `<input type="checkbox" id="${chkId}" class="p-chk" value="${escapeHtml(p.name)}" ${isSelected ? 'checked' : ''} onclick="pick('${escapeHtml(p.name).replace(/\'/g,"&#39;")}')">`;
-      html += `<label for="${chkId}" class="p-label">${escapeHtml(p.name)}<span class="p-rank">${index+1}위</span></label>`;
+      html += `<label for="${chkId}" class="p-label">${gIcon}${escapeHtml(p.name)}<span class="p-rank">${index+1}위</span></label>`;
     });
     html += '</div>';
 
@@ -150,7 +174,7 @@
       html += '<div style="width:100%; margin:10px 0 15px; border-top:1px dashed #ddd; position:relative;">';
       html += '<span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:#fff; padding:0 10px; font-size:11px; color:#999; font-weight:bold;">GUEST LIST</span>';
       html += '</div>';
-      html += '<div style="display:flex !important; flex-wrap:wrap !important; justify-content:flex-start !important; gap:8px;">';
+      html += '<div class="player-pool">';
       guests.forEach((p, index) => {
         const isSelected = (window.hT && window.hT.includes(p.name)) || (window.aT && window.aT.includes(p.name));
         const chkId = `pool_g_${index}`;
@@ -164,7 +188,7 @@
       html += '<div style="width:100%; margin:10px 0 8px; border-top:1px dashed #ddd; position:relative;">';
       html += '<span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:white; padding:0 10px; font-size:11px; color:var(--aussie-blue); font-weight:bold;">당일 게스트</span>';
       html += '</div>';
-      html += '<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:4px;">';
+      html += '<div class="player-pool" style="margin-bottom:4px;">';
       oneTimePlayers.forEach((name, i) => {
         const isSelected = hT.includes(name) || aT.includes(name);
         const chkId = `pool_ot_${i}`;
@@ -225,8 +249,40 @@
     
     // ⭐ 카운트 리셋
     updateRecordCount();
+    // ✅ v3.92: 복식 모드일 때 혼성 버튼 표시
+    const mixedArea = $('mixed-double-btn-area');
+    if(mixedArea) mixedArea.style.display = (t === 'double') ? 'block' : 'none';
     // ✅ v3.8201: 단식/복식 전환 시 1vs2용 버튼 상태 갱신
     renderPool();
+  }
+
+  // ✅ v3.92: 혼성 복식 자동 배치 (남1+여1 vs 남1+여1)
+  function autoMixedDouble(){
+    if(mType !== 'double') { gsAlert('복식 모드에서만 사용 가능해요!'); return; }
+    
+    const pool = players.filter(p => !p.isGuest);
+    const males = pool.filter(p => p.gender !== 'F').sort((a,b) => (b.score||0)-(a.score||0));
+    const females = pool.filter(p => p.gender === 'F').sort((a,b) => (b.score||0)-(a.score||0));
+    
+    if(males.length < 2 || females.length < 2) {
+      gsAlert('혼성 복식을 위해 남자 2명 이상, 여자 2명 이상이 필요해요.\n현재: 남자 ' + males.length + '명, 여자 ' + females.length + '명');
+      return;
+    }
+    
+    // 랭킹 기반 균형 배치: 남1위+여2위 vs 남2위+여1위
+    const m1 = males[0], m2 = males[1];
+    const f1 = females[0], f2 = females[1];
+    
+    hT = [m1.name, f2.name];
+    aT = [m2.name, f1.name];
+    
+    $('hN').innerText = hT.map(displayName).join(',');
+    $('aN').innerText = aT.map(displayName).join(',');
+    
+    // 풀에서 체크박스 동기화
+    renderPool();
+    
+    gsAlert('혼성 자동 배치 완료!\n[남] ' + m1.name + ' + [여] ' + f2.name + '\nvs\n[남] ' + m2.name + ' + [여] ' + f1.name);
   }
 
   function updatePlayerList(){
@@ -237,11 +293,19 @@
     let rows = all.map(p => {
       const safeName = escapeHtml(p.name).replace(/'/g,"&#39;");
       const typeLabel = p.isGuest ? '<span style="color:var(--text-gray);">게스트</span>' : '회원';
+      // ✅ v3.93: Material Symbols 아이콘 (이름 앞 인라인)
+      const gIcon = (p.gender === 'F')
+        ? '<span class="material-symbols-outlined" style="font-size:15px; color:#E8437A; vertical-align:middle; margin-right:3px;">female</span>'
+        : '<span class="material-symbols-outlined" style="font-size:15px; color:#3A7BD5; vertical-align:middle; margin-right:3px;">male</span>';
+      const gBtnIcon = (p.gender === 'F')
+        ? '<span class="material-symbols-outlined" style="font-size:14px; vertical-align:middle;">female</span>'
+        : '<span class="material-symbols-outlined" style="font-size:14px; vertical-align:middle;">male</span>';
       return `<tr>
-        <td style="text-align:left; padding-left:10px; font-weight:400; max-width:none; white-space:nowrap; overflow:visible; text-overflow:clip;">${escapeHtml(displayName(p.name))}</td>
+        <td style="text-align:left; padding-left:10px; font-weight:400; max-width:none; white-space:nowrap; overflow:visible; text-overflow:clip;">${gIcon}${escapeHtml(displayName(p.name))}</td>
         <td style="text-align:center; font-size:12px; width:50px;">${typeLabel}</td>
-        <td style="text-align:right; padding-right:5px; width:140px; white-space:nowrap;">
+        <td style="text-align:right; padding-right:5px; width:160px; white-space:nowrap;">
           <button onclick="editP('${safeName}')" style="background:var(--aussie-blue); color:white; border:none; padding:6px 8px; border-radius:8px; font-size:11px; font-weight:400;">수정</button>
+          <button onclick="toggleGender('${safeName}')" style="background:${p.gender==='F'?'#E8437A':'#3A7BD5'}; color:white; border:none; padding:6px 8px; border-radius:8px; font-size:11px; font-weight:400;">${gBtnIcon}</button>
           <button onclick="toggleGuest('${safeName}')" style="background:#8E8E93; color:white; border:none; padding:6px 8px; border-radius:8px; font-size:11px; font-weight:400;">구분</button>
           <button onclick="delP('${safeName}')" style="background:var(--roland-clay); color:white; border:none; padding:6px 8px; border-radius:8px; font-size:11px; font-weight:400;">삭제</button>
         </td>

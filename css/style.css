@@ -53,6 +53,9 @@
     .tab-menu { display: flex; gap: 8px; margin-bottom: 20px; }
     .tab-btn { flex: 1; padding: 12px 0; border: none; font-size: 13px; font-weight: 400; cursor: pointer; border-radius: 12px; transition: all 0.2s; background: var(--roland-clay); color: white; opacity: 0.8; }
     .tab-btn.active { background: var(--aussie-blue) !important; color: white; opacity: 1; transform: scale(1.02); box-shadow: 0 2px 8px rgba(102, 157, 179, 0.4); }
+    /* ✅ v3.92: 성별 랭킹 서브탭 */
+    .gender-tab-btn { flex:1; padding:8px 0; border:none; font-size:12px; font-weight:500; cursor:pointer; border-radius:9px; transition:all 0.2s; background:transparent; color:#666; }
+    .gender-tab-btn.active { background:white; color:#333; font-weight:700; box-shadow:0 1px 4px rgba(0,0,0,0.15); }
 
     .section-card { background: white; padding: 20px; border-radius: 20px; min-height: 450px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); display: none; margin-bottom: 20px; }
     .section-card.active { display: block; }
@@ -110,6 +113,12 @@
     .tour-section-title .material-symbols-outlined { color: var(--wimbledon-sage) !important; font-size: 18px; }
 
     .player-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 20px; }
+    /* ✅ v3.943: CSS Grid 반응형 풀 — 3열→2열→1열 자동, 버튼이 남은 공간 균등 채움 */
+    .player-pool {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+      gap: 8px;
+    }
     .p-chk { display: none; }
     .p-label { background: white; border: 2px solid #ddd; color: #888; padding: 8px 6px; border-radius: 10px; text-align: center; font-size: 13px; font-weight: 400; cursor: pointer; transition: 0.2s; }
     .guest-label { background:#f9f9f9; border-color:#ddd; color:#777; }
@@ -407,39 +416,25 @@
        선수 버튼 기본 스타일
        ======================================== */
     .p-label {
-      min-width: 75px;
-      flex: 0 0 auto;
+      width: 100%;
       box-sizing: border-box;
+      text-align: center;
     }
 
     /* ========================================
-       모바일 선수 버튼 3개 배치 (완전 수정)
+       v3.943: player-pool CSS Grid 대응
+       모바일에서 열 수에 관계없이 버튼이 셀을 꽉 채움
        ======================================== */
-    @media (max-width: 420px) {
-      .p-label {
-        /* ⭐ min-width 완전 제거 */
-        min-width: 0 !important;
-        /* ⭐ width와 max-width 동일하게 설정 */
-        width: calc(33.333% - 6px) !important;
-        max-width: calc(33.333% - 6px) !important;
-        /* ⭐ flex-basis도 동일하게 */
-        flex: 0 0 calc(33.333% - 6px) !important;
-        /* ⭐ box-sizing으로 padding 포함 계산 */
-        box-sizing: border-box !important;
-        /* ⭐ 패딩과 폰트 축소 */
-        padding: 6px 2px !important;
-        font-size: 12px !important;
-        /* ⭐ 텍스트 줄바꿈 방지 */
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-      }
-      
-      .p-rank {
-        font-size: 9px !important;
-        display: block !important;
-        margin-top: 2px !important;
-      }
+    .player-pool .p-label,
+    .player-pool label.p-label {
+      width: 100% !important;
+      min-width: 0 !important;
+      flex: unset !important;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding: 8px 4px;
+      font-size: 12px;
     }
 
     /* ========================================

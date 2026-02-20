@@ -20,6 +20,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 스플래시는 sync 완료 즉시 숨김
   hideSplashSafe();
 
+  // ✅ v3.94: 주간 랭킹 자동 리셋 — 월요일 기준, 클럽별 localStorage
+  try { checkAndAutoResetWeekly(); } catch(e) { console.warn('autoResetWeekly error:', e); }
+
   // 날씨/코트/공지는 스플래시와 무관하게 병렬 처리
   try { loadWeatherForNextMeeting(0); } catch (e) { console.error("loadWeather() error:", e); }
   Promise.all([
@@ -90,3 +93,41 @@ window.addEventListener("resize", () => {
   updateWeekly();
   setTimeout(applyAutofitAllTables, 0);
 });
+
+// ✅ v3.94: 주간 랭킹 자동 리셋 — 월요일 기준
+function checkAndAutoResetWeekly() {
+  // 가장 최근 지나간 월요일 자정 계산
+  const now = new Date();
+  const day = now.getDay(); // 0=일,1=월,...,6=토
+  const daysSinceMon = (day === 0) ? 6 : day - 1;
+  const lastMonday = new Date(now);
+  lastMonday.setHours(0, 0, 0, 0);
+  lastMonday.setDate(now.getDate() - daysSinceMon);
+  const lastMondayStr = lastMonday.toISOString().slice(0, 10); // 'YYYY-MM-DD'
+
+  // 클럽별 고유 key
+  const clubId = (typeof getActiveClubId === 'function') ? getActiveClubId() : 'default';
+  const storageKey = 'grandslam_weekly_reset_' + clubId;
+  const lastResetStr = localStorage.getItem(storageKey) || '';
+
+  if (lastResetStr >= lastMondayStr) return; // 이미 이번 주에 리셋됨
+
+  // 주간 필드 초기화
+  if (!Array.isArray(players) || players.length === 0) return;
+  players.forEach(p => {
+    ['weekly','wdScore','wsScore','wWins','wLosses','wdWins','wdLosses','wsWins','wsLosses','lastW','lastWD','lastWS'].forEach(f => p[f] = 0);
+  });
+
+  // 서버에 저장
+  if (typeof pushDataOnly === 'function') {
+    pushDataOnly().then(() => {
+      localStorage.setItem(storageKey, lastMondayStr);
+      if (typeof updateWeekly === 'function') updateWeekly();
+      // 토스트 알림
+      if (typeof gsAlert === 'function') {
+        gsAlert('📅 주간 랭킹이 자동 초기화됐습니다.\n(기준: ' + lastMondayStr + ' 월요일)');
+      }
+      console.log('[v3.94] 주간 자동 리셋 완료:', lastMondayStr);
+    });
+  }
+}

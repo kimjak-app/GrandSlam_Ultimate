@@ -38,6 +38,18 @@
   var _clubPinCallback = null;
 
   // Player & Match Data
+  // ✅ v3.93: Player 객체 gender 필드 명세
+  //   gender: 'M' | 'F'  (string, 단일 대문자)
+  //   - 'M' = 남자 (Male)  — 기본값, ensure()에서 자동 정규화
+  //   - 'F' = 여자 (Female)
+  //   - undefined/null → ensure()가 'M'으로 보정
+  //   - 혼성 복식 자동 매칭 알고리즘의 핵심 근거 필드
+  // ✅ v3.94: 혼복 전용 필드 명세
+  //   mScore  : 혼복 총점
+  //   mWins   : 혼복 승수
+  //   mLosses : 혼복 패수
+  //   lastM   : 혼복 지난 랭킹 (스냅샷)
+  //   - 역추산: matchLog의 팀 구성원 gender로 혼복 여부 판별
   var players = [];      // 선수 목록
   var matchLog = [];     // 경기 기록 (MatchLog 누적 기반 통계)
   
