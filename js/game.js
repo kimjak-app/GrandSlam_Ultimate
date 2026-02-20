@@ -162,8 +162,8 @@
       const chkId = `pool_p_${index}`;
       // ✅ v3.93: Material Symbols 아이콘
       const gIcon = (p.gender === 'F')
-        ? '<span class="material-symbols-outlined gender-icon-inline" style="font-size:12px; color:#E8437A; vertical-align:middle;">female</span>'
-        : '<span class="material-symbols-outlined gender-icon-inline" style="font-size:12px; color:#3A7BD5; vertical-align:middle;">male</span>';
+        ? '<span class="material-symbols-outlined" style="font-size:12px; color:#E8437A; vertical-align:middle;">female</span>'
+        : '<span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5; vertical-align:middle;">male</span>';
       html += `<input type="checkbox" id="${chkId}" class="p-chk" value="${escapeHtml(p.name)}" ${isSelected ? 'checked' : ''} onclick="pick('${escapeHtml(p.name).replace(/\'/g,"&#39;")}')">`;
       html += `<label for="${chkId}" class="p-label">${gIcon}${escapeHtml(p.name)}<span class="p-rank">${index+1}위</span></label>`;
     });
@@ -295,8 +295,8 @@
       const typeLabel = p.isGuest ? '<span style="color:var(--text-gray);">게스트</span>' : '회원';
       // ✅ v3.93: Material Symbols 아이콘 (이름 앞 인라인)
       const gIcon = (p.gender === 'F')
-        ? '<span class="material-symbols-outlined gender-icon-inline" style="font-size:15px; color:#E8437A; vertical-align:middle; margin-right:3px;">female</span>'
-        : '<span class="material-symbols-outlined gender-icon-inline" style="font-size:15px; color:#3A7BD5; vertical-align:middle; margin-right:3px;">male</span>';
+        ? '<span class="material-symbols-outlined" style="font-size:15px; color:#E8437A; vertical-align:middle; margin-right:3px;">female</span>'
+        : '<span class="material-symbols-outlined" style="font-size:15px; color:#3A7BD5; vertical-align:middle; margin-right:3px;">male</span>';
       const gBtnIcon = (p.gender === 'F')
         ? '<span class="material-symbols-outlined" style="font-size:14px; vertical-align:middle;">female</span>'
         : '<span class="material-symbols-outlined" style="font-size:14px; vertical-align:middle;">male</span>';

@@ -485,8 +485,8 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
     members.forEach((p, i) => {
       // ✅ v3.93: Material Symbols 아이콘
       const gIcon = (p.gender === 'F')
-        ? '<span class="material-symbols-outlined gender-icon-inline" style="font-size:13px; color:#E8437A; vertical-align:middle;">female</span>'
-        : '<span class="material-symbols-outlined gender-icon-inline" style="font-size:13px; color:#3A7BD5; vertical-align:middle;">male</span>';
+        ? '<span class="material-symbols-outlined" style="font-size:13px; color:#E8437A; vertical-align:middle;">female</span>'
+        : '<span class="material-symbols-outlined" style="font-size:13px; color:#3A7BD5; vertical-align:middle;">male</span>';
       html += createPlayerOption({ inputType:"radio", nameAttr:"statsPick", id:`stat_p_${i}`, value:p.name, checked:false, onClick:`viewStats('${escapeHtml(p.name).replace(/'/g,"&#39;")}')`, labelText:`${gIcon}${escapeHtml(displayName(p.name))}`, isGuest:false, showRank:true, rankText:`${i+1}위` });
     });
     html += '</div>';

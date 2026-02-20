@@ -18,8 +18,8 @@
     members.forEach((p, i) => {
       // ✅ v3.93: Material Symbols 아이콘
       const gIcon = (p.gender === 'F')
-        ? '<span class="material-symbols-outlined gender-icon-inline" style="font-size:12px; color:#E8437A; vertical-align:middle;">female</span>'
-        : '<span class="material-symbols-outlined gender-icon-inline" style="font-size:12px; color:#3A7BD5; vertical-align:middle;">male</span>';
+        ? '<span class="material-symbols-outlined" style="font-size:12px; color:#E8437A; vertical-align:middle;">female</span>'
+        : '<span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5; vertical-align:middle;">male</span>';
       html += `<input type="checkbox" id="tp${i}" class="p-chk" value="${escapeHtml(p.name)}" onclick="tourPick(this)">`;
       html += `<label for="tp${i}" class="p-label" style="min-width:80px; flex:0 0 auto;">${gIcon}${escapeHtml(p.name)}<span class="p-rank">${i+1}위</span></label>`;
     });
