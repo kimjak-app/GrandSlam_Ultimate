@@ -116,8 +116,8 @@
       const rankStr = `${p.rank || (idx+1)}위`;
       // ✅ v3.93: Material Symbols 아이콘
       const gIcon = (p.gender === 'F')
-        ? '<span class="material-symbols-outlined" style="font-size:12px; color:#E8437A; vertical-align:middle;">female</span>'
-        : '<span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5; vertical-align:middle;">male</span>';
+        ? '<span class="material-symbols-outlined gender-icon-inline" style="font-size:12px; color:#E8437A; vertical-align:middle;">female</span>'
+        : '<span class="material-symbols-outlined gender-icon-inline" style="font-size:12px; color:#3A7BD5; vertical-align:middle;">male</span>';
       html += createPlayerOption({
         inputType: 'checkbox',
         nameAttr: 'round-player',
