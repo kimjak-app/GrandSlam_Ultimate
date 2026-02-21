@@ -432,55 +432,48 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
     const list = Object.entries(pairMap)
       .map(([key, v]) => ({ key, names: v.names, wins: v.wins, losses: v.losses, total: v.wins + v.losses }))
       .filter(v => v.total >= 1)
-      .sort((a, b) => b.wins - a.wins || b.total - a.total);
+      // ✅ v3.9493: 승률 기준 정렬로 변경
+      .sort((a, b) => {
+        const ar = a.total > 0 ? a.wins / a.total : 0;
+        const br = b.total > 0 ? b.wins / b.total : 0;
+        return br - ar || b.wins - a.wins || b.total - a.total;
+      });
 
     if (list.length === 0) {
-      table.innerHTML = '<tbody><tr><td colspan="5" style="text-align:center; color:#999; font-size:12px; padding:12px;">조합 기록 없음</td></tr></tbody>';
+      table.innerHTML = '<tbody><tr><td colspan="4" style="text-align:center; color:#999; font-size:12px; padding:12px;">조합 기록 없음</td></tr></tbody>';
       return;
     }
-
-    // 승률 순위 계산 (기존 로직과 동일 방식)
-    const wrSorted = [...list].sort((a, b) => {
-      const ar = a.total > 0 ? a.wins / a.total : 0;
-      const br = b.total > 0 ? b.wins / b.total : 0;
-      return br - ar || b.wins - a.wins;
-    });
-    const wrRankMap = {};
-    let wrRank = 1;
-    wrSorted.forEach((v, i) => {
-      if (i > 0) {
-        const prev = wrSorted[i-1];
-        const pr = prev.total > 0 ? prev.wins / prev.total : 0;
-        const cr = v.total > 0 ? v.wins / v.total : 0;
-        if (cr !== pr) wrRank = i + 1;
-      }
-      wrRankMap[v.key] = wrRank;
-    });
 
     const mIcon = '<span class="material-symbols-outlined" style="font-size:12px;color:#3A7BD5;vertical-align:middle;">male</span>';
     const fIcon = '<span class="material-symbols-outlined" style="font-size:12px;color:#E8437A;vertical-align:middle;">female</span>';
     const nameIcon = (n) => getGender(n) === 'F' ? fIcon : mIcon;
     const dName = (n) => escapeHtml(displayName(n));
 
+    // ✅ v3.9493: 승률 기준 순위 계산
     let rank = 1;
     const rows = list.map((v, i) => {
-      if (i > 0 && list[i-1].wins !== v.wins) rank = i + 1;
+      if (i > 0) {
+        const prev = list[i-1];
+        const pr = prev.total > 0 ? prev.wins / prev.total : 0;
+        const cr = v.total > 0 ? v.wins / v.total : 0;
+        if (cr !== pr) rank = i + 1;
+      }
       const rate = v.total > 0 ? ((v.wins / v.total) * 100).toFixed(1) : '0.0';
       const pairLabel = v.names.map(n => `${nameIcon(n)}${dName(n)}`).join(' & ');
       return `<tr>
-        <td style="text-align:center; width:8%;">${rank}</td>
-        <td style="text-align:left; padding-left:8px; white-space:nowrap;">${pairLabel}</td>
-        <td style="text-align:center; white-space:nowrap; font-size:11px; color:#666;">${rate}% (${wrRankMap[v.key]}위)</td>
-        <td style="text-align:center; font-size:11px; white-space:nowrap;">${v.wins}/${v.losses}</td>
+        <td style="text-align:center; width:30px;">${rank}</td>
+        <td style="text-align:left; padding-left:6px;">${pairLabel}</td>
+        <td style="text-align:center; width:52px; font-size:11px; color:#666; white-space:nowrap;">${rate}%</td>
+        <td style="text-align:center; width:48px; font-size:11px; white-space:nowrap;">${v.wins}/${v.losses}</td>
       </tr>`;
     }).join('');
 
     table.innerHTML = `
       <thead><tr>
-        <th style="width:8%;">순위</th>
-        <th style="text-align:left; padding-left:8px;">조합</th>
-        <th style="width:22%;">승률</th>
-        <th style="width:12%;">승/패</th>
+        <th style="width:30px;">순위</th>
+        <th style="text-align:left; padding-left:6px;">조합</th>
+        <th style="width:52px;">승률</th>
+        <th style="width:48px;">승/패</th>
       </tr></thead>
       <tbody>${rows}</tbody>`;
 
@@ -720,6 +713,14 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
   // ========================================
   
   function renderStatsPlayerList() {
+    // ✅ v3.9493: 클럽 전환 시 이전 분석 리포트 초기화
+    const reportEl = $('stats-report');
+    if(reportEl) reportEl.style.display = 'none';
+    const welcomeEl = $('welcome-msg');
+    if(welcomeEl) welcomeEl.style.display = 'block';
+    // 선택된 라디오 버튼 초기화
+    document.querySelectorAll('input[name="statsPick"]').forEach(r => r.checked = false);
+
     const members = players.filter(p => !p.isGuest).sort((a,b)=>(b.score||0)-(a.score||0));
     // ✅ v3.816: HIDDEN_PLAYERS 제외
     const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name));

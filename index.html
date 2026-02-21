@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v3.9492</title>
+  <title>GrandSlam Ultimate v3.9493</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -219,8 +219,9 @@
       </div>
       <div class="court-info-row">
         <span class="material-symbols-outlined">schedule</span>
-        <span id="courtTime"></span>
-        <span id="courtNumber" style="display:none; margin-left:8px; font-size:13px; color:var(--wimbledon-sage); font-weight:400; background:rgba(93,156,118,0.1); padding:2px 8px; border-radius:8px;"></span>
+        <div id="courtSlots" style="display:flex; flex-direction:column; gap:2px;"></div>
+        <span id="courtNumber" style="display:none;"></span>
+        <span id="courtTime" style="display:none;"></span>
       </div>
       <div class="court-info-row">
         <span class="material-symbols-outlined">map</span>
@@ -270,7 +271,7 @@
     </div>
   </div>
 
-  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v3.9492</div>
+  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v3.9493</div>
 </div>
 
 <div id="view-tennis" class="app-screen">
@@ -325,7 +326,7 @@
       </div>
       <div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">
         <div style="max-height:260px; overflow-y:auto;">
-          <table id="seasonPairTableM" class="tennis-table" style="min-width:320px;"></table>
+          <table id="seasonPairTableM" class="tennis-table" style="width:100%; table-layout:fixed;"></table>
         </div>
       </div>
     </div>
@@ -342,7 +343,7 @@
       </div>
       <div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">
         <div style="max-height:260px; overflow-y:auto;">
-          <table id="seasonPairTableF" class="tennis-table" style="min-width:320px;"></table>
+          <table id="seasonPairTableF" class="tennis-table" style="width:100%; table-layout:fixed;"></table>
         </div>
       </div>
     </div>
@@ -369,7 +370,7 @@
       </div>
       <div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">
         <div style="max-height:260px; overflow-y:auto;">
-          <table id="seasonMixedPairTable" class="tennis-table" style="min-width:320px;"></table>
+          <table id="seasonMixedPairTable" class="tennis-table" style="width:100%; table-layout:fixed;"></table>
         </div>
       </div>
     </div>
@@ -536,6 +537,7 @@
       <div class="r-line r-mini">- ✅ v3.94 gender 시스템 완결 — gender 저장버그 수정(pushPayload race condition), 사다리 아이콘 제거, 혼복 필드(mScore/mWins/mLosses) 신설, 랭킹 종합고정+복식남녀분리+혼복랭킹+단식남녀분리, 주간 자동리셋(월요일 기준)</div>
       <div class="r-line r-mini">- ✅ v3.941 gender 근본 수정 — GAS DATA_FIELDS에 gender 컬럼 추가, 기존 시트 자동 마이그레이션('M' 기본값), 혼복 판별 개선(한 팀이라도 남+여면 해당 팀 혼복 점수 취득)</div>
       <div class="r-line r-mini">- ✅ v3.942 랭킹 탭 버그 수정(남자부/여자부 섹션 분리 show/hide), 선수 분석 리포트 이성간 단식(최고승률/천적) + 혼복 최고/분발 파트너 + 혼복 남자/여자 천적 카드 추가</div>
+      <div class="r-line r-mini">- ✅ v3.9493 코트정보 시간대별 줄표시, 클럽전환 통계 초기화 버그수정, 조합랭킹 승률순정렬+레이아웃최적화, 이성단식 카드명 수정</div>
       <div class="r-line r-mini">- ✅ v3.9492 분석리포트 카드 재정렬(복식그룹/혼복그룹), 신규카드(연속기록/상대전적TOP3/요일별승률/월별활동), 단식라이벌</div>
       <div class="r-line r-mini">- ✅ v3.9491 연납 토글 버튼 추가, 연납자 납부 집계 수정(syncFeeToFinance/copyFeeStatus/feeSummary)</div>
       <div class="r-line r-mini">- ✅ v3.949 총무 면제(isTreasurer), 납부율 요약, 연납 자동체크, 지출 카테고리(코트비/장비/기타)</div>
@@ -601,7 +603,7 @@
           <div style="font-size:11px; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:2px;">
             <span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5;">male</span>
             <span class="material-symbols-outlined" style="font-size:12px; color:#E8437A;">female</span>
-            <span style="color:#3A7BD5;">이성간 단식 최고 승률</span>
+            <span style="color:#3A7BD5;">이성 단식 최고승률</span>
           </div>
           <div id="res-cross-best" style="font-size:16px; margin-top:5px;">-</div>
           <div id="res-cross-best-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
@@ -610,7 +612,7 @@
           <div style="font-size:11px; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:2px;">
             <span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5;">male</span>
             <span class="material-symbols-outlined" style="font-size:12px; color:#E8437A;">female</span>
-            <span style="color:#E8437A;">이성간 단식 천적</span>
+            <span style="color:#E8437A;">이성 단식 천적</span>
           </div>
           <div id="res-cross-worst" style="font-size:16px; margin-top:5px;">-</div>
           <div id="res-cross-worst-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
