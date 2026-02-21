@@ -6,6 +6,8 @@
     if (p.isGuest === undefined) p.isGuest = false;
     // ✅ v3.93: gender 정규화 — 'M'|'F' 외 값은 전부 'M'으로 보정
     if (p.gender !== 'M' && p.gender !== 'F') p.gender = 'M';
+    // ✅ v3.949: 총무 면제 필드
+    if (p.isTreasurer === undefined) p.isTreasurer = false;
     if(!p.name) p.name = "NONAME";
     return p;
   }
@@ -118,26 +120,30 @@
 function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
     const baseList = (() => {
       if (filterMode === 'guest') {
-        // ✅ v3.816: HIDDEN_PLAYERS는 게스트 랭킹에서도 제외
         const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name));
         const names = guests.map(p=>p.name);
         const agg = aggregateSeasonForNamesFromLog(names);
-        // Merge computed season stats into the current player objects (keeps last-rank fields)
         return guests.map(p => Object.assign({}, p, agg[p.name] || {}));
       }
       if (filterMode === 'all') return [...players];
       // ✅ v3.92: 성별 필터
       if (filterMode === 'male') return players.filter(p => !p.isGuest && p.gender !== 'F');
       if (filterMode === 'female') return players.filter(p => !p.isGuest && p.gender === 'F');
-      // 기본: 정식 회원(게스트가 아닌 선수)만 랭킹에 포함
       return players.filter(p => !p.isGuest);
     })();
+
+    // ✅ v3.946: 해당 종목 경기 기록 없는 선수 제외 (0승0패 노출 방지)
+    // 종합/주간 종합은 전체 포함, 종목별(단식/복식/혼복)은 1경기 이상만
+    const isOverallKey = (scoreK === 'score' || scoreK === 'weekly');
+    const filtered = isOverallKey
+      ? baseList
+      : baseList.filter(p => (p[winK]||0) + (p[lossK]||0) > 0);
     const calcRate = (p) => {
       const t = (p[winK]||0) + (p[lossK]||0);
       return t > 0 ? ((p[winK]||0) / t) : 0;
     };
 
-    const wrSorted = [...baseList].sort((a,b) => calcRate(b) - calcRate(a) || (b[winK]||0) - (a[winK]||0));
+    const wrSorted = [...filtered].sort((a,b) => calcRate(b) - calcRate(a) || (b[winK]||0) - (a[winK]||0));
     const wrRanks = {};
     let currentWrRank = 1;
     wrSorted.forEach((p, i) => {
@@ -148,8 +154,15 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
       wrRanks[p.name] = currentWrRank;
     });
 
-    const sorted = [...baseList].sort((a,b) => (b[scoreK]||0) - (a[scoreK]||0) || calcRate(b) - calcRate(a));
+    const sorted = [...filtered].sort((a,b) => (b[scoreK]||0) - (a[scoreK]||0) || calcRate(b) - calcRate(a));
     const table = $(tableId);
+    if (!table) return;
+
+    // ✅ v3.946: 경기 기록 없는 경우 빈 메시지
+    if (sorted.length === 0) {
+      table.innerHTML = '<tbody><tr><td colspan="5" style="text-align:center; color:#999; font-size:12px; padding:12px;">경기 기록 없음</td></tr></tbody>';
+      return;
+    }
 
     table.innerHTML = `<thead><tr>
       <th style="width:11%;">순위</th>
@@ -201,6 +214,40 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
   // ========================================
 
   function updateSeason() {
+    // ✅ v3.947: matchLog 기반으로 혼복 필드 재계산 — players.mScore/mWins/mLosses 보정
+    // (Sheets에서 불러온 players 배열에 혼복 필드가 없거나 0인 경우 대비)
+    if (Array.isArray(players) && Array.isArray(matchLog)) {
+      const getGender = (n) => { const p = players.find(x=>x.name===n); return p ? p.gender : 'M'; };
+      const isMixedTeam = (arr) => {
+        if (arr.length < 2) return false;
+        const gs = arr.map(getGender);
+        return gs.includes('M') && gs.includes('F');
+      };
+      // 초기화
+      players.forEach(p => { p.mScore = 0; p.mWins = 0; p.mLosses = 0; });
+      // matchLog 순회
+      matchLog.forEach(m => {
+        if (m.type !== 'double') return;
+        const home = Array.isArray(m.home) ? m.home : [];
+        const away = Array.isArray(m.away) ? m.away : [];
+        const homeMixed = isMixedTeam(home);
+        const awayMixed = isMixedTeam(away);
+        if (!homeMixed && !awayMixed) return; // 혼복 경기 아님
+        const homeWin = m.winner === 'home';
+        [[home, homeMixed, homeWin], [away, awayMixed, !homeWin]].forEach(([arr, isMixed, isW]) => {
+          if (!isMixed) return; // 혼성 팀에 속한 선수만 취득
+          arr.forEach(n => {
+            const p = players.find(x=>x.name===n);
+            if (!p) return;
+            const d = calcDeltas('double', isW);
+            p.mScore += d.d;
+            p.mWins  += isW ? 1 : 0;
+            p.mLosses += isW ? 0 : 1;
+          });
+        });
+      });
+    }
+
     const tab = window.genderRankTab || 'all';
 
     // ✅ v3.942: 종합 순위표 — 탭에 따라 필터 적용
@@ -215,7 +262,10 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
     // 복식 섹션 show/hide
     const secDoubleM = $('sec-double-male');
     const secDoubleF = $('sec-double-female');
-    const secMixed   = $('sec-mixed');
+    const secMixedM  = $('sec-mixed-male');
+    const secMixedF  = $('sec-mixed-female');
+    const secMixed   = { m: secMixedM, f: secMixedF }; // 편의용 래퍼
+    const showMixed  = (m, f) => { if(secMixedM) secMixedM.style.display = m; if(secMixedF) secMixedF.style.display = f; };
     const secSingleM = $('sec-single-male');
     const secSingleF = $('sec-single-female');
     const gs         = $('guest-rank-section');
@@ -224,14 +274,18 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
       // 전부 표시
       if(secDoubleM) secDoubleM.style.display = 'block';
       if(secDoubleF) secDoubleF.style.display = 'block';
-      if(secMixed)   secMixed.style.display   = 'block';
+      showMixed('block', 'block');
       if(secSingleM) secSingleM.style.display = 'block';
       if(secSingleF) secSingleF.style.display = 'block';
       if(gs)         gs.style.display         = 'block';
 
       renderRankTable('seasonDoubleTableM', 'dScore', 'dWins', 'dLosses', 'lastD', 'male');
       renderRankTable('seasonDoubleTableF', 'dScore', 'dWins', 'dLosses', 'lastD', 'female');
-      renderMixedRankTable('seasonMixedTable');
+      renderMixedRankTable('seasonMixedTableM', 'male');
+      renderMixedRankTable('seasonMixedTableF', 'female');
+      renderPairRankTable('seasonPairTableM', 'male');
+      renderPairRankTable('seasonPairTableF', 'female');
+      renderPairRankTable('seasonMixedPairTable', 'mixed');
       renderRankTable('seasonSingleTableM', 'sScore', 'sWins', 'sLosses', 'lastS', 'male');
       renderRankTable('seasonSingleTableF', 'sScore', 'sWins', 'sLosses', 'lastS', 'female');
       renderRankTable('guestSeasonTotalTable',  'score',  'wins',   'losses',  'last',  'guest');
@@ -242,42 +296,198 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
       // 남자 섹션만 표시
       if(secDoubleM) secDoubleM.style.display = 'block';
       if(secDoubleF) secDoubleF.style.display = 'none';
-      if(secMixed)   secMixed.style.display   = 'none';
+      showMixed('block', 'none');
       if(secSingleM) secSingleM.style.display = 'block';
       if(secSingleF) secSingleF.style.display = 'none';
       if(gs)         gs.style.display         = 'none';
 
       renderRankTable('seasonDoubleTableM', 'dScore', 'dWins', 'dLosses', 'lastD', 'male');
+      renderMixedRankTable('seasonMixedTableM', 'male');
+      renderPairRankTable('seasonPairTableM', 'male');
       renderRankTable('seasonSingleTableM', 'sScore', 'sWins', 'sLosses', 'lastS', 'male');
 
     } else if (tab === 'female') {
       // 여자 섹션만 표시
       if(secDoubleM) secDoubleM.style.display = 'none';
       if(secDoubleF) secDoubleF.style.display = 'block';
-      if(secMixed)   secMixed.style.display   = 'none';
+      showMixed('none', 'block');
       if(secSingleM) secSingleM.style.display = 'none';
       if(secSingleF) secSingleF.style.display = 'block';
       if(gs)         gs.style.display         = 'none';
 
       renderRankTable('seasonDoubleTableF', 'dScore', 'dWins', 'dLosses', 'lastD', 'female');
+      renderMixedRankTable('seasonMixedTableF', 'female');
+      renderPairRankTable('seasonPairTableF', 'female');
       renderRankTable('seasonSingleTableF', 'sScore', 'sWins', 'sLosses', 'lastS', 'female');
     }
   }
 
-  // ✅ v3.94: 혼복 랭킹 렌더링 — mScore/mWins/mLosses 필드 기반
-  function renderMixedRankTable(tableId) {
+  // ✅ v3.946: 혼복 랭킹 렌더링 — 직접 필터된 list로 테이블 그림 (renderRankTable 미사용)
+  function renderMixedRankTable(tableId, genderFilter) {
     const table = $(tableId);
     if (!table) return;
-    // 혼복 경기가 한 번이라도 있는 선수만 표시
-    const list = players.filter(p => !p.isGuest && (p.mWins > 0 || p.mLosses > 0));
+
+    // 혼복 경기 있는 선수만, 성별 필터 적용
+    let list = players.filter(p => !p.isGuest && (p.mWins > 0 || p.mLosses > 0));
+    if (genderFilter === 'male')   list = list.filter(p => p.gender !== 'F');
+    if (genderFilter === 'female') list = list.filter(p => p.gender === 'F');
+
     if (list.length === 0) {
       table.innerHTML = '<tbody><tr><td colspan="5" style="text-align:center; color:#999; font-size:12px; padding:12px;">혼복 경기 기록 없음</td></tr></tbody>';
       return;
     }
-    renderRankTable(tableId, 'mScore', 'mWins', 'mLosses', 'lastM');
+
+    const calcRate = (p) => {
+      const t = (p.mWins||0) + (p.mLosses||0);
+      return t > 0 ? ((p.mWins||0) / t) : 0;
+    };
+
+    // 승률 순위 계산
+    const wrSorted = [...list].sort((a,b) => calcRate(b) - calcRate(a) || (b.mWins||0) - (a.mWins||0));
+    const wrRanks = {};
+    let currentWrRank = 1;
+    wrSorted.forEach((p, i) => {
+      if (i > 0 && calcRate(p) !== calcRate(wrSorted[i-1])) currentWrRank = i + 1;
+      wrRanks[p.name] = currentWrRank;
+    });
+
+    const sorted = [...list].sort((a,b) => (b.mScore||0) - (a.mScore||0) || calcRate(b) - calcRate(a));
+
+    table.innerHTML = `<thead><tr>
+      <th style="width:11%;">순위</th>
+      <th style="width:34%;">이름</th>
+      <th style="width:24%;">승률</th>
+      <th style="width:12%;">승/패</th>
+      <th style="width:19%;">총점</th>
+    </tr></thead><tbody></tbody>`;
+
+    let currentRank = 1;
+    table.querySelector('tbody').innerHTML = sorted.map((p, i) => {
+      if (i > 0 && (sorted[i-1].mScore||0) !== (p.mScore||0)) currentRank = i + 1;
+      const rankIcon = currentRank === 1 ? '<span class="material-symbols-outlined rank-1-icon">emoji_events</span>' : currentRank;
+      const lastShown = (p.lastM && Number(p.lastM) > 0) ? Number(p.lastM) : currentRank;
+      const df = (p.lastM && Number(p.lastM) > 0 && lastShown !== currentRank)
+        ? (lastShown > currentRank
+          ? `<span style="color:var(--up-red)">▲${lastShown - currentRank}</span>`
+          : `<span style="color:var(--down-blue)">▼${currentRank - lastShown}</span>`)
+        : '-';
+      const gIcon = p.gender === 'F'
+        ? '<span class="material-symbols-outlined gender-icon-inline" style="font-size:14px;color:#E8437A;vertical-align:middle;margin-right:2px;">female</span>'
+        : '<span class="material-symbols-outlined gender-icon-inline" style="font-size:14px;color:#3A7BD5;vertical-align:middle;margin-right:2px;">male</span>';
+      return `<tr>
+        <td>${rankIcon}</td>
+        <td style="text-align:left; padding-left:10px; overflow:hidden;">
+          <div data-autofit="1" class="autofit-cell" style="display:flex; align-items:center; gap:4px;">
+            ${gIcon}<span style="font-weight:400; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(displayName(p.name))}</span>
+            <span data-autofit="1" class="sub-info autofit-cell" style="margin-left:0;">(${lastShown}위)${df}</span>
+          </div>
+        </td>
+        <td data-autofit="1" class="sub-info autofit-cell">${(calcRate(p)*100).toFixed(1)}% (${wrRanks[p.name]}위)</td>
+        <td style="font-size:11px; white-space:nowrap;">${p.mWins||0}/${p.mLosses||0}</td>
+        <td class="point-text" style="white-space:nowrap;">${Number(p.mScore||0).toFixed(1)}</td>
+      </tr>`;
+    }).join('');
+
+    setTimeout(() => applyAutofit(table), 0);
   }
 
-  // ✅ v3.94: 성별 랭킹 탭 전환
+  // ✅ v3.945: 복식/혼복 조합 랭킹 렌더링
+  // mode: 'male'=남자복식, 'female'=여자복식, 'mixed'=혼복
+  function renderPairRankTable(tableId, mode) {
+    const table = $(tableId);
+    if (!table) return;
+
+    const getGender = (n) => { const p = players.find(x => x.name === n); return p ? p.gender : 'M'; };
+
+    const pairMap = {}; // key: 'A&B' (정렬된 이름), value: {wins, losses}
+
+    (matchLog || []).forEach(m => {
+      if (m.type !== 'double') return;
+      const home = Array.isArray(m.home) ? m.home : [];
+      const away = Array.isArray(m.away) ? m.away : [];
+      if (home.length < 2 || away.length < 2) return;
+
+      const homeGenders = home.map(getGender);
+      const awayGenders = away.map(getGender);
+      const homeMixed = homeGenders.includes('M') && homeGenders.includes('F');
+      const awayMixed = awayGenders.includes('M') && awayGenders.includes('F');
+
+      const teams = [
+        { arr: home, win: m.winner === 'home', isMixed: homeMixed, genders: homeGenders },
+        { arr: away, win: m.winner === 'away', isMixed: awayMixed, genders: awayGenders }
+      ];
+
+      teams.forEach(({ arr, win, isMixed, genders }) => {
+        // 모드 필터
+        if (mode === 'male'   && (isMixed || genders.includes('F'))) return;
+        if (mode === 'female' && (isMixed || !genders.every(g => g === 'F'))) return;
+        if (mode === 'mixed'  && !isMixed) return;
+
+        const key = [...arr].sort().join('&');
+        if (!pairMap[key]) pairMap[key] = { names: arr, wins: 0, losses: 0 };
+        if (win) pairMap[key].wins++; else pairMap[key].losses++;
+      });
+    });
+
+    const list = Object.entries(pairMap)
+      .map(([key, v]) => ({ key, names: v.names, wins: v.wins, losses: v.losses, total: v.wins + v.losses }))
+      .filter(v => v.total >= 1)
+      .sort((a, b) => b.wins - a.wins || b.total - a.total);
+
+    if (list.length === 0) {
+      table.innerHTML = '<tbody><tr><td colspan="5" style="text-align:center; color:#999; font-size:12px; padding:12px;">조합 기록 없음</td></tr></tbody>';
+      return;
+    }
+
+    // 승률 순위 계산 (기존 로직과 동일 방식)
+    const wrSorted = [...list].sort((a, b) => {
+      const ar = a.total > 0 ? a.wins / a.total : 0;
+      const br = b.total > 0 ? b.wins / b.total : 0;
+      return br - ar || b.wins - a.wins;
+    });
+    const wrRankMap = {};
+    let wrRank = 1;
+    wrSorted.forEach((v, i) => {
+      if (i > 0) {
+        const prev = wrSorted[i-1];
+        const pr = prev.total > 0 ? prev.wins / prev.total : 0;
+        const cr = v.total > 0 ? v.wins / v.total : 0;
+        if (cr !== pr) wrRank = i + 1;
+      }
+      wrRankMap[v.key] = wrRank;
+    });
+
+    const mIcon = '<span class="material-symbols-outlined" style="font-size:12px;color:#3A7BD5;vertical-align:middle;">male</span>';
+    const fIcon = '<span class="material-symbols-outlined" style="font-size:12px;color:#E8437A;vertical-align:middle;">female</span>';
+    const nameIcon = (n) => getGender(n) === 'F' ? fIcon : mIcon;
+    const dName = (n) => escapeHtml(displayName(n));
+
+    let rank = 1;
+    const rows = list.map((v, i) => {
+      if (i > 0 && list[i-1].wins !== v.wins) rank = i + 1;
+      const rate = v.total > 0 ? ((v.wins / v.total) * 100).toFixed(1) : '0.0';
+      const pairLabel = v.names.map(n => `${nameIcon(n)}${dName(n)}`).join(' & ');
+      return `<tr>
+        <td style="text-align:center; width:8%;">${rank}</td>
+        <td style="text-align:left; padding-left:8px; white-space:nowrap;">${pairLabel}</td>
+        <td style="text-align:center; white-space:nowrap; font-size:11px; color:#666;">${rate}% (${wrRankMap[v.key]}위)</td>
+        <td style="text-align:center; font-size:11px; white-space:nowrap;">${v.wins}/${v.losses}</td>
+      </tr>`;
+    }).join('');
+
+    table.innerHTML = `
+      <thead><tr>
+        <th style="width:8%;">순위</th>
+        <th style="text-align:left; padding-left:8px;">조합</th>
+        <th style="width:22%;">승률</th>
+        <th style="width:12%;">승/패</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>`;
+
+    setTimeout(() => applyAutofit(table), 0);
+  }
+
+  // ✅ v3.945: 성별 랭킹 탭 전환
   function switchGenderRankTab(tab) {
     window.genderRankTab = tab;
     ['all','male','female'].forEach(t => {
@@ -285,6 +495,9 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
       if(btn) btn.className = (t === tab) ? 'gender-tab-btn active' : 'gender-tab-btn';
     });
     updateSeason();
+    // ✅ v3.948: 탭 전환 시 차트도 성별 필터 적용해서 재렌더
+    const currentRangeIdx = window.currentChartRangeIdx || 0;
+    updateChartRange(currentRangeIdx);
   }
 
   function updateWeekly() {
@@ -294,6 +507,9 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
   }
 
   function updateChartRange(rangeIdx) {
+    // ✅ v3.948: 현재 rangeIdx 저장 (탭 전환 시 재사용)
+    window.currentChartRangeIdx = rangeIdx;
+
     document.querySelectorAll('.chart-nav .chart-btn').forEach((b,i) => b.className = i===rangeIdx ? 'chart-btn active' : 'chart-btn');
 
     const emptyChart = () => {
@@ -328,8 +544,14 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
 
     if (filteredDates.length === 0) { emptyChart(); return; }
 
-    // ✅ v3.818: 날짜별 누적 점수로 순위 계산
-    const members = players.filter(p => !p.isGuest);
+    // ✅ v3.948: 성별 탭에 따라 members 필터
+    const genderTab = window.genderRankTab || 'all';
+    const members = players.filter(p => {
+      if (p.isGuest) return false;
+      if (genderTab === 'male')   return p.gender !== 'F';
+      if (genderTab === 'female') return p.gender === 'F';
+      return true;
+    });
     const colors = ['#FF3B30','#007AFF','#34C759','#FF9500','#AF52DE','#5856D6','#FF2D55','#5AC8FA','#FFCC00'];
 
     // 각 선수 누적 점수 초기화
@@ -412,30 +634,48 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
     // ✅ v3.8206: 당일 게스트는 players 배열에 없으므로 자동으로 집계 제외됨
     const homeWin = winnerSide === "home";
 
+    const getGender = (n) => { const p = players.find(x=>x.name===n); return p ? p.gender : 'M'; };
+
     // ✅ v3.941: 혼복 판별 — 한 팀이라도 남+여 조합이면 혼복으로 판정
-    // (남+남 vs 남+여, 여+여 vs 남+여 등 모두 혼복으로 처리)
-    // 혼복 점수는 실제로 혼성 팀에 속한 선수만 취득
     const isMixedTeam = (arr) => {
       if (arr.length < 2) return false;
-      const genders = arr.map(n => { const p = players.find(x=>x.name===n); return p ? p.gender : 'M'; });
+      const genders = arr.map(getGender);
       return genders.includes('M') && genders.includes('F');
     };
     const homeMixed = type === 'double' && isMixedTeam(homeArr);
     const awayMixed = type === 'double' && isMixedTeam(awayArr);
+
+    // ✅ v3.946: 이성간 단식 판별 — 종합점수만, sScore 미포함
+    const isCrossSingle = type === 'single' && homeArr.length === 1 && awayArr.length === 1
+      && getGender(homeArr[0]) !== getGender(awayArr[0]);
+
+    // ✅ v3.946: 이성간 복식 판별(남팀 vs 여팀) — 종합점수만, dScore 미포함
+    // 혼복(한 팀이라도 혼성)은 기존 로직 유지
+    const isCrossDouble = type === 'double' && !homeMixed && !awayMixed
+      && (() => {
+        const hg = homeArr.map(getGender);
+        const ag = awayArr.map(getGender);
+        return (hg.every(g=>g==='M') && ag.every(g=>g==='F'))
+            || (hg.every(g=>g==='F') && ag.every(g=>g==='M'));
+      })();
 
     const apply = (ns, isW, isMyTeamMixed) => ns.forEach(n => {
       var p = players.find(x=>x.name==n);
       if(!p) return;
       const d = calcDeltas(type, isW);
 
+      // 종합점수/승패는 이성간 포함 항상 반영
       p.score += d.total;
       p.wins += isW ? 1 : 0;
       p.losses += isW ? 0 : 1;
 
       if (type === "double") {
-        p.dScore += d.d;
-        p.dWins += isW ? 1 : 0;
-        p.dLosses += isW ? 0 : 1;
+        // ✅ v3.946: 이성간 복식(남팀vs여팀)은 dScore 미포함
+        if (!isCrossDouble) {
+          p.dScore += d.d;
+          p.dWins += isW ? 1 : 0;
+          p.dLosses += isW ? 0 : 1;
+        }
         // ✅ v3.941: 내 팀이 혼성이면 혼복 점수 취득
         if (isMyTeamMixed) {
           p.mScore += d.d;
@@ -443,9 +683,12 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
           p.mLosses += isW ? 0 : 1;
         }
       } else {
-        p.sScore += d.s;
-        p.sWins += isW ? 1 : 0;
-        p.sLosses += isW ? 0 : 1;
+        // ✅ v3.946: 이성간 단식은 sScore 미포함
+        if (!isCrossSingle) {
+          p.sScore += d.s;
+          p.sWins += isW ? 1 : 0;
+          p.sLosses += isW ? 0 : 1;
+        }
       }
 
       p.weekly += d.total;
@@ -453,13 +696,17 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
       p.wLosses += isW ? 0 : 1;
 
       if (type === "double") {
-        p.wdScore += d.d;
-        p.wdWins += isW ? 1 : 0;
-        p.wdLosses += isW ? 0 : 1;
+        if (!isCrossDouble) {
+          p.wdScore += d.d;
+          p.wdWins += isW ? 1 : 0;
+          p.wdLosses += isW ? 0 : 1;
+        }
       } else {
-        p.wsScore += d.s;
-        p.wsWins += isW ? 1 : 0;
-        p.wsLosses += isW ? 0 : 1;
+        if (!isCrossSingle) {
+          p.wsScore += d.s;
+          p.wsWins += isW ? 1 : 0;
+          p.wsLosses += isW ? 0 : 1;
+        }
       }
     });
 
@@ -796,8 +1043,61 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
       mixedBestPartner, mixedWorstPartner,
       mixedEnemyM, mixedEnemyF,
       dE1, dE2,
-      myGender
+      myGender,
+      // ✅ v3.9492: 신규 데이터
+      ...computeExtraStats(name, logs)
     };
+  }
+
+  // ✅ v3.9492: 신규 통계 계산 — 연속기록, 상대전적TOP3, 요일별승률, 월별활동
+  function computeExtraStats(name, logs) {
+    const KO_DAYS = ['일','월','화','수','목','금','토'];
+
+    // 1. 최장 연승/연패
+    let maxWinStreak = 0, maxLoseStreak = 0;
+    let curW = 0, curL = 0;
+    const allResults = [...logs].sort((a,b)=>(a.ts||0)-(b.ts||0))
+      .map(l => didPlayerWin(l, name)).filter(v => v === true || v === false);
+    allResults.forEach(win => {
+      if (win) { curW++; curL = 0; maxWinStreak = Math.max(maxWinStreak, curW); }
+      else     { curL++; curW = 0; maxLoseStreak = Math.max(maxLoseStreak, curL); }
+    });
+
+    // 2. 상대 전적 TOP3 (전체 상대, 많이 붙은 순)
+    const oppAllMap = {};
+    logs.forEach(l => {
+      const win = didPlayerWin(l, name);
+      if (win === null) return;
+      getOpponentNames(l, name).forEach(op => {
+        if (HIDDEN_PLAYERS.includes(op)) return;
+        if (!oppAllMap[op]) oppAllMap[op] = { w:0, l:0 };
+        if (win) oppAllMap[op].w++; else oppAllMap[op].l++;
+      });
+    });
+    const top3Opp = Object.entries(oppAllMap)
+      .sort((a,b) => (b[1].w+b[1].l) - (a[1].w+a[1].l))
+      .slice(0, 3);
+
+    // 3. 요일별 승률
+    const weekdayMap = {};
+    logs.forEach(l => {
+      const win = didPlayerWin(l, name);
+      if (win === null || !l.date) return;
+      const day = new Date(l.date).getDay(); // 0=일
+      if (!weekdayMap[day]) weekdayMap[day] = { w:0, l:0 };
+      if (win) weekdayMap[day].w++; else weekdayMap[day].l++;
+    });
+
+    // 4. 월별 활동
+    const monthMap = {};
+    logs.forEach(l => {
+      if (!l.date) return;
+      const mo = l.date.slice(0,7); // 'YYYY-MM'
+      if (!monthMap[mo]) monthMap[mo] = 0;
+      monthMap[mo]++;
+    });
+
+    return { maxWinStreak, maxLoseStreak, top3Opp, weekdayMap, monthMap, KO_DAYS };
   }
 
   // ✅ v3.692: 통계 렌더(화면 반영)
@@ -878,6 +1178,83 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
 
     $('res-d-enemy2').innerText = (data.dE2 && isValid(data.dE2[1])) ? displayName(data.dE2[0]) : "-";
     $('res-d-enemy2-sub').innerText = (data.dE2 && isValid(data.dE2[1])) ? `${data.dE2[1].w}승 ${data.dE2[1].l}패` : "0승 0패";
+
+    // ✅ v3.9492: 신규 카드 렌더링
+
+    // 연속 기록
+    const mwEl = $('res-max-streak-win');
+    const mlEl = $('res-max-streak-lose');
+    if (mwEl) {
+      mwEl.innerText = data.maxWinStreak > 0 ? data.maxWinStreak : '-';
+      $('res-max-streak-win-sub').innerText = data.maxWinStreak > 0 ? `연승 (전체 기록)` : '기록 없음';
+    }
+    if (mlEl) {
+      mlEl.innerText = data.maxLoseStreak > 0 ? data.maxLoseStreak : '-';
+      $('res-max-streak-lose-sub').innerText = data.maxLoseStreak > 0 ? `연패 (전체 기록)` : '기록 없음';
+    }
+
+    // 상대 전적 TOP3
+    const top3El = $('res-top3-opp');
+    if (top3El) {
+      if (data.top3Opp.length === 0) {
+        top3El.innerHTML = '<span style="color:var(--text-gray);">경기 기록 없음</span>';
+      } else {
+        top3El.innerHTML = data.top3Opp.map(([op, s], i) => {
+          const total = s.w + s.l;
+          const rate = total > 0 ? Math.round(s.w / total * 100) : 0;
+          const medal = ['🥇','🥈','🥉'][i] || '';
+          const rateColor = rate >= 50 ? 'var(--wimbledon-sage)' : 'var(--up-red)';
+          return `<div style="display:flex; justify-content:space-between; align-items:center; padding:2px 0;">
+            <span>${medal} ${escapeHtml(displayName(op))}</span>
+            <span style="color:${rateColor}; font-weight:bold;">${s.w}승${s.l}패 (${rate}%)</span>
+          </div>`;
+        }).join('');
+      }
+    }
+
+    // 요일별 승률
+    const wdEl = $('res-weekday');
+    if (wdEl) {
+      const days = [1,2,3,4,5,6,0]; // 월~일
+      const bars = days.map(d => {
+        const stat = data.weekdayMap[d];
+        if (!stat || (stat.w + stat.l) === 0) return null;
+        const total = stat.w + stat.l;
+        const rate = Math.round(stat.w / total * 100);
+        const barW = Math.max(4, rate);
+        const barColor = rate >= 60 ? 'var(--wimbledon-sage)' : rate >= 40 ? 'var(--aussie-blue)' : 'var(--up-red)';
+        return `<div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+          <span style="width:16px; font-weight:bold;">${data.KO_DAYS[d]}</span>
+          <div style="flex:1; background:#eee; border-radius:4px; height:12px; overflow:hidden;">
+            <div style="width:${barW}%; background:${barColor}; height:100%; border-radius:4px;"></div>
+          </div>
+          <span style="font-size:11px; min-width:70px;">${rate}% (${stat.w}승${stat.l}패)</span>
+        </div>`;
+      }).filter(Boolean);
+      wdEl.innerHTML = bars.length > 0 ? bars.join('') : '<span style="color:var(--text-gray);">경기 기록 없음</span>';
+    }
+
+    // 월별 활동
+    const moEl = $('res-monthly');
+    if (moEl) {
+      const months = Object.entries(data.monthMap).sort((a,b) => a[0].localeCompare(b[0]));
+      if (months.length === 0) {
+        moEl.innerHTML = '<span style="color:var(--text-gray);">경기 기록 없음</span>';
+      } else {
+        const maxGames = Math.max(...months.map(([,v]) => v));
+        moEl.innerHTML = months.map(([mo, cnt]) => {
+          const label = mo.slice(2).replace('-','년 ') + '월';
+          const barW = Math.max(4, Math.round(cnt / maxGames * 100));
+          return `<div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+            <span style="width:46px; font-size:11px;">${label}</span>
+            <div style="flex:1; background:#eee; border-radius:4px; height:12px; overflow:hidden;">
+              <div style="width:${barW}%; background:var(--aussie-blue); height:100%; border-radius:4px;"></div>
+            </div>
+            <span style="font-size:11px; min-width:30px;">${cnt}경기</span>
+          </div>`;
+        }).join('');
+      }
+    }
   }
 
 

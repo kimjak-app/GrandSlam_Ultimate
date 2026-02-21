@@ -23,6 +23,9 @@
     });
     // ✅ v3.8206: 당일 게스트는 players에 추가하지 않음 — matchLog에만 기록
 
+    // ✅ v3.945: 이번 주 첫 게임 저장 시 주간 랭킹 리셋
+    if (typeof checkAndResetWeeklyOnSave === 'function') checkAndResetWeeklyOnSave();
+
     snapshotLastRanks();
 
     const homeScore = parseInt(hs, 10);

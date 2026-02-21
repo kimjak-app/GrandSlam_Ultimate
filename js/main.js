@@ -20,9 +20,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   // 스플래시는 sync 완료 즉시 숨김
   hideSplashSafe();
 
-  // ✅ v3.94: 주간 랭킹 자동 리셋 — 월요일 기준, 클럽별 localStorage
-  try { checkAndAutoResetWeekly(); } catch(e) { console.warn('autoResetWeekly error:', e); }
-
   // 날씨/코트/공지는 스플래시와 무관하게 병렬 처리
   try { loadWeatherForNextMeeting(0); } catch (e) { console.error("loadWeather() error:", e); }
   Promise.all([
@@ -94,40 +91,41 @@ window.addEventListener("resize", () => {
   setTimeout(applyAutofitAllTables, 0);
 });
 
-// ✅ v3.94: 주간 랭킹 자동 리셋 — 월요일 기준
-function checkAndAutoResetWeekly() {
-  // 가장 최근 지나간 월요일 자정 계산
-  const now = new Date();
-  const day = now.getDay(); // 0=일,1=월,...,6=토
-  const daysSinceMon = (day === 0) ? 6 : day - 1;
-  const lastMonday = new Date(now);
-  lastMonday.setHours(0, 0, 0, 0);
-  lastMonday.setDate(now.getDate() - daysSinceMon);
-  const lastMondayStr = lastMonday.toISOString().slice(0, 10); // 'YYYY-MM-DD'
+// ✅ v3.945: 주간 랭킹 리셋 — 이번 주 첫 게임 저장 시 조용히 리셋
+// 앱 로드 시에는 리셋하지 않음 → 지난 주 랭킹 그대로 유지
+// 단일게임/토너먼트/라운드 결과 저장 직전에 호출
 
-  // 클럽별 고유 key
+function getThisWeekMondayStr() {
+  // 한국 로컬 날짜 기준으로 이번 주 월요일 계산
+  const now = new Date();
+  const kstOffset = 9 * 60; // UTC+9 (분)
+  const kstNow = new Date(now.getTime() + (kstOffset - now.getTimezoneOffset()) * 60000);
+  const day = kstNow.getUTCDay(); // 0=일,1=월,...,6=토
+  const daysSinceMon = (day === 0) ? 6 : day - 1;
+  const monday = new Date(kstNow);
+  monday.setUTCDate(kstNow.getUTCDate() - daysSinceMon);
+  const y = monday.getUTCFullYear();
+  const m = String(monday.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(monday.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function checkAndResetWeeklyOnSave() {
+  if (!Array.isArray(players) || players.length === 0) return;
+
+  const mondayStr = getThisWeekMondayStr();
   const clubId = (typeof getActiveClubId === 'function') ? getActiveClubId() : 'default';
   const storageKey = 'grandslam_weekly_reset_' + clubId;
   const lastResetStr = localStorage.getItem(storageKey) || '';
 
-  if (lastResetStr >= lastMondayStr) return; // 이미 이번 주에 리셋됨
+  // 이미 이번 주에 리셋됐으면 스킵
+  if (lastResetStr >= mondayStr) return;
 
-  // 주간 필드 초기화
-  if (!Array.isArray(players) || players.length === 0) return;
+  // 주간 필드 초기화 (조용히 — 알림 없음)
   players.forEach(p => {
     ['weekly','wdScore','wsScore','wWins','wLosses','wdWins','wdLosses','wsWins','wsLosses','lastW','lastWD','lastWS'].forEach(f => p[f] = 0);
   });
 
-  // 서버에 저장
-  if (typeof pushDataOnly === 'function') {
-    pushDataOnly().then(() => {
-      localStorage.setItem(storageKey, lastMondayStr);
-      if (typeof updateWeekly === 'function') updateWeekly();
-      // 토스트 알림
-      if (typeof gsAlert === 'function') {
-        gsAlert('📅 주간 랭킹이 자동 초기화됐습니다.\n(기준: ' + lastMondayStr + ' 월요일)');
-      }
-      console.log('[v3.94] 주간 자동 리셋 완료:', lastMondayStr);
-    });
-  }
+  localStorage.setItem(storageKey, mondayStr);
+  console.log('[v3.945] 주간 자동 리셋 (첫 게임 저장 시):', mondayStr);
 }

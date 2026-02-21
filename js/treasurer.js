@@ -114,7 +114,7 @@
     const el = $('treasurer-' + section);
     if(el) el.style.display = 'block';
 
-    if(section === 'fee') { initFeeTable(); }
+    if(section === 'fee') { initFeeTable(); renderTreasurerPicker(); }
     if(section === 'finance') { initFinance(); }
     if(section === 'court-mgmt') { loadCourtPresets(); renderCourtNoticeList(); }
     if(section === 'notice-mgmt') { renderAnnouncementMgmtList(); }
@@ -153,6 +153,20 @@
     const curYear = new Date().getFullYear();
     const members = players.filter(p => !p.isGuest).sort((a,b) => a.name.localeCompare(b.name));
 
+    // ✅ v3.949: 납부율 요약 — 총무 제외한 현재 월 납부 현황
+    const summaryEl = $('feeSummary');
+    if (summaryEl) {
+      const key = `${year}-${String(curMonth).padStart(2,'0')}`;
+      const targets = members.filter(p => !p.isTreasurer);
+      // ✅ v3.9491: 연납자(yearly='Y')도 납부로 집계
+      const yearlyKey = `${year}-yearly`;
+      const paidCount = targets.filter(p => {
+        const pf = feeData[p.name] || {};
+        return pf[key] === 'Y' || pf[yearlyKey] === 'Y';
+      }).length;
+      summaryEl.textContent = `📊 ${curMonth}월 납부 현황: ${paidCount}/${targets.length}명`;
+    }
+
     let headHtml = '<tr><th>회원</th>';
     for(let m = 1; m <= 12; m++) {
       const isCur = (parseInt(year) === curYear && m === curMonth);
@@ -164,13 +178,33 @@
     let bodyHtml = '';
     members.forEach(p => {
       const pFee = feeData[p.name] || {};
-      bodyHtml += `<tr><td>${escapeHtml(displayName(p.name))}</td>`;
+
+      // ✅ v3.949: 총무 면제 행 — 체크 불가, "면제" 표시
+      if (p.isTreasurer) {
+        bodyHtml += `<tr><td>${escapeHtml(displayName(p.name))} <span style="font-size:10px; color:var(--wimbledon-sage);">[총무]</span></td>`;
+        for(let m = 1; m <= 12; m++) {
+          const isCur = (parseInt(year) === curYear && m === curMonth);
+          bodyHtml += `<td class="fee-check${isCur ? ' fee-current-month' : ''}" style="color:var(--wimbledon-sage); font-size:11px;">면제</td>`;
+        }
+        bodyHtml += '</tr>';
+        return;
+      }
+
+      // ✅ v3.949: 연납 자동 체크 — yearly 키가 'Y'면 전월 자동 완료 표시
+      const isYearly = pFee[`${year}-yearly`] === 'Y';
+
+      const yearlyBtnStyle = isYearly
+        ? 'font-size:10px; color:#fff; background:var(--wimbledon-sage); border:none; border-radius:8px; padding:1px 5px; margin-left:3px; cursor:pointer;'
+        : 'font-size:10px; color:var(--wimbledon-sage); background:none; border:1px solid var(--wimbledon-sage); border-radius:8px; padding:1px 5px; margin-left:3px; cursor:pointer;';
+      bodyHtml += `<tr><td>${escapeHtml(displayName(p.name))}<button style="${yearlyBtnStyle}" onclick="toggleYearlyFee('${escapeHtml(p.name).replace(/'/g,"&#39;")}')">${isYearly ? '연납✓' : '연납'}</button></td>`;
       for(let m = 1; m <= 12; m++) {
         const key = `${year}-${String(m).padStart(2,'0')}`;
-        const paid = pFee[key] === 'Y';
+        const paid = isYearly || pFee[key] === 'Y';
         const isCur = (parseInt(year) === curYear && m === curMonth);
         const cellClass = (!paid ? ' fee-unpaid' : '') + (isCur ? ' fee-current-month' : '');
-        bodyHtml += `<td class="fee-check${cellClass}" onclick="toggleFee('${escapeHtml(p.name)}','${key}')">${paid ? '✅' : '❌'}</td>`;
+        const autoStyle = isYearly ? ' opacity:0.75;' : '';
+        const clickHandler = isYearly ? '' : `onclick="toggleFee('${escapeHtml(p.name)}','${key}')"`;
+        bodyHtml += `<td class="fee-check${cellClass}" style="${autoStyle}" ${clickHandler}>${paid ? '✅' : '❌'}</td>`;
       }
       bodyHtml += '</tr>';
     });
@@ -193,7 +227,8 @@
   function feeSetAll(value, scope) {
     const year = $('feeYear').value;
     const curMonth = new Date().getMonth() + 1;
-    const members = players.filter(p => !p.isGuest);
+    // ✅ v3.949: 총무 제외
+    const members = players.filter(p => !p.isGuest && !p.isTreasurer);
 
     if(scope === 'year') {
       // 1~12월 전체
@@ -235,7 +270,14 @@
     for(let m = 1; m <= 12; m++) {
       const key = `${year}-${String(m).padStart(2,'0')}`;
       let paidCount = 0;
-      Object.values(feeData).forEach(pf => { if(pf[key] === 'Y') paidCount++; });
+      // ✅ v3.949: 총무 제외하여 납부 인원 계산
+      const nonTreasurerNames = new Set(players.filter(p => !p.isGuest && !p.isTreasurer).map(p => p.name));
+      Object.entries(feeData).forEach(([name, pf]) => {
+        if (!nonTreasurerNames.has(name)) return;
+        // ✅ v3.9491: 연납자(yearly='Y')도 납부로 집계
+        const yearlyKey = `${year}-yearly`;
+        if (pf[key] === 'Y' || pf[yearlyKey] === 'Y') paidCount++;
+      });
       if(paidCount > 0) {
         financeData.push({
           id: `auto-fee-${key}`,
@@ -253,13 +295,16 @@
     const year = $('feeYear').value;
     const curMonth = new Date().getMonth() + 1;
     const key = `${year}-${String(curMonth).padStart(2,'0')}`;
-    const members = players.filter(p => !p.isGuest).sort((a,b) => a.name.localeCompare(b.name));
+    // ✅ v3.949: 총무 제외
+    const members = players.filter(p => !p.isGuest && !p.isTreasurer).sort((a,b) => a.name.localeCompare(b.name));
 
     const paid = [];
     const unpaid = [];
     members.forEach(p => {
       const pFee = feeData[p.name] || {};
-      if(pFee[key] === 'Y') paid.push(displayName(p.name));
+      // ✅ v3.9491: 연납자(yearly='Y')도 납부로 표시
+      const yearlyKey = `${year}-yearly`;
+      if(pFee[key] === 'Y' || pFee[yearlyKey] === 'Y') paid.push(displayName(p.name));
       else unpaid.push(displayName(p.name));
     });
 
@@ -300,13 +345,74 @@
     currentFinTab = tab;
     $('finTabIncome').classList.toggle('active', tab === 'income');
     $('finTabExpense').classList.toggle('active', tab === 'expense');
+    // ✅ v3.949: 지출일 때만 카테고리 표시
+    const catRow = $('finCategoryRow');
+    if (catRow) catRow.style.display = tab === 'expense' ? 'flex' : 'none';
     renderFinanceList();
+  }
+
+  // ✅ v3.949: 총무 지정/해제
+  function toggleTreasurer(name) {
+    const p = players.find(x => x.name === name);
+    if (!p) return;
+    // 기존 총무 해제 후 새로 지정 (한 명만)
+    players.forEach(x => { x.isTreasurer = false; });
+    p.isTreasurer = true;
+    pushDataOnly();
+    renderTreasurerPicker();
+    renderFeeTable();
+    gsAlert(`${displayName(name)}님이 총무로 지정됐습니다.`);
+  }
+
+  function clearTreasurer() {
+    players.forEach(x => { x.isTreasurer = false; });
+    pushDataOnly();
+    renderTreasurerPicker();
+    renderFeeTable();
+    gsAlert('총무 면제가 해제됐습니다.');
+  }
+
+  function renderTreasurerPicker() {
+    const el = $('treasurerPickerArea');
+    if (!el) return;
+    const current = players.find(p => p.isTreasurer);
+    const members = players.filter(p => !p.isGuest).sort((a,b) => a.name.localeCompare(b.name));
+    let html = `<div style="margin-bottom:8px; font-size:13px; color:var(--text-gray);">현재 총무: <strong style="color:var(--wimbledon-sage);">${current ? escapeHtml(displayName(current.name)) : '없음'}</strong></div>`;
+    html += `<div style="display:flex; flex-wrap:wrap; gap:6px;">`;
+    members.forEach(p => {
+      const isT = p.isTreasurer;
+      html += `<button onclick="toggleTreasurer('${escapeHtml(p.name).replace(/'/g,"&#39;")}')"
+        style="padding:6px 12px; border-radius:20px; border:2px solid ${isT ? 'var(--wimbledon-sage)' : '#ddd'}; background:${isT ? 'var(--wimbledon-sage)' : '#fff'}; color:${isT ? '#fff' : 'var(--text-dark)'}; font-size:13px; cursor:pointer;">
+        ${isT ? '✓ ' : ''}${escapeHtml(displayName(p.name))}
+      </button>`;
+    });
+    html += `</div>`;
+    if (current) {
+      html += `<button onclick="clearTreasurer()" style="margin-top:8px; font-size:12px; color:var(--up-red); background:none; border:none; cursor:pointer;">✕ 총무 면제 해제</button>`;
+    }
+    el.innerHTML = html;
+  }
+
+  // ✅ v3.949: 연납 토글
+  function toggleYearlyFee(name) {
+    const year = $('feeYear').value;
+    const key = `${year}-yearly`;
+    if (!feeData[name]) feeData[name] = {};
+    feeData[name][key] = (feeData[name][key] === 'Y') ? 'N' : 'Y';
+    const cid = getActiveClubId();
+    if(cid) localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
+    renderFeeTable();
+    syncFeeToFinance();
+    pushFeeData();
   }
 
   function addFinanceItem() {
     const date = $('finDate').value;
     const desc = $('finDesc').value.trim();
     const amount = parseInt($('finAmount').value);
+    // ✅ v3.949: 지출 카테고리
+    const catEl = $('finCategory');
+    const category = (catEl && currentFinTab === 'expense') ? catEl.value : '';
 
     if(!desc) { gsAlert('내용을 입력하세요.'); return; }
     if(!amount || amount <= 0) { gsAlert('금액을 입력하세요.'); return; }
@@ -317,6 +423,7 @@
       date: date,
       desc: desc,
       amount: amount,
+      category: category,
       auto: false
     });
 
@@ -352,11 +459,13 @@
         const prefix = f.type === 'income' ? '+' : '-';
         const autoStyle = f.auto ? 'opacity:0.7; background:rgba(93,156,118,0.06);' : '';
         const autoTag = f.auto ? '<span style="font-size:10px; color:var(--wimbledon-sage); margin-left:4px;">[자동]</span>' : '';
+        // ✅ v3.949: 지출 카테고리 태그
+        const catTag = (!f.auto && f.category) ? `<span style="font-size:10px; color:#888; margin-left:4px; background:#f0f0f0; padding:1px 5px; border-radius:8px;">${escapeHtml(f.category)}</span>` : '';
         const delBtn = f.auto ? '' : `<span class="material-symbols-outlined fi-del" onclick="deleteFinanceItem('${f.id}')">close</span>`;
         return `
           <div class="finance-item" style="${autoStyle}">
             <span class="fi-date">${dateShort}</span>
-            <span class="fi-desc">${escapeHtml(f.desc)}${autoTag}</span>
+            <span class="fi-desc">${escapeHtml(f.desc)}${autoTag}${catTag}</span>
             <span class="fi-amount ${amtClass}">${prefix}${f.amount.toLocaleString()}원</span>
             ${delBtn}
           </div>
@@ -398,7 +507,9 @@
       text += `📤 지출\n`;
       expenses.forEach(f => {
         const dateShort = (f.date || '').slice(5).replace('-','/');
-        text += `• ${dateShort} ${f.desc} ${f.amount.toLocaleString()}원\n`;
+        // ✅ v3.949: 카테고리 표시
+        const catStr = f.category ? ` [${f.category}]` : '';
+        text += `• ${dateShort} ${f.desc}${catStr} ${f.amount.toLocaleString()}원\n`;
       });
       text += `소계: ${totalExpense.toLocaleString()}원\n\n`;
     }

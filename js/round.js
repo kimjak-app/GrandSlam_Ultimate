@@ -570,7 +570,10 @@
     
     gsConfirm(`${finishedMatches.length}경기의 결과를 저장하시겠습니까?`, ok => {
       if(!ok) return;
-    
+
+      // ✅ v3.945: 이번 주 첫 게임 저장 시 주간 랭킹 리셋
+      if (typeof checkAndResetWeeklyOnSave === 'function') checkAndResetWeeklyOnSave();
+
     // 순위 계산
     const standings = {};
     roundParticipants.forEach(p => {
