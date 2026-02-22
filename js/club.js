@@ -393,20 +393,20 @@
       $('courtName').textContent = notice.courtName || '';
       // ✅ v3.811: slots 배열 지원
       const slots = notice.slots || [{time: notice.time, court: notice.memo}];
-      const timeText = slots.map(s => s.time || '').filter(Boolean).join(' / ');
-      $('courtTime').textContent = timeText || '';
-      $('courtAddress').textContent = notice.address || '';
-      
-      // ✅ v3.816: 코트 번호를 시간 옆에 인라인 표시 + courtMemo는 숨김
-      const courtText = slots.map(s => s.court || '').filter(Boolean).join(', ');
-      if(courtText) {
-        $('courtNumber').textContent = courtText;
-        $('courtNumber').style.display = 'inline-block';
-        $('courtMemo').style.display = 'none';
-      } else {
-        $('courtNumber').style.display = 'none';
-        $('courtMemo').style.display = 'none';
+
+      // ✅ v4.01: 슬롯별 한 줄씩 표시 (시간 / 코트번호)
+      const slotDisplay = $('courtSlotDisplay');
+      if(slotDisplay) {
+        slotDisplay.innerHTML = slots.filter(s => s.time || s.court).map(s => {
+          const courtBadge = s.court
+            ? `<span style="margin-left:8px; font-size:13px; color:var(--wimbledon-sage); font-weight:400; background:rgba(93,156,118,0.1); padding:2px 8px; border-radius:8px;">${escapeHtml(s.court)}</span>`
+            : '';
+          return `<div style="display:flex; align-items:center;">${escapeHtml(s.time||'')}${courtBadge}</div>`;
+        }).join('');
       }
+
+      $('courtAddress').textContent = notice.address || '';
+      $('courtMemo').style.display = 'none';
       
       // 날짜가 오늘이 아니면 날짜 표시
       if(notice.date !== todayStr) {
@@ -507,13 +507,12 @@
     $('shareDropdown').classList.remove('active');
 
     const courtName = $('courtName')?.textContent || '';
-    const courtTime = $('courtTime')?.textContent || '';
-    const courtNumber = $('courtNumber')?.textContent || '';
     const courtAddress = $('courtAddress')?.textContent || '';
     const dateDisp = $('dateDisplay')?.textContent || '';
 
-    // ✅ v3.816: 코트 번호가 있으면 시간 뒤에 붙여서 표시
-    const courtTimeWithNum = courtNumber ? `${courtTime}  <${courtNumber}>` : courtTime;
+    // ✅ v4.01: slotDisplay에서 슬롯별 텍스트 추출
+    const slotRows = $('courtSlotDisplay')?.querySelectorAll('div') || [];
+    const courtTimeWithNum = Array.from(slotRows).map(r => r.textContent.trim()).filter(Boolean).join(' / ');
 
     // 날씨 요약 생성
     let weatherSummary = '';
