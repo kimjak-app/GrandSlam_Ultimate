@@ -602,8 +602,8 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
         const winners = homeWin ? (log.home || []) : (log.away || []);
         const losers  = homeWin ? (log.away || []) : (log.home || []);
         const isDouble = log.type === 'double';
-        winners.forEach(n => { if(cumScore[n] !== undefined) cumScore[n] += isDouble ? 3.0 : 4.0; });
-        losers.forEach(n  => { if(cumScore[n] !== undefined) cumScore[n] += isDouble ? 0.3 : 0.5; });
+        winners.forEach(n => { if(cumScore[n] !== undefined) cumScore[n] += isDouble ? TENNIS_RULES.cumScore.double : TENNIS_RULES.cumScore.single; });
+        losers.forEach(n  => { if(cumScore[n] !== undefined) cumScore[n] += isDouble ? (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss) : (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss); });
         logIdx++;
       }
       // 현재 누적 점수로 순위 계산
@@ -654,8 +654,13 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
   }
 
   function calcDeltas(type, isWin) {
-    if (type === "double") return isWin ? { total: 3.0, d: 3.0, s: 0.0 } : { total: 0.3, d: 0.3, s: 0.0 };
-    return isWin ? { total: 4.0, d: 0.0, s: 4.0 } : { total: 0.5, d: 0.0, s: 0.5 };
+    // ✅ v4.02: TENNIS_RULES 참조 (rules/tennis.js)
+    const rule = TENNIS_RULES.scoring[type] || TENNIS_RULES.scoring.double;
+    const earn = isWin
+      ? TENNIS_RULES.scoring.participate + rule.win
+      : TENNIS_RULES.scoring.participate + rule.loss;
+    if (type === "double" || type === "mixed") return { total: earn, d: earn, s: 0.0 };
+    return { total: earn, d: 0.0, s: earn };
   }
 
   function applyMatchToPlayers(type, homeArr, awayArr, winnerSide) {

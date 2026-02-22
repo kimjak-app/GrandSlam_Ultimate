@@ -38,26 +38,14 @@
   var _clubPinCallback = null;
 
   // ========================================
-  // ✅ v4.0: 다종목 확장 구조 — 씨앗 심기
-  // UI는 테니스 전용 유지, 데이터 구조만 범용화
+  // ✅ v4.02: 다종목 확장 구조
+  // 점수 규칙 상수는 js/rules/tennis.js (TENNIS_RULES)로 이전됨
+  // Firestore 이전 후엔 clubs/{clubId}/settings.sports.tennis.scoringRule 에서 로드
   // ========================================
 
-  // 현재 앱의 기본 스포츠 종목
   const DEFAULT_SPORT = "tennis";
 
-  // 점수 체계 객체 — 하드코딩 금지, 이 객체 참조
-  const SCORING_RULES = {
-    tennis: {
-      winPoint: 3,
-      drawPoint: 1,
-      lossPoint: 0,
-      genderSeparated: true,
-      mixedAllowed: true,
-      levelSeparated: true
-    }
-  };
-
-  // matchType 범용 상수
+  // matchType 범용 상수 (UI는 singles/doubles/mixed 유지, 내부 분류용)
   const MATCH_TYPE = {
     INDIVIDUAL: "individual",
     PAIR: "pair",

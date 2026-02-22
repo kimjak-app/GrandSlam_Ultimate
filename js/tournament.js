@@ -426,8 +426,8 @@
     const b = singlePrelim.b;
     const loserName = (winnerName === a) ? b : a;
 
-    if (pointsData[winnerName]) { pointsData[winnerName].score += 3.0; pointsData[winnerName].win++; }
-    if (pointsData[loserName])  { pointsData[loserName].score += -0.5; pointsData[loserName].loss++; }
+    if (pointsData[winnerName]) { pointsData[winnerName].score += TENNIS_RULES.scoring.single.win; pointsData[winnerName].win++; }
+    if (pointsData[loserName])  { pointsData[loserName].score  += TENNIS_RULES.scoring.single.loss; pointsData[loserName].loss++; }
 
     bufferTournamentMatch('single', a, b, winnerName);
 
@@ -476,8 +476,9 @@
 
     if(tType==='double' && !loserName.includes('BYE') && loserName !== 'BYE') registerLosers(loserName);
 
-    const winEarn = (tType === 'single') ? 3.0 : 2.0;
-    const lossEarn = -0.5;
+    // ✅ v4.02: TENNIS_RULES 참조 (rules/tennis.js)
+    const winEarn  = TENNIS_RULES.scoring[tType === 'single' ? 'single' : 'double'].win;
+    const lossEarn = TENNIS_RULES.scoring[tType === 'single' ? 'single' : 'double'].loss;
 
     name.split(',').forEach(pn => {
       if(pointsData[pn]) { pointsData[pn].score += winEarn; pointsData[pn].win++; }
@@ -488,10 +489,10 @@
     });
 
     if(currentBracketSize === 8) {
-      if(round === 1) loserName.split(',').forEach(pn => { if(pointsData[pn]) pointsData[pn].finalBonus = 0.5; });
-      else if(round === 2) loserName.split(',').forEach(pn => { if(pointsData[pn]) pointsData[pn].finalBonus = 1.0; });
+      if(round === 1) loserName.split(',').forEach(pn => { if(pointsData[pn]) pointsData[pn].finalBonus = TENNIS_RULES.tournamentBonus.quarterFinal; });
+      else if(round === 2) loserName.split(',').forEach(pn => { if(pointsData[pn]) pointsData[pn].finalBonus = TENNIS_RULES.tournamentBonus.semiFinal; });
     } else if(currentBracketSize === 4) {
-      if(round === 2) loserName.split(',').forEach(pn => { if(pointsData[pn]) pointsData[pn].finalBonus = 1.0; });
+      if(round === 2) loserName.split(',').forEach(pn => { if(pointsData[pn]) pointsData[pn].finalBonus = TENNIS_RULES.tournamentBonus.semiFinal; });
     }
 
     bufferTournamentMatch(tType, teamA, teamB, name);
@@ -499,8 +500,8 @@
     if(p.classList.contains('final-stage') || round === 3) {
       $('champ-display').style.display = 'inline-flex';
       $('champ-name').innerText = name;
-      name.split(',').forEach(pn => { if(pointsData[pn]) pointsData[pn].finalBonus = 3.0; });
-      loserName.split(',').forEach(pn => { if(pointsData[pn]) pointsData[pn].finalBonus = 2.0; });
+      name.split(',').forEach(pn => { if(pointsData[pn]) pointsData[pn].finalBonus = TENNIS_RULES.tournamentBonus.champion; });
+      loserName.split(',').forEach(pn => { if(pointsData[pn]) pointsData[pn].finalBonus = TENNIS_RULES.tournamentBonus.runnerUp; });
       updateScoreBoard();
       await commitTournamentIfNeeded();
       return;

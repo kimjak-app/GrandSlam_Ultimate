@@ -446,9 +446,10 @@
     // 승률 및 점수 계산
     Object.values(standings).forEach(s => {
       s.winRate = s.matches > 0 ? s.wins / s.matches : 0;
-      // 총점 계산 (보너스 제외, 순수 경기 획득 점수)
-      const winPoint = roundMode === 'single' ? 3 : 2;
-      const losePoint = roundMode === 'single' ? -0.5 : -0.7;
+      // ✅ v4.02: TENNIS_RULES 참조 (rules/tennis.js)
+      const matchType = roundMode === 'single' ? 'single' : 'double';
+      const winPoint  = getRoundWinPoint(matchType);
+      const losePoint = getRoundLosePoint(matchType);
       // 라운드 로빈 점수 + 미니 토너먼트 점수(승리당 +1점)
       s.points = 1 + (s.wins * winPoint) + (s.losses * losePoint) + ((s.miniWins || 0) * 1);
     });
@@ -613,16 +614,17 @@
     // 점수 부여
     // 1위: +5, 2위: +4, 3위: +3, 4위: +2.5, 5-8위: +1.5, 9위 이하: +0.1
     sorted.forEach((s, idx) => {
-      let bonus = 0.1;
-      if(idx === 0) bonus = 5;
-      else if(idx === 1) bonus = 4;
-      else if(idx === 2) bonus = 3;
-      else if(idx === 3) bonus = 2.5;
-      else if(idx < 8) bonus = 1.5;
+      let bonus = TENNIS_RULES.roundBonus[5];
+      if(idx === 0) bonus = TENNIS_RULES.roundBonus[0];
+      else if(idx === 1) bonus = TENNIS_RULES.roundBonus[1];
+      else if(idx === 2) bonus = TENNIS_RULES.roundBonus[2];
+      else if(idx === 3) bonus = TENNIS_RULES.roundBonus[3];
+      else if(idx < 8) bonus = TENNIS_RULES.roundBonus[4];
       
-      // 참여 +1, 승리당 +3 (단식) or +2 (복식), 패배당 -0.5 (단식) or -0.7 (복식)
-      const winPoint = roundMode === 'single' ? 3 : 2;
-      const losePoint = roundMode === 'single' ? -0.5 : -0.7;
+      // ✅ v4.02: TENNIS_RULES 참조 (rules/tennis.js)
+      const matchType = roundMode === 'single' ? 'single' : 'double';
+      const winPoint  = getRoundWinPoint(matchType);
+      const losePoint = getRoundLosePoint(matchType);
       
       s.points = 1 + (s.wins * winPoint) + (s.losses * losePoint) + bonus;
     });
@@ -648,25 +650,25 @@
         
         if(wp) {
           wp.sWins = (wp.sWins || 0) + 1;
-          wp.sScore = (wp.sScore || 0) + 4; // 승리 +3 + 참여 +1
+          wp.sScore = (wp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win); // 참여+승리
         }
         if(lp) {
           lp.sLosses = (lp.sLosses || 0) + 1;
-          lp.sScore = (lp.sScore || 0) + 0.5; // 패배 -0.5 + 참여 +1
+          lp.sScore = (lp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss); // 참여+패배
         }
       } else {
         winner.forEach(name => {
           const p = players.find(pl => pl.name === name);
           if(p) {
             p.dWins = (p.dWins || 0) + 1;
-            p.dScore = (p.dScore || 0) + 3; // 승리 +2 + 참여 +1
+            p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win); // 참여+승리
           }
         });
         loser.forEach(name => {
           const p = players.find(pl => pl.name === name);
           if(p) {
             p.dLosses = (p.dLosses || 0) + 1;
-            p.dScore = (p.dScore || 0) + 0.3; // 패배 -0.7 + 참여 +1
+            p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss); // 참여+패배
           }
         });
       }
@@ -674,12 +676,12 @@
     
     // 순위 보너스 적용
     sorted.forEach((s, idx) => {
-      let bonus = 0.1;
+      let bonus = TENNIS_RULES.roundBonus[5];
       if(idx === 0) bonus = 5;
       else if(idx === 1) bonus = 4;
       else if(idx === 2) bonus = 3;
-      else if(idx === 3) bonus = 2.5;
-      else if(idx < 8) bonus = 1.5;
+      else if(idx === 3) bonus = TENNIS_RULES.roundBonus[3];
+      else if(idx < 8) bonus = TENNIS_RULES.roundBonus[4];
       
       if(roundMode === 'single') {
         const p = players.find(pl => pl.name === s.name);
@@ -700,11 +702,11 @@
       if(stat && stat.matches === 0) {
         if(roundMode === 'single') {
           const p = players.find(pl => pl.name === participant);
-          if(p) p.sScore = (p.sScore || 0) + 0.1;
+          if(p) p.sScore = (p.sScore || 0) + TENNIS_RULES.roundBonus[5];
         } else {
           participant.forEach(name => {
             const p = players.find(pl => pl.name === name);
-            if(p) p.dScore = (p.dScore || 0) + 0.1;
+            if(p) p.dScore = (p.dScore || 0) + TENNIS_RULES.roundBonus[5];
           });
         }
       }
@@ -986,25 +988,25 @@
         
         if(wp) {
           wp.sWins = (wp.sWins || 0) + 1;
-          wp.sScore = (wp.sScore || 0) + 4;
+          wp.sScore = (wp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win);
         }
         if(lp) {
           lp.sLosses = (lp.sLosses || 0) + 1;
-          lp.sScore = (lp.sScore || 0) + 0.5;
+          lp.sScore = (lp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss);
         }
       } else {
         winner.forEach(name => {
           const p = players.find(pl => pl.name === name);
           if(p) {
             p.dWins = (p.dWins || 0) + 1;
-            p.dScore = (p.dScore || 0) + 3;
+            p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win);
           }
         });
         loser.forEach(name => {
           const p = players.find(pl => pl.name === name);
           if(p) {
             p.dLosses = (p.dLosses || 0) + 1;
-            p.dScore = (p.dScore || 0) + 0.3;
+            p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss);
           }
         });
       }
