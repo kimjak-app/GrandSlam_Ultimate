@@ -96,6 +96,10 @@ async function sync() {
     // ✅ v3.92: gs:state:changed 통합 이벤트 — 선수/경기 데이터 확정
     AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'data', players, matchLog } }));
 
+    // ✅ v4.031: players 로드 완료 후 feeData 갱신 — 타이밍 버그 수정
+    // (베이글 외 클럽에서 재정관리 수입 0원 되던 문제 해결)
+    fetchFeeData().catch(e => console.warn('sync fetchFeeData error:', e));
+
     setTimeout(applyAutofitAllTables, 0);
   } catch (e) {
     setStatus(`<div style="color:#ff3b30; font-size:12px; margin-bottom:10px;">데이터 동기화 실패 😵‍💫</div>`);

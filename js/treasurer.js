@@ -34,13 +34,6 @@
     try { initRoundPlayerPool(); } catch(e) {}
   }
 
-  // ✅ v3.816: 클럽별 1대2대결용 활성화 여부 (localStorage 저장)
-  function getUse1v2Key() { return 'grandslam_use1v2_' + getActiveClubId(); }
-  function isUse1v2() { return localStorage.getItem(getUse1v2Key()) === 'Y'; }
-  function setUse1v2(val) { localStorage.setItem(getUse1v2Key(), val ? 'Y' : 'N'); }
-
-  // ✅ v3.816: 가상 1대2대결용 플레이어 객체 (players 배열에 없어도 풀에 표시)
-  // VIRTUAL_1V2_PLAYER → state.js에서 선언됨
   // ========================================
 
   function enterTreasurer() {
@@ -75,30 +68,8 @@
     $('treasurer-pin-screen').style.display = 'none';
     $('treasurer-main').style.display = 'block';
     hideTreasurerSections();
-    // ✅ v3.816: 1대2대결용 토글 상태 렌더링
-    render1v2Toggle();
-  }
-
-  // ✅ v3.816: 1대2대결용 토글 상태 업데이트
-  function render1v2Toggle() {
-    const track = $('use1v2Track');
-    const thumb = $('use1v2Thumb');
-    if(!track || !thumb) return;
-    const active = isUse1v2();
-    track.style.background = active ? 'var(--wimbledon-sage)' : '#ccc';
-    thumb.style.transform = active ? 'translateX(22px)' : 'translateX(0)';
-  }
-
-  // ✅ v3.816: 1대2대결용 토글 클릭
-  function toggle1v2() {
-    setUse1v2(!isUse1v2());
-    render1v2Toggle();
-    // 게임 풀 즉시 갱신
-    renderPool();
-    renderLadderPlayerPool();
-    initTournament();
-    try { initRoundPlayerPool(); } catch(e) {}
-    gsAlert(isUse1v2() ? '✅ [1vs2]용이 게임 풀에 표시됩니다.' : '❌ [1vs2]용이 숨겨집니다.');
+    // ✅ v4.032: 회비 면제 설정 등 변경사항 저장
+    pushDataOnly();
   }
 
   function hideTreasurerSections() {
@@ -114,7 +85,7 @@
     const el = $('treasurer-' + section);
     if(el) el.style.display = 'block';
 
-    if(section === 'fee') { initFeeTable(); renderTreasurerPicker(); }
+    if(section === 'fee') { initFeeTable(); renderTreasurerPicker(); renderFeeExemptPicker(); }
     if(section === 'finance') { initFinance(); }
     if(section === 'court-mgmt') { loadCourtPresets(); renderCourtNoticeList(); }
     if(section === 'notice-mgmt') { renderAnnouncementMgmtList(); }
@@ -157,7 +128,7 @@
     const summaryEl = $('feeSummary');
     if (summaryEl) {
       const key = `${year}-${String(curMonth).padStart(2,'0')}`;
-      const targets = members.filter(p => !p.isTreasurer);
+      const targets = members.filter(p => !p.isTreasurer && !p.isFeeExempt);
       // ✅ v3.9491: 연납자(yearly='Y')도 납부로 집계
       const yearlyKey = `${year}-yearly`;
       const paidCount = targets.filter(p => {
@@ -185,6 +156,17 @@
         for(let m = 1; m <= 12; m++) {
           const isCur = (parseInt(year) === curYear && m === curMonth);
           bodyHtml += `<td class="fee-check${isCur ? ' fee-current-month' : ''}" style="color:var(--wimbledon-sage); font-size:11px;">면제</td>`;
+        }
+        bodyHtml += '</tr>';
+        return;
+      }
+
+      // ✅ v4.032: 회비 면제 행 — 체크 불가, "면제" 표시
+      if (p.isFeeExempt) {
+        bodyHtml += `<tr><td>${escapeHtml(displayName(p.name))} <span style="font-size:10px; color:#FF9500;">[면제]</span></td>`;
+        for(let m = 1; m <= 12; m++) {
+          const isCur = (parseInt(year) === curYear && m === curMonth);
+          bodyHtml += `<td class="fee-check${isCur ? ' fee-current-month' : ''}" style="color:#FF9500; font-size:11px;">면제</td>`;
         }
         bodyHtml += '</tr>';
         return;
@@ -228,7 +210,8 @@
     const year = $('feeYear').value;
     const curMonth = new Date().getMonth() + 1;
     // ✅ v3.949: 총무 제외
-    const members = players.filter(p => !p.isGuest && !p.isTreasurer);
+    // ✅ v4.032: 회비 면제 회원도 제외
+    const members = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt);
 
     if(scope === 'year') {
       // 1~12월 전체
@@ -271,7 +254,8 @@
       const key = `${year}-${String(m).padStart(2,'0')}`;
       let paidCount = 0;
       // ✅ v3.949: 총무 제외하여 납부 인원 계산
-      const nonTreasurerNames = new Set(players.filter(p => !p.isGuest && !p.isTreasurer).map(p => p.name));
+      // ✅ v4.032: 회비 면제 회원도 제외
+      const nonTreasurerNames = new Set(players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt).map(p => p.name));
       Object.entries(feeData).forEach(([name, pf]) => {
         if (!nonTreasurerNames.has(name)) return;
         // ✅ v3.9491: 연납자(yearly='Y')도 납부로 집계
@@ -296,7 +280,8 @@
     const curMonth = new Date().getMonth() + 1;
     const key = `${year}-${String(curMonth).padStart(2,'0')}`;
     // ✅ v3.949: 총무 제외
-    const members = players.filter(p => !p.isGuest && !p.isTreasurer).sort((a,b) => a.name.localeCompare(b.name));
+    // ✅ v4.032: 회비 면제 회원도 제외
+    const members = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt).sort((a,b) => a.name.localeCompare(b.name));
 
     const paid = [];
     const unpaid = [];
@@ -394,6 +379,52 @@
   }
 
   // ✅ v3.949: 연납 토글
+
+  // ✅ v4.032: 회비 면제 피커 렌더링
+  function renderFeeExemptPicker() {
+    const el = $('feeExemptPickerArea');
+    if (!el) return;
+    const exempted = players.filter(p => !p.isGuest && p.isFeeExempt);
+    const members = players.filter(p => !p.isGuest).sort((a,b) => a.name.localeCompare(b.name));
+    let html = `<div style="margin-bottom:8px; font-size:13px; color:var(--text-gray);">면제 회원: <strong style="color:#FF9500;">${exempted.length > 0 ? exempted.map(p => escapeHtml(displayName(p.name))).join(', ') : '없음'}</strong></div>`;
+    html += `<div style="display:flex; flex-wrap:wrap; gap:6px;">`;
+    members.forEach(p => {
+      const isE = !!p.isFeeExempt;
+      const safeName = escapeHtml(p.name).replace(/'/g,"&#39;");
+      html += `<button onclick="toggleFeeExempt('${safeName}')"
+        style="padding:6px 12px; border-radius:20px; border:2px solid ${isE ? '#FF9500' : '#ddd'}; background:${isE ? '#FF9500' : '#fff'}; color:${isE ? '#fff' : 'var(--text-dark)'}; font-size:13px; cursor:pointer;">
+        ${isE ? '&#10003; ' : ''}${escapeHtml(displayName(p.name))}
+      </button>`;
+    });
+    html += `</div>`;
+    if (exempted.length > 0) {
+      html += `<button onclick="clearFeeExempt()" style="margin-top:8px; font-size:12px; color:var(--up-red); background:none; border:none; cursor:pointer;">&#10005; 전체 면제 해제</button>`;
+    }
+    el.innerHTML = html;
+  }
+
+  // ✅ v4.032: 회비 면제 토글
+  function toggleFeeExempt(name) {
+    const p = players.find(x => x.name === name);
+    if (!p) return;
+    p.isFeeExempt = !p.isFeeExempt;
+    const cid = getActiveClubId();
+    if (cid) localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
+    renderFeeExemptPicker();
+    renderFeeTable();
+    syncFeeToFinance();
+  }
+
+  // ✅ v4.032: 회비 면제 전체 해제
+  function clearFeeExempt() {
+    players.forEach(x => { x.isFeeExempt = false; });
+    pushDataOnly();
+    renderFeeExemptPicker();
+    renderFeeTable();
+    syncFeeToFinance();
+    gsAlert('회비 면제가 전체 해제됐습니다.');
+  }
+
   function toggleYearlyFee(name) {
     const year = $('feeYear').value;
     const key = `${year}-yearly`;

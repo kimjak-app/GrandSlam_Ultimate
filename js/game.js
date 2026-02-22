@@ -147,7 +147,7 @@
     updatePlayerList();
     renderStatsPlayerList();
     await pushDataOnly();
-    gsAlert(p.name + ' → ' + p.level + '급으로 변경됐습니다.');
+    gsAlert(p.name + ' → ' + p.level + '로 변경됐습니다.');
   }
 
   // ✅ v3.94: async로 변경 — push 완료 후 UI 업데이트, race condition 방지
@@ -332,7 +332,7 @@
         <td style="text-align:right; padding-right:5px; width:180px; white-space:nowrap;">
           <button onclick="editP('${safeName}')" style="background:var(--aussie-blue); color:white; border:none; padding:6px 8px; border-radius:8px; font-size:11px; font-weight:400;">수정</button>
           <button onclick="toggleGender('${safeName}')" style="background:${p.gender==='F'?'#E8437A':'#3A7BD5'}; color:white; border:none; padding:6px 8px; border-radius:8px; font-size:11px; font-weight:400;">${gBtnIcon}</button>
-          <button onclick="toggleLevel('${safeName}')" style="background:${lvColor}; color:white; border:none; padding:6px 8px; border-radius:8px; font-size:11px; font-weight:600;">${lv}급</button>
+          <button onclick="toggleLevel('${safeName}')" style="background:${lvColor}; color:white; border:none; padding:6px 8px; border-radius:8px; font-size:11px; font-weight:600;">${lv}</button>
           <button onclick="toggleGuest('${safeName}')" style="background:#8E8E93; color:white; border:none; padding:6px 8px; border-radius:8px; font-size:11px; font-weight:400;">구분</button>
           <button onclick="delP('${safeName}')" style="background:var(--roland-clay); color:white; border:none; padding:6px 8px; border-radius:8px; font-size:11px; font-weight:400;">삭제</button>
         </td>
@@ -421,6 +421,13 @@ function checkAdminAndShow(viewName) {
 function showView(v){
     // ✅ v3.80: 'weather' 호출 하위호환 → 'home'으로 전환
     if(v === 'weather') v = 'home';
+
+    // ✅ v4.032: treasurer 화면에서 다른 화면으로 나갈 때 자동 저장
+    const currentVisible = document.querySelector('.app-screen[style*="display: block"], .app-screen[style*="display:block"]');
+    if (currentVisible && currentVisible.id === 'view-treasurer' && v !== 'treasurer') {
+      pushDataOnly().catch(e => console.warn('treasurer 자동저장 오류:', e));
+    }
+
     document.querySelectorAll('.app-screen').forEach(el=>el.style.display='none');
     const el = document.getElementById(`view-${v}`);
     if(el) el.style.display='block';

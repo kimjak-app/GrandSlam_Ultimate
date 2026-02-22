@@ -129,3 +129,11 @@ function checkAndResetWeeklyOnSave() {
   localStorage.setItem(storageKey, mondayStr);
   console.log('[v3.945] 주간 자동 리셋 (첫 게임 저장 시):', mondayStr);
 }
+
+// ✅ v4.032: 앱 종료/탭 닫기 시 treasurer 화면이면 자동 저장 시도
+window.addEventListener('beforeunload', () => {
+  const currentVisible = document.querySelector('#view-treasurer[style*="display: block"], #view-treasurer[style*="display:block"]');
+  if (currentVisible) {
+    pushDataOnly().catch(e => console.warn('beforeunload 자동저장 오류:', e));
+  }
+});

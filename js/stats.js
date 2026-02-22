@@ -6,6 +6,10 @@
     if (p.isGuest === undefined) p.isGuest = false;
     // ✅ v3.93: gender 정규화 — 'M'|'F' 외 값은 전부 'M'으로 보정
     if (p.gender !== 'M' && p.gender !== 'F') p.gender = 'M';
+    // ✅ v3.949: 총무 면제 필드
+    if (p.isTreasurer === undefined) p.isTreasurer = false;
+    // ✅ v4.032: 회비 면제 필드
+    if (p.isFeeExempt === undefined) p.isFeeExempt = false;
     // ✅ v4.0: level 정규화 — 미설정 시 'A'로 기본값
     if (!p.level || !['A','B','C','D'].includes(p.level)) p.level = 'A';
     // ✅ v4.0: attributes 껍데기 — 종목별 확장용
@@ -208,6 +212,11 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
         : '<span class="material-symbols-outlined gender-icon-inline" style="font-size:14px; color:#3A7BD5; vertical-align:middle; margin-right:2px;">male</span>';
       // ✅ v4.0: level 뱃지
       const lvBadge = `<span style="font-size:9px; background:#F0F0F0; color:#666; border-radius:3px; padding:1px 3px; margin-left:2px; vertical-align:middle;">${p.level||'A'}</span>`;
+      // ✅ v4.03: 승률 1위 셀 하이라이트
+      const isWrTop = wrRanks[p.name] === 1;
+      const wrCellStyle = isWrTop
+        ? `background:var(--aussie-blue); color:white; border-radius:6px; font-weight:600; white-space:nowrap;`
+        : `white-space:nowrap;`;
       return `<tr>
         <td style="white-space:nowrap;">${rankIcon}</td>
         <td style="text-align:left; padding-left:10px; white-space:nowrap;">
@@ -216,7 +225,7 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
             <span class="sub-info" style="margin-left:2px; white-space:nowrap;">(${lastShown}위)${df}</span>
           </div>
         </td>
-        <td style="white-space:nowrap;" class="sub-info">${(calcRate(p)*100).toFixed(1)}% (${wrRanks[p.name]}위)</td>
+        <td style="${wrCellStyle}" class="${isWrTop ? '' : 'sub-info'}">${(calcRate(p)*100).toFixed(1)}% (${wrRanks[p.name]}위)</td>
         <td style="font-size:11px; white-space:nowrap;">${(p[winK]||0)}/${(p[lossK]||0)}</td>
         <td class="point-text" style="white-space:nowrap;">${Number(p[scoreK]||0).toFixed(1)}</td>
       </tr>`;
@@ -392,6 +401,11 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
         ? '<span class="material-symbols-outlined gender-icon-inline" style="font-size:14px;color:#E8437A;vertical-align:middle;margin-right:2px;">female</span>'
         : '<span class="material-symbols-outlined gender-icon-inline" style="font-size:14px;color:#3A7BD5;vertical-align:middle;margin-right:2px;">male</span>';
       const lvBadge = `<span style="font-size:9px; background:#F0F0F0; color:#666; border-radius:3px; padding:1px 3px; margin-left:2px; vertical-align:middle;">${p.level||'A'}</span>`;
+      // ✅ v4.03: 승률 1위 셀 하이라이트
+      const isWrTop = wrRanks[p.name] === 1;
+      const wrCellStyle = isWrTop
+        ? `background:var(--aussie-blue); color:white; border-radius:6px; font-weight:600; white-space:nowrap;`
+        : `white-space:nowrap;`;
       return `<tr>
         <td style="white-space:nowrap;">${rankIcon}</td>
         <td style="text-align:left; padding-left:10px; white-space:nowrap;">
@@ -400,7 +414,7 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
             <span class="sub-info" style="margin-left:2px; white-space:nowrap;">(${lastShown}위)${df}</span>
           </div>
         </td>
-        <td style="white-space:nowrap;" class="sub-info">${(calcRate(p)*100).toFixed(1)}% (${wrRanks[p.name]}위)</td>
+        <td style="${wrCellStyle}" class="${isWrTop ? '' : 'sub-info'}">${(calcRate(p)*100).toFixed(1)}% (${wrRanks[p.name]}위)</td>
         <td style="font-size:11px; white-space:nowrap;">${p.mWins||0}/${p.mLosses||0}</td>
         <td class="point-text" style="white-space:nowrap;">${Number(p.mScore||0).toFixed(1)}</td>
       </tr>`;
@@ -486,19 +500,21 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
       const rate = v.total > 0 ? ((v.wins / v.total) * 100).toFixed(1) : '0.0';
       const pairLabel = v.names.map(n => `${nameIcon(n)}${dName(n)}`).join(' & ');
       return `<tr>
-        <td style="text-align:center; width:8%;">${rank}</td>
+        <td style="text-align:center; width:36px; min-width:36px; white-space:nowrap;">${rank}</td>
         <td style="text-align:left; padding-left:8px; white-space:nowrap;">${pairLabel}</td>
         <td style="text-align:center; white-space:nowrap; font-size:11px; color:#666;">${rate}% (${wrRankMap[v.key]}위)</td>
-        <td style="text-align:center; font-size:11px; white-space:nowrap;">${v.wins}/${v.losses}</td>
+        <td style="text-align:center; font-size:11px; white-space:nowrap; min-width:48px;">${v.wins}/${v.losses}</td>
       </tr>`;
     }).join('');
 
+    // ✅ v4.03: min-width 스크롤 방식 — 순위/승패 세워지지 않게 고정
+    table.style.minWidth = '320px';
     table.innerHTML = `
       <thead><tr>
-        <th style="width:8%;">순위</th>
+        <th style="width:36px; min-width:36px; white-space:nowrap;">순위</th>
         <th style="text-align:left; padding-left:8px;">조합</th>
-        <th style="width:22%;">승률</th>
-        <th style="width:12%;">승/패</th>
+        <th style="width:90px; min-width:90px; white-space:nowrap;">승률</th>
+        <th style="width:48px; min-width:48px; white-space:nowrap;">승/패</th>
       </tr></thead>
       <tbody>${rows}</tbody>`;
 
@@ -1298,7 +1314,7 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
     $('welcome-msg').style.display = 'none';
     const report = $('stats-report');
     report.style.display = 'block';
-    $('target-name-text').innerText = `${displayName(name)} 분석 리포트`;
+    $('target-name-text').innerText = `${displayName(name)} (${p.level||'A'}조) 분석 리포트`;
 
     const data = computeStatsFromMatchLog(name);
     renderStatsHTML(name, data);
