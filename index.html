@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.032</title>
+  <title>GrandSlam Ultimate v4.033</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -269,7 +269,7 @@
     </div>
   </div>
 
-  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v4.032</div>
+  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v4.033</div>
 </div>
 
 <div id="view-tennis" class="app-screen">
@@ -568,6 +568,7 @@
       <div class="r-line r-mini">- ✅ v3.94 gender 시스템 완결 — gender 저장버그 수정(pushPayload race condition), 사다리 아이콘 제거, 혼복 필드(mScore/mWins/mLosses) 신설, 랭킹 종합고정+복식남녀분리+혼복랭킹+단식남녀분리, 주간 자동리셋(월요일 기준)</div>
       <div class="r-line r-mini">- ✅ v3.941 gender 근본 수정 — GAS DATA_FIELDS에 gender 컬럼 추가, 기존 시트 자동 마이그레이션('M' 기본값), 혼복 판별 개선(한 팀이라도 남+여면 해당 팀 혼복 점수 취득)</div>
       <div class="r-line r-mini">- ✅ v3.942 랭킹 탭 버그 수정(남자부/여자부 섹션 분리 show/hide), 선수 분석 리포트 이성간 단식(최고승률/천적) + 혼복 최고/분발 파트너 + 혼복 남자/여자 천적 카드 추가</div>
+      <div class="r-line r-mini">- ✅ v4.033 GAS Code.gs isFeeExempt 필드 추가 — DATA_FIELDS/makeEmptyPlayer_/normalizePlayers_/cleanPlayer_/writePlayersOverwrite_/migrateFeeExemptColumn_ 전부 처리, 회비 면제 설정 GAS 완전 저장/로드 지원</div>
       <div class="r-line r-mini">- ✅ v4.032 회비 면제 설정 추가 — isFeeExempt 필드 신설, 총무 면제 설정 하단 💸회비 면제 피커 추가, 납부현황/재정계산/완납해제/납부율요약/카톡복사 전부 면제 회원 제외 처리</div>
       <div class="r-line r-mini">- ✅ v4.031 버그수정(sync() 완료 후 fetchFeeData 병렬 호출→전 클럽 재정관리 수입 정상화), 1VS2 클럽게임설정 완전 제거, 랭킹 서브탭 버튼 A조/B조/C조, 선수관리 뱃지/버튼/라디오 A/B/C 알파벳만, 분석리포트 제목 (A조) 유지</div>
       <div class="r-line r-mini">- ✅ v4.03 버그수정(isTreasurer ensure 누락→토브클럽 회비→재정 수입0원), 이성단식 최고승률 텍스트 확정+아이콘제거, 혼복/연승/연패 카드 아이콘 제거, A급→A조(랭킹탭/선수관리/뱃지/버튼/알럿), 분석리포트 제목 (A조) 표시, 조합랭킹 min-width 순위/승패 세로세워짐 해결, 승률1위 셀 호주색 하이라이트</div>
@@ -582,7 +583,6 @@
       <div class="r-line r-mini">- ✅ v3.945 주간리셋 방식 변경(앱로드→첫게임저장시 조용히 리셋, UTC버그 제거), 혼복랭킹 남/여 분리 표시, 복식/혼복 조합 랭킹 추가(승리수정렬+승률+상하스크롤)</div>
       <div class="r-line r-mini">- ✅ v3.943 동성 필터링(단식/복식 파트너/천적 동성만 집계), 이성간/혼복 카드 제목 가운데정렬, 선수풀 CSS Grid 반응형(3열→2열→1열 자동, 버튼 균등 확장)</div>
       <div class="r-line r-mini">- ✅ v3.944 랭킹 테이블 성별 아이콘만 세로모드 숨김/가로모드 표시 — 선수풀/통계 아이콘은 항상 표시</div>
-      <div class="r-line r-mini">- ✅ v4.032 Firestore 데이타 서버 이전작업 전 마지막 버그 수정</div>    
     </div>
   
     
