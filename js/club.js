@@ -15,18 +15,12 @@
     localStorage.setItem(ACTIVE_CLUB_KEY, id || '');
   }
 
-  // GAS에서 클럽 목록 불러오기
+  // ✅ v4.037: Firestore에서 클럽 목록 불러오기
   async function fetchClubList() {
     try {
-      const url = MASTER_GAS_URL + '?action=listClubs';
-      const r = await fetchWithTimeout(url, {}, 12000);
-      if (!r.ok) throw new Error('listClubs 실패: ' + r.status);
-      const resp = await r.json();
-      if (resp.ok && Array.isArray(resp.clubs)) {
-        clubList = resp.clubs;
-        return clubList;
-      }
-      throw new Error(resp.error || 'listClubs 응답 오류');
+      const snap = await _db.collection('clubs').get();
+      clubList = snap.docs.map(d => d.data()).filter(c => c.clubId);
+      return clubList;
     } catch(e) {
       console.error('fetchClubList error:', e);
       clubList = [];
@@ -252,19 +246,11 @@
     try {
       if (editId) {
         // 수정
-        const payload = {
-          action: 'updateClub', clubId: editId,
+        // ✅ v4.037: Firestore 클럽 수정
+        await _db.collection('clubs').doc(editId).update({
           clubName: name, adminPin: pin,
           city: city || 'Gwangmyeong', cityKo: cityKo || city || '도시', color: color
-        };
-        const r = await fetchWithTimeout(MASTER_GAS_URL, {
-          method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
-        }, 15000);
-        const resp = await r.json();
-        if (!resp.ok) throw new Error(resp.error || '수정 실패');
-        
-        // ✅ v3.8204: 비번 변경 성공 시 localStorage에 즉시 저장 (브라우저 재시작 대비)
+        });
         localStorage.setItem('grandslam_admin_pin_' + editId, pin);
         await fetchClubList();
         if (currentClub && currentClub.clubId === editId) {
@@ -278,27 +264,20 @@
         gsAlert('클럽 정보가 수정되었습니다!');
 
       } else {
-        // 새 클럽 생성 (자동 시트 생성!)
-        const payload = {
-          action: 'createClub', clubName: name, adminPin: pin,
-          city: city || 'Gwangmyeong', cityKo: cityKo || city || '도시', color: color
-        };
-        const r = await fetchWithTimeout(MASTER_GAS_URL, {
-          method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload)
-        }, 20000);
-        const resp = await r.json();
-        if (!resp.ok) throw new Error(resp.error || '생성 실패');
-        
+        // ✅ v4.037: Firestore 클럽 생성
+        const newId = 'club_' + Date.now();
+        await _db.collection('clubs').doc(newId).set({
+          clubId: newId, clubName: name, adminPin: pin,
+          city: city || 'Gwangmyeong', cityKo: cityKo || city || '도시',
+          color: color, isDefault: false, sport: 'tennis', createdAt: Date.now()
+        });
         await fetchClubList();
-        gsAlert('"' + name + '" 클럽이 생성되었습니다!\n(Google Sheets가 자동으로 만들어졌습니다)', () => {
-          if (resp.club) {
-            gsConfirm('"' + name + '" 클럽으로 바로 전환하시겠습니까?', ok => {
-              if(!ok) return;
-              const newClub = clubList.find(function(c){ return c.clubId === resp.club.clubId; });
-              if (newClub) { activateClub(newClub, true); showView('weather'); }
-            });
-          }
+        gsAlert('"' + name + '" 클럽이 생성되었습니다!', () => {
+          gsConfirm('"' + name + '" 클럽으로 바로 전환하시겠습니까?', ok => {
+            if(!ok) return;
+            const newClub = clubList.find(function(c){ return c.clubId === newId; });
+            if (newClub) { activateClub(newClub, true); showView('weather'); }
+          });
         });
       }
     } catch(e) {
@@ -326,12 +305,8 @@
         if(!ok2) return;
         $('loading-overlay').style.display = 'flex';
         try {
-          const r = await fetchWithTimeout(MASTER_GAS_URL, {
-            method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ action: 'deleteClub', clubId: clubId })
-          }, 12000);
-          const resp = await r.json();
-          if (!resp.ok) throw new Error(resp.error || '삭제 실패');
+          // ✅ v4.037: Firestore 클럽 삭제
+          await _db.collection('clubs').doc(clubId).delete();
           await fetchClubList();
           renderClubManageList();
           gsAlert('클럽 등록이 해제되었습니다.');

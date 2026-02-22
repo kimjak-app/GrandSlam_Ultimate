@@ -110,7 +110,7 @@ async function _fsSavePlayers(clubId, playerArr) {
   const batch = _db.batch();
   playerArr.forEach(p => {
     // ✅ v4.036: 필수 필드 default 주입
-    const data = Object.assign({ sport: 'tennis', level: 'C', attributes: {} }, p);
+    const data = Object.assign({ sport: 'tennis', level: 'A', attributes: {} }, p);
     const docId = _sanitizeDocId(data.name);
     const ref = col.doc(docId);
     batch.set(ref, data);
