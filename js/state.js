@@ -8,9 +8,8 @@
   // CONFIGURATION & GLOBAL VARIABLES
   // ========================================
   
-  // ✅ v3.79: 다중 클럽 시스템 (Master GAS 방식)
-  // GAS URL은 하나! 모든 클럽이 같은 URL로 통신, clubId로 라우팅
-  const MASTER_GAS_URL = "https://script.google.com/macros/s/AKfycbwaTBlyZRh6UbxupMkFWDvJtgtU-CeAXipk7cwKzZpyoi23Ua8x_1WkY_lyLXDN2dwytg/exec";
+  // ✅ v4.037: Firestore 마이그레이션 완료 — GAS URL 제거
+  // (구 MASTER_GAS_URL 삭제, api.js/club.js 모두 Firestore 직접 연결)
   const ACTIVE_CLUB_KEY = 'grandslam_active_club_v2';
   const MASTER_PIN = "0707"; // 총괄 마스터 비밀번호 (모든 클럽 접근 가능)
   
@@ -20,9 +19,8 @@
   var currentClub = null;
   var clubList = [];
   var masterUnlocked = false; // 마스터 인증 상태
-  
-  // 하위 호환: 기존 코드가 참조하는 글로벌 변수
-  var GAS_URL = MASTER_GAS_URL;
+
+  // 하위 호환: GAS_URL 제거, ADMIN_PIN 유지
   var ADMIN_PIN = "0707";
 
   // ✅ v3.8204: 마스터 비번 확인 - 커스텀 모달 (prompt 대체)
