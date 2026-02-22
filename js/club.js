@@ -391,25 +391,22 @@
 
     if(notice) {
       $('courtName').textContent = notice.courtName || '';
-      // ✅ v3.9493: slots 배열 → 시간대별 줄바꿈 표시
+      // ✅ v3.811: slots 배열 지원
       const slots = notice.slots || [{time: notice.time, court: notice.memo}];
-      const slotsEl = $('courtSlots');
-      if(slotsEl) {
-        slotsEl.innerHTML = slots.map(s => {
-          const t = s.time || '';
-          const c = s.court || '';
-          if(!t && !c) return '';
-          return `<div style="display:flex; align-items:center; gap:6px;">` +
-            (t ? `<span>${t}</span>` : '') +
-            (c ? `<span style="font-size:12px; color:var(--wimbledon-sage); font-weight:400; background:rgba(93,156,118,0.1); padding:1px 7px; border-radius:8px;">${c}</span>` : '') +
-            `</div>`;
-        }).filter(Boolean).join('');
-      }
+      const timeText = slots.map(s => s.time || '').filter(Boolean).join(' / ');
+      $('courtTime').textContent = timeText || '';
       $('courtAddress').textContent = notice.address || '';
       
-      // ✅ v3.816 호환: courtNumber/courtMemo 숨김 유지
-      if($('courtNumber')) $('courtNumber').style.display = 'none';
-      if($('courtMemo')) $('courtMemo').style.display = 'none';
+      // ✅ v3.816: 코트 번호를 시간 옆에 인라인 표시 + courtMemo는 숨김
+      const courtText = slots.map(s => s.court || '').filter(Boolean).join(', ');
+      if(courtText) {
+        $('courtNumber').textContent = courtText;
+        $('courtNumber').style.display = 'inline-block';
+        $('courtMemo').style.display = 'none';
+      } else {
+        $('courtNumber').style.display = 'none';
+        $('courtMemo').style.display = 'none';
+      }
       
       // 날짜가 오늘이 아니면 날짜 표시
       if(notice.date !== todayStr) {

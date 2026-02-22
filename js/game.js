@@ -89,13 +89,19 @@
       // ✅ v3.92: 성별 선택 (라디오 버튼)
       var genderRadio = document.querySelector('input[name="pGender"]:checked');
       var gender = genderRadio ? genderRadio.value : 'M';
-      players.push(ensure({name:n, isGuest:isGuest, gender:gender}));
+      // ✅ v4.0: 급수 선택
+      var levelRadio = document.querySelector('input[name="pLevel"]:checked');
+      var level = levelRadio ? levelRadio.value : 'A';
+      players.push(ensure({name:n, isGuest:isGuest, gender:gender, level:level}));
       pushDataOnly();
       $('pI').value='';
       if($('pIsGuest')) $('pIsGuest').checked = false;
       // ✅ v3.92: 성별 라디오 남자로 초기화
       var mRadio = document.querySelector('input[name="pGender"][value="M"]');
       if(mRadio) mRadio.checked = true;
+      // ✅ v4.0: 급수 라디오 A급으로 초기화
+      var aRadio = document.querySelector('input[name="pLevel"][value="A"]');
+      if(aRadio) aRadio.checked = true;
       updatePlayerList();
       gsAlert(n + (isGuest ? ' (게스트) 등록!' : ' 등록!'));
       renderLadderPlayerPool();
@@ -129,6 +135,19 @@
     updatePlayerList();
     renderStatsPlayerList();
     gsAlert(p.name + '은(는) 이제 ' + (p.isGuest ? '게스트' : '회원') + '입니다.');
+  }
+
+  // ✅ v4.0: 급수 순환 토글 A→B→C→A
+  async function toggleLevel(n){
+    var p = players.find(x => x.name === n);
+    if(!p) return;
+    const levels = ['A','B','C'];
+    const cur = levels.indexOf(p.level || 'A');
+    p.level = levels[(cur + 1) % levels.length];
+    updatePlayerList();
+    renderStatsPlayerList();
+    await pushDataOnly();
+    gsAlert(p.name + ' → ' + p.level + '급으로 변경됐습니다.');
   }
 
   // ✅ v3.94: async로 변경 — push 완료 후 UI 업데이트, race condition 방지
@@ -303,12 +322,17 @@
       const gBtnIcon = (p.gender === 'F')
         ? '<span class="material-symbols-outlined" style="font-size:14px; vertical-align:middle;">female</span>'
         : '<span class="material-symbols-outlined" style="font-size:14px; vertical-align:middle;">male</span>';
+      // ✅ v4.0: 급수 뱃지 + 버튼
+      const lv = p.level || 'A';
+      const lvColor = lv === 'A' ? '#5D9C76' : lv === 'B' ? '#669DB3' : '#D98C73';
+      const lvBadge = `<span style="font-size:10px; background:${lvColor}; color:white; border-radius:4px; padding:1px 5px; margin-left:4px; vertical-align:middle; font-weight:600;">${lv}</span>`;
       return `<tr>
-        <td style="text-align:left; padding-left:10px; font-weight:400; max-width:none; white-space:nowrap; overflow:visible; text-overflow:clip;">${gIcon}${escapeHtml(displayName(p.name))}</td>
+        <td style="text-align:left; padding-left:10px; font-weight:400; max-width:none; white-space:nowrap; overflow:visible; text-overflow:clip;">${gIcon}${escapeHtml(displayName(p.name))}${lvBadge}</td>
         <td style="text-align:center; font-size:12px; width:50px;">${typeLabel}</td>
-        <td style="text-align:right; padding-right:5px; width:160px; white-space:nowrap;">
+        <td style="text-align:right; padding-right:5px; width:180px; white-space:nowrap;">
           <button onclick="editP('${safeName}')" style="background:var(--aussie-blue); color:white; border:none; padding:6px 8px; border-radius:8px; font-size:11px; font-weight:400;">수정</button>
           <button onclick="toggleGender('${safeName}')" style="background:${p.gender==='F'?'#E8437A':'#3A7BD5'}; color:white; border:none; padding:6px 8px; border-radius:8px; font-size:11px; font-weight:400;">${gBtnIcon}</button>
+          <button onclick="toggleLevel('${safeName}')" style="background:${lvColor}; color:white; border:none; padding:6px 8px; border-radius:8px; font-size:11px; font-weight:600;">${lv}급</button>
           <button onclick="toggleGuest('${safeName}')" style="background:#8E8E93; color:white; border:none; padding:6px 8px; border-radius:8px; font-size:11px; font-weight:400;">구분</button>
           <button onclick="delP('${safeName}')" style="background:var(--roland-clay); color:white; border:none; padding:6px 8px; border-radius:8px; font-size:11px; font-weight:400;">삭제</button>
         </td>

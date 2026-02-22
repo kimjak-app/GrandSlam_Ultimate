@@ -37,19 +37,39 @@
   // ✅ v3.8191: 클럽 관리자 비번 확인 - 커스텀 모달 (prompt 대체)
   var _clubPinCallback = null;
 
+  // ========================================
+  // ✅ v4.0: 다종목 확장 구조 — 씨앗 심기
+  // UI는 테니스 전용 유지, 데이터 구조만 범용화
+  // ========================================
+
+  // 현재 앱의 기본 스포츠 종목
+  const DEFAULT_SPORT = "tennis";
+
+  // 점수 체계 객체 — 하드코딩 금지, 이 객체 참조
+  const SCORING_RULES = {
+    tennis: {
+      winPoint: 3,
+      drawPoint: 1,
+      lossPoint: 0,
+      genderSeparated: true,
+      mixedAllowed: true,
+      levelSeparated: true
+    }
+  };
+
+  // matchType 범용 상수
+  const MATCH_TYPE = {
+    INDIVIDUAL: "individual",
+    PAIR: "pair",
+    TEAM: "team"
+  };
+
   // Player & Match Data
   // ✅ v3.93: Player 객체 gender 필드 명세
   //   gender: 'M' | 'F'  (string, 단일 대문자)
-  //   - 'M' = 남자 (Male)  — 기본값, ensure()에서 자동 정규화
-  //   - 'F' = 여자 (Female)
-  //   - undefined/null → ensure()가 'M'으로 보정
-  //   - 혼성 복식 자동 매칭 알고리즘의 핵심 근거 필드
-  // ✅ v3.94: 혼복 전용 필드 명세
-  //   mScore  : 혼복 총점
-  //   mWins   : 혼복 승수
-  //   mLosses : 혼복 패수
-  //   lastM   : 혼복 지난 랭킹 (스냅샷)
-  //   - 역추산: matchLog의 팀 구성원 gender로 혼복 여부 판별
+  // ✅ v3.94: 혼복 전용 필드 mScore/mWins/mLosses/lastM
+  // ✅ v4.0: level 필드 — 'A'|'B'|'C' (기본값 'A', ensure()에서 자동 정규화)
+  //         attributes — 종목별 확장용 껍데기 { sport, preferredPosition }
   var players = [];      // 선수 목록
   var matchLog = [];     // 경기 기록 (MatchLog 누적 기반 통계)
   

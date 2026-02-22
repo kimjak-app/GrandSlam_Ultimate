@@ -6,8 +6,10 @@
     if (p.isGuest === undefined) p.isGuest = false;
     // ✅ v3.93: gender 정규화 — 'M'|'F' 외 값은 전부 'M'으로 보정
     if (p.gender !== 'M' && p.gender !== 'F') p.gender = 'M';
-    // ✅ v3.949: 총무 면제 필드
-    if (p.isTreasurer === undefined) p.isTreasurer = false;
+    // ✅ v4.0: level 정규화 — 미설정 시 'A'로 기본값
+    if (!p.level || !['A','B','C','D'].includes(p.level)) p.level = 'A';
+    // ✅ v4.0: attributes 껍데기 — 종목별 확장용
+    if (!p.attributes) p.attributes = { sport: 'tennis', preferredPosition: null };
     if(!p.name) p.name = "NONAME";
     return p;
   }
@@ -118,6 +120,9 @@
   }
 
 function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
+    // ✅ v4.0: level 필터 상태
+    const levelFilter = window.levelRankTab || 'all';
+
     const baseList = (() => {
       if (filterMode === 'guest') {
         const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name));
@@ -125,11 +130,17 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
         const agg = aggregateSeasonForNamesFromLog(names);
         return guests.map(p => Object.assign({}, p, agg[p.name] || {}));
       }
-      if (filterMode === 'all') return [...players];
+      let list;
+      if (filterMode === 'all') list = [...players];
       // ✅ v3.92: 성별 필터
-      if (filterMode === 'male') return players.filter(p => !p.isGuest && p.gender !== 'F');
-      if (filterMode === 'female') return players.filter(p => !p.isGuest && p.gender === 'F');
-      return players.filter(p => !p.isGuest);
+      else if (filterMode === 'male') list = players.filter(p => !p.isGuest && p.gender !== 'F');
+      else if (filterMode === 'female') list = players.filter(p => !p.isGuest && p.gender === 'F');
+      else list = players.filter(p => !p.isGuest);
+      // ✅ v4.0: 급수 필터 (게스트 제외 탭에만 적용)
+      if (levelFilter !== 'all' && filterMode !== 'guest') {
+        list = list.filter(p => (p.level || 'A') === levelFilter);
+      }
+      return list;
     })();
 
     // ✅ v3.946: 해당 종목 경기 기록 없는 선수 제외 (0승0패 노출 방지)
@@ -158,18 +169,21 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
     const table = $(tableId);
     if (!table) return;
 
-    // ✅ v3.946: 경기 기록 없는 경우 빈 메시지
+    // ✅ v4.0: 경기 기록 없는 경우 빈 메시지
     if (sorted.length === 0) {
       table.innerHTML = '<tbody><tr><td colspan="5" style="text-align:center; color:#999; font-size:12px; padding:12px;">경기 기록 없음</td></tr></tbody>';
       return;
     }
 
+    // ✅ v4.0: 테이블 min-width 설정 — 이름이 절대 잘리지 않고 오른쪽이 스크롤
+    // 컨테이너 wrapper는 CSS에서 overflow-x:auto로 처리
+    table.style.minWidth = '340px';
     table.innerHTML = `<thead><tr>
-      <th style="width:11%;">순위</th>
-      <th style="width:34%;">이름</th>
-      <th style="width:24%;">승률</th>
-      <th style="width:12%;">승/패</th>
-      <th style="width:19%;">총점</th>
+      <th style="width:40px; min-width:40px;">순위</th>
+      <th style="min-width:110px; text-align:left; padding-left:10px;">이름</th>
+      <th style="width:90px; min-width:90px;">승률</th>
+      <th style="width:55px; min-width:55px;">승/패</th>
+      <th style="width:60px; min-width:60px;">총점</th>
     </tr></thead><tbody></tbody>`;
 
     let currentRank = 1;
@@ -192,15 +206,17 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
       const gIcon = (p.gender === 'F')
         ? '<span class="material-symbols-outlined gender-icon-inline" style="font-size:14px; color:#E8437A; vertical-align:middle; margin-right:2px;">female</span>'
         : '<span class="material-symbols-outlined gender-icon-inline" style="font-size:14px; color:#3A7BD5; vertical-align:middle; margin-right:2px;">male</span>';
+      // ✅ v4.0: level 뱃지
+      const lvBadge = `<span style="font-size:9px; background:#F0F0F0; color:#666; border-radius:3px; padding:1px 3px; margin-left:2px; vertical-align:middle;">${p.level||'A'}</span>`;
       return `<tr>
-        <td>${rankIcon}</td>
-        <td style="text-align:left; padding-left:10px; overflow:hidden;">
-          <div data-autofit="1" class="autofit-cell" style="display:flex; align-items:center; gap:4px;">
-            ${gIcon}<span style="font-weight:400; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(shownName)}</span>
-            <span data-autofit="1" class="sub-info autofit-cell" style="margin-left:0;">(${lastShown}위)${df}</span>
+        <td style="white-space:nowrap;">${rankIcon}</td>
+        <td style="text-align:left; padding-left:10px; white-space:nowrap;">
+          <div style="display:flex; align-items:center; gap:2px;">
+            ${gIcon}<span style="font-weight:400;">${escapeHtml(shownName)}</span>${lvBadge}
+            <span class="sub-info" style="margin-left:2px; white-space:nowrap;">(${lastShown}위)${df}</span>
           </div>
         </td>
-        <td data-autofit="1" class="sub-info autofit-cell">${(calcRate(p)*100).toFixed(1)}% (${wrRanks[p.name]}위)</td>
+        <td style="white-space:nowrap;" class="sub-info">${(calcRate(p)*100).toFixed(1)}% (${wrRanks[p.name]}위)</td>
         <td style="font-size:11px; white-space:nowrap;">${(p[winK]||0)}/${(p[lossK]||0)}</td>
         <td class="point-text" style="white-space:nowrap;">${Number(p[scoreK]||0).toFixed(1)}</td>
       </tr>`;
@@ -353,12 +369,13 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
 
     const sorted = [...list].sort((a,b) => (b.mScore||0) - (a.mScore||0) || calcRate(b) - calcRate(a));
 
+    table.style.minWidth = '340px';
     table.innerHTML = `<thead><tr>
-      <th style="width:11%;">순위</th>
-      <th style="width:34%;">이름</th>
-      <th style="width:24%;">승률</th>
-      <th style="width:12%;">승/패</th>
-      <th style="width:19%;">총점</th>
+      <th style="width:40px; min-width:40px;">순위</th>
+      <th style="min-width:110px; text-align:left; padding-left:10px;">이름</th>
+      <th style="width:90px; min-width:90px;">승률</th>
+      <th style="width:55px; min-width:55px;">승/패</th>
+      <th style="width:60px; min-width:60px;">총점</th>
     </tr></thead><tbody></tbody>`;
 
     let currentRank = 1;
@@ -374,15 +391,16 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
       const gIcon = p.gender === 'F'
         ? '<span class="material-symbols-outlined gender-icon-inline" style="font-size:14px;color:#E8437A;vertical-align:middle;margin-right:2px;">female</span>'
         : '<span class="material-symbols-outlined gender-icon-inline" style="font-size:14px;color:#3A7BD5;vertical-align:middle;margin-right:2px;">male</span>';
+      const lvBadge = `<span style="font-size:9px; background:#F0F0F0; color:#666; border-radius:3px; padding:1px 3px; margin-left:2px; vertical-align:middle;">${p.level||'A'}</span>`;
       return `<tr>
-        <td>${rankIcon}</td>
-        <td style="text-align:left; padding-left:10px; overflow:hidden;">
-          <div data-autofit="1" class="autofit-cell" style="display:flex; align-items:center; gap:4px;">
-            ${gIcon}<span style="font-weight:400; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(displayName(p.name))}</span>
-            <span data-autofit="1" class="sub-info autofit-cell" style="margin-left:0;">(${lastShown}위)${df}</span>
+        <td style="white-space:nowrap;">${rankIcon}</td>
+        <td style="text-align:left; padding-left:10px; white-space:nowrap;">
+          <div style="display:flex; align-items:center; gap:2px;">
+            ${gIcon}<span style="font-weight:400;">${escapeHtml(displayName(p.name))}</span>${lvBadge}
+            <span class="sub-info" style="margin-left:2px; white-space:nowrap;">(${lastShown}위)${df}</span>
           </div>
         </td>
-        <td data-autofit="1" class="sub-info autofit-cell">${(calcRate(p)*100).toFixed(1)}% (${wrRanks[p.name]}위)</td>
+        <td style="white-space:nowrap;" class="sub-info">${(calcRate(p)*100).toFixed(1)}% (${wrRanks[p.name]}위)</td>
         <td style="font-size:11px; white-space:nowrap;">${p.mWins||0}/${p.mLosses||0}</td>
         <td class="point-text" style="white-space:nowrap;">${Number(p.mScore||0).toFixed(1)}</td>
       </tr>`;
@@ -432,48 +450,55 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
     const list = Object.entries(pairMap)
       .map(([key, v]) => ({ key, names: v.names, wins: v.wins, losses: v.losses, total: v.wins + v.losses }))
       .filter(v => v.total >= 1)
-      // ✅ v3.9493: 승률 기준 정렬로 변경
-      .sort((a, b) => {
-        const ar = a.total > 0 ? a.wins / a.total : 0;
-        const br = b.total > 0 ? b.wins / b.total : 0;
-        return br - ar || b.wins - a.wins || b.total - a.total;
-      });
+      .sort((a, b) => b.wins - a.wins || b.total - a.total);
 
     if (list.length === 0) {
-      table.innerHTML = '<tbody><tr><td colspan="4" style="text-align:center; color:#999; font-size:12px; padding:12px;">조합 기록 없음</td></tr></tbody>';
+      table.innerHTML = '<tbody><tr><td colspan="5" style="text-align:center; color:#999; font-size:12px; padding:12px;">조합 기록 없음</td></tr></tbody>';
       return;
     }
+
+    // 승률 순위 계산 (기존 로직과 동일 방식)
+    const wrSorted = [...list].sort((a, b) => {
+      const ar = a.total > 0 ? a.wins / a.total : 0;
+      const br = b.total > 0 ? b.wins / b.total : 0;
+      return br - ar || b.wins - a.wins;
+    });
+    const wrRankMap = {};
+    let wrRank = 1;
+    wrSorted.forEach((v, i) => {
+      if (i > 0) {
+        const prev = wrSorted[i-1];
+        const pr = prev.total > 0 ? prev.wins / prev.total : 0;
+        const cr = v.total > 0 ? v.wins / v.total : 0;
+        if (cr !== pr) wrRank = i + 1;
+      }
+      wrRankMap[v.key] = wrRank;
+    });
 
     const mIcon = '<span class="material-symbols-outlined" style="font-size:12px;color:#3A7BD5;vertical-align:middle;">male</span>';
     const fIcon = '<span class="material-symbols-outlined" style="font-size:12px;color:#E8437A;vertical-align:middle;">female</span>';
     const nameIcon = (n) => getGender(n) === 'F' ? fIcon : mIcon;
     const dName = (n) => escapeHtml(displayName(n));
 
-    // ✅ v3.9493: 승률 기준 순위 계산
     let rank = 1;
     const rows = list.map((v, i) => {
-      if (i > 0) {
-        const prev = list[i-1];
-        const pr = prev.total > 0 ? prev.wins / prev.total : 0;
-        const cr = v.total > 0 ? v.wins / v.total : 0;
-        if (cr !== pr) rank = i + 1;
-      }
+      if (i > 0 && list[i-1].wins !== v.wins) rank = i + 1;
       const rate = v.total > 0 ? ((v.wins / v.total) * 100).toFixed(1) : '0.0';
       const pairLabel = v.names.map(n => `${nameIcon(n)}${dName(n)}`).join(' & ');
       return `<tr>
-        <td style="text-align:center; width:30px;">${rank}</td>
-        <td style="text-align:left; padding-left:6px;">${pairLabel}</td>
-        <td style="text-align:center; width:52px; font-size:11px; color:#666; white-space:nowrap;">${rate}%</td>
-        <td style="text-align:center; width:48px; font-size:11px; white-space:nowrap;">${v.wins}/${v.losses}</td>
+        <td style="text-align:center; width:8%;">${rank}</td>
+        <td style="text-align:left; padding-left:8px; white-space:nowrap;">${pairLabel}</td>
+        <td style="text-align:center; white-space:nowrap; font-size:11px; color:#666;">${rate}% (${wrRankMap[v.key]}위)</td>
+        <td style="text-align:center; font-size:11px; white-space:nowrap;">${v.wins}/${v.losses}</td>
       </tr>`;
     }).join('');
 
     table.innerHTML = `
       <thead><tr>
-        <th style="width:30px;">순위</th>
-        <th style="text-align:left; padding-left:6px;">조합</th>
-        <th style="width:52px;">승률</th>
-        <th style="width:48px;">승/패</th>
+        <th style="width:8%;">순위</th>
+        <th style="text-align:left; padding-left:8px;">조합</th>
+        <th style="width:22%;">승률</th>
+        <th style="width:12%;">승/패</th>
       </tr></thead>
       <tbody>${rows}</tbody>`;
 
@@ -491,6 +516,16 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
     // ✅ v3.948: 탭 전환 시 차트도 성별 필터 적용해서 재렌더
     const currentRangeIdx = window.currentChartRangeIdx || 0;
     updateChartRange(currentRangeIdx);
+  }
+
+  // ✅ v4.0: 급수 랭킹 탭 전환
+  function switchLevelRankTab(lvl) {
+    window.levelRankTab = lvl;
+    ['all','A','B','C'].forEach(t => {
+      const btn = $('level-rank-tab-' + t);
+      if(btn) btn.className = (t === lvl) ? 'gender-tab-btn active' : 'gender-tab-btn';
+    });
+    updateSeason();
   }
 
   function updateWeekly() {
@@ -713,14 +748,6 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
   // ========================================
   
   function renderStatsPlayerList() {
-    // ✅ v3.9493: 클럽 전환 시 이전 분석 리포트 초기화
-    const reportEl = $('stats-report');
-    if(reportEl) reportEl.style.display = 'none';
-    const welcomeEl = $('welcome-msg');
-    if(welcomeEl) welcomeEl.style.display = 'block';
-    // 선택된 라디오 버튼 초기화
-    document.querySelectorAll('input[name="statsPick"]').forEach(r => r.checked = false);
-
     const members = players.filter(p => !p.isGuest).sort((a,b)=>(b.score||0)-(a.score||0));
     // ✅ v3.816: HIDDEN_PLAYERS 제외
     const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name));

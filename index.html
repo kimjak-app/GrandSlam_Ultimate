@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v3.9493</title>
+  <title>GrandSlam Ultimate v4.0</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -219,9 +219,8 @@
       </div>
       <div class="court-info-row">
         <span class="material-symbols-outlined">schedule</span>
-        <div id="courtSlots" style="display:flex; flex-direction:column; gap:2px;"></div>
-        <span id="courtNumber" style="display:none;"></span>
-        <span id="courtTime" style="display:none;"></span>
+        <span id="courtTime"></span>
+        <span id="courtNumber" style="display:none; margin-left:8px; font-size:13px; color:var(--wimbledon-sage); font-weight:400; background:rgba(93,156,118,0.1); padding:2px 8px; border-radius:8px;"></span>
       </div>
       <div class="court-info-row">
         <span class="material-symbols-outlined">map</span>
@@ -271,7 +270,7 @@
     </div>
   </div>
 
-  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v3.9493</div>
+  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v4.0</div>
 </div>
 
 <div id="view-tennis" class="app-screen">
@@ -287,7 +286,7 @@
 
   <div id="s1" class="section-card active">
     <!-- ✅ v3.94: 성별 랭킹 서브탭 — Material Symbols -->
-    <div style="display:flex; gap:6px; margin-bottom:16px; background:#F2F2F7; border-radius:12px; padding:4px;">
+    <div style="display:flex; gap:6px; margin-bottom:8px; background:#F2F2F7; border-radius:12px; padding:4px;">
       <button id="gender-rank-tab-all" class="gender-tab-btn active" onclick="switchGenderRankTab('all')">
         <span class="material-symbols-outlined" style="font-size:14px; vertical-align:middle;">leaderboard</span> 종합
       </button>
@@ -296,6 +295,21 @@
       </button>
       <button id="gender-rank-tab-female" class="gender-tab-btn" onclick="switchGenderRankTab('female')">
         <span class="material-symbols-outlined" style="font-size:14px; vertical-align:middle; color:#E8437A;">female</span> 여자부
+      </button>
+    </div>
+    <!-- ✅ v4.0: 급수 필터 서브탭 -->
+    <div style="display:flex; gap:6px; margin-bottom:16px; background:#F2F2F7; border-radius:12px; padding:4px; overflow-x:auto; -webkit-overflow-scrolling:touch;">
+      <button id="level-rank-tab-all" class="gender-tab-btn active" onclick="switchLevelRankTab('all')" style="white-space:nowrap;">
+        전체
+      </button>
+      <button id="level-rank-tab-A" class="gender-tab-btn" onclick="switchLevelRankTab('A')" style="white-space:nowrap; color:#5D9C76;">
+        A급
+      </button>
+      <button id="level-rank-tab-B" class="gender-tab-btn" onclick="switchLevelRankTab('B')" style="white-space:nowrap; color:#669DB3;">
+        B급
+      </button>
+      <button id="level-rank-tab-C" class="gender-tab-btn" onclick="switchLevelRankTab('C')" style="white-space:nowrap; color:#D98C73;">
+        C급
       </button>
     </div>
 
@@ -312,21 +326,23 @@
 
     <!-- 종합 순위 — 탭에 따라 필터 적용 -->
     <div class="sub-rank-title"><span class="material-symbols-outlined">format_list_numbered</span>종합 순위표</div>
-    <table id="seasonTable" class="tennis-table"></table>
+    <div class="rank-table-wrap">
+      <table id="seasonTable" class="tennis-table"></table>
+    </div>
 
     <!-- 복식 랭킹 — 남자 -->
     <div id="sec-double-male">
       <div class="sub-rank-title"><span class="material-symbols-outlined">groups</span>복식 랭킹
         <span class="material-symbols-outlined" style="font-size:14px; color:#3A7BD5; vertical-align:middle;">male</span> 남자
       </div>
-      <table id="seasonDoubleTableM" class="tennis-table"></table>
+      <div class="rank-table-wrap"><table id="seasonDoubleTableM" class="tennis-table"></table></div>
       <!-- 남자 복식 조합 랭킹 -->
       <div class="sub-rank-title" style="font-size:12px; color:#666; margin-top:8px;">
         <span class="material-symbols-outlined" style="font-size:14px; vertical-align:middle;">handshake</span> 조합 랭킹
       </div>
       <div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">
         <div style="max-height:260px; overflow-y:auto;">
-          <table id="seasonPairTableM" class="tennis-table" style="width:100%; table-layout:fixed;"></table>
+          <table id="seasonPairTableM" class="tennis-table" style="min-width:320px;"></table>
         </div>
       </div>
     </div>
@@ -336,14 +352,14 @@
       <div class="sub-rank-title"><span class="material-symbols-outlined">groups</span>복식 랭킹
         <span class="material-symbols-outlined" style="font-size:14px; color:#E8437A; vertical-align:middle;">female</span> 여자
       </div>
-      <table id="seasonDoubleTableF" class="tennis-table"></table>
+      <div class="rank-table-wrap"><table id="seasonDoubleTableF" class="tennis-table"></table></div>
       <!-- 여자 복식 조합 랭킹 -->
       <div class="sub-rank-title" style="font-size:12px; color:#666; margin-top:8px;">
         <span class="material-symbols-outlined" style="font-size:14px; vertical-align:middle;">handshake</span> 조합 랭킹
       </div>
       <div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">
         <div style="max-height:260px; overflow-y:auto;">
-          <table id="seasonPairTableF" class="tennis-table" style="width:100%; table-layout:fixed;"></table>
+          <table id="seasonPairTableF" class="tennis-table" style="min-width:320px;"></table>
         </div>
       </div>
     </div>
@@ -354,7 +370,7 @@
         <span class="material-symbols-outlined" style="color:#3A7BD5;">male</span><span class="material-symbols-outlined" style="color:#E8437A;">female</span> 혼합 복식 랭킹
         <span class="material-symbols-outlined" style="font-size:14px; color:#3A7BD5; vertical-align:middle;">male</span> 남자
       </div>
-      <table id="seasonMixedTableM" class="tennis-table"></table>
+      <div class="rank-table-wrap"><table id="seasonMixedTableM" class="tennis-table"></table></div>
     </div>
 
     <!-- 혼합 복식 랭킹 — 여자 -->
@@ -363,14 +379,14 @@
         <span class="material-symbols-outlined" style="color:#3A7BD5;">male</span><span class="material-symbols-outlined" style="color:#E8437A;">female</span> 혼합 복식 랭킹
         <span class="material-symbols-outlined" style="font-size:14px; color:#E8437A; vertical-align:middle;">female</span> 여자
       </div>
-      <table id="seasonMixedTableF" class="tennis-table"></table>
+      <div class="rank-table-wrap"><table id="seasonMixedTableF" class="tennis-table"></table></div>
       <!-- 혼복 조합 랭킹 (종합탭에서만 여자 섹션 아래 표시) -->
       <div class="sub-rank-title" style="font-size:12px; color:#666; margin-top:8px;">
         <span class="material-symbols-outlined" style="font-size:14px; vertical-align:middle;">handshake</span> 혼복 조합 랭킹
       </div>
       <div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">
         <div style="max-height:260px; overflow-y:auto;">
-          <table id="seasonMixedPairTable" class="tennis-table" style="width:100%; table-layout:fixed;"></table>
+          <table id="seasonMixedPairTable" class="tennis-table" style="min-width:320px;"></table>
         </div>
       </div>
     </div>
@@ -380,7 +396,7 @@
       <div class="sub-rank-title"><span class="material-symbols-outlined">person</span>단식 랭킹
         <span class="material-symbols-outlined" style="font-size:14px; color:#3A7BD5; vertical-align:middle;">male</span> 남자
       </div>
-      <table id="seasonSingleTableM" class="tennis-table"></table>
+      <div class="rank-table-wrap"><table id="seasonSingleTableM" class="tennis-table"></table></div>
     </div>
 
     <!-- 단식 랭킹 — 여자 -->
@@ -388,26 +404,26 @@
       <div class="sub-rank-title"><span class="material-symbols-outlined">person</span>단식 랭킹
         <span class="material-symbols-outlined" style="font-size:14px; color:#E8437A; vertical-align:middle;">female</span> 여자
       </div>
-      <table id="seasonSingleTableF" class="tennis-table"></table>
+      <div class="rank-table-wrap"><table id="seasonSingleTableF" class="tennis-table"></table></div>
     </div>
 
     <div id="guest-rank-section">
     <div class="sub-rank-title"><span class="material-symbols-outlined">group_add</span>게스트 시즌 종합</div>
-    <table id="guestSeasonTotalTable" class="tennis-table"></table>
+    <div class="rank-table-wrap"><table id="guestSeasonTotalTable" class="tennis-table"></table></div>
     <div class="sub-rank-title"><span class="material-symbols-outlined">groups</span>게스트 시즌 복식</div>
-    <table id="guestSeasonDoubleTable" class="tennis-table"></table>
+    <div class="rank-table-wrap"><table id="guestSeasonDoubleTable" class="tennis-table"></table></div>
     <div class="sub-rank-title"><span class="material-symbols-outlined">person</span>게스트 시즌 단식</div>
-    <table id="guestSeasonSingleTable" class="tennis-table"></table>
+    <div class="rank-table-wrap"><table id="guestSeasonSingleTable" class="tennis-table"></table></div>
     </div>
   </div>
 
   <div id="s2" class="section-card">
     <div class="sub-rank-title">📅 주간 종합 순위</div>
-    <table id="weeklyTotalTable" class="tennis-table"></table>
+    <div class="rank-table-wrap"><table id="weeklyTotalTable" class="tennis-table"></table></div>
     <div class="sub-rank-title">👥 주간 복식 순위</div>
-    <table id="weeklyDoubleTable" class="tennis-table"></table>
+    <div class="rank-table-wrap"><table id="weeklyDoubleTable" class="tennis-table"></table></div>
     <div class="sub-rank-title">👤 주간 단식 순위</div>
-    <table id="weeklySingleTable" class="tennis-table"></table>
+    <div class="rank-table-wrap"><table id="weeklySingleTable" class="tennis-table"></table></div>
   </div>
   <div style="padding: 0 15px;">
     <button class="btn-main" onclick="showView('weather')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
@@ -492,6 +508,22 @@
         <span style="font-size:12px; color:#E8437A; font-weight:600;">여</span>
       </label>
     </div>
+    <!-- ✅ v4.0: 급수 선택 -->
+    <div style="display:flex; align-items:center; gap:12px; margin:-6px 0 10px 0; font-size:12px;">
+      <span style="color:#666; font-weight:bold;">급수:</span>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="radio" name="pLevel" value="A" checked style="margin:0; accent-color:#5D9C76;">
+        <span style="font-size:12px; color:#5D9C76; font-weight:700;">A급</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="radio" name="pLevel" value="B" style="margin:0; accent-color:#669DB3;">
+        <span style="font-size:12px; color:#669DB3; font-weight:700;">B급</span>
+      </label>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="radio" name="pLevel" value="C" style="margin:0; accent-color:#D98C73;">
+        <span style="font-size:12px; color:#D98C73; font-weight:700;">C급</span>
+      </label>
+    </div>
     <div style="display:flex; align-items:center; gap:6px; margin:-10px 0 14px 0; font-size:11px; color:#666;">
       <input type="checkbox" id="pIsGuest" style="margin:0;">
       <label for="pIsGuest">준회원에 준하는 게스트로 등록 (체크 시 랭킹에서 게스트로 분리)</label>
@@ -537,7 +569,7 @@
       <div class="r-line r-mini">- ✅ v3.94 gender 시스템 완결 — gender 저장버그 수정(pushPayload race condition), 사다리 아이콘 제거, 혼복 필드(mScore/mWins/mLosses) 신설, 랭킹 종합고정+복식남녀분리+혼복랭킹+단식남녀분리, 주간 자동리셋(월요일 기준)</div>
       <div class="r-line r-mini">- ✅ v3.941 gender 근본 수정 — GAS DATA_FIELDS에 gender 컬럼 추가, 기존 시트 자동 마이그레이션('M' 기본값), 혼복 판별 개선(한 팀이라도 남+여면 해당 팀 혼복 점수 취득)</div>
       <div class="r-line r-mini">- ✅ v3.942 랭킹 탭 버그 수정(남자부/여자부 섹션 분리 show/hide), 선수 분석 리포트 이성간 단식(최고승률/천적) + 혼복 최고/분발 파트너 + 혼복 남자/여자 천적 카드 추가</div>
-      <div class="r-line r-mini">- ✅ v3.9493 코트정보 시간대별 줄표시, 클럽전환 통계 초기화 버그수정, 조합랭킹 승률순정렬+레이아웃최적화, 이성단식 카드명 수정</div>
+      <div class="r-line r-mini">- ✅ v4.0 다종목 확장 구조 씨앗 — DEFAULT_SPORT/SCORING_RULES/MATCH_TYPE 상수, player.level(A/B/C 급수) + player.attributes{sport,preferredPosition} 필드 신설, 랭킹 급수 필터 탭(전체/A/B/C), 선수관리 급수 라디오+뱃지+토글버튼, 랭킹 테이블 min-width 가로스크롤 방식으로 이름 말줄임 완전 해결</div>
       <div class="r-line r-mini">- ✅ v3.9492 분석리포트 카드 재정렬(복식그룹/혼복그룹), 신규카드(연속기록/상대전적TOP3/요일별승률/월별활동), 단식라이벌</div>
       <div class="r-line r-mini">- ✅ v3.9491 연납 토글 버튼 추가, 연납자 납부 집계 수정(syncFeeToFinance/copyFeeStatus/feeSummary)</div>
       <div class="r-line r-mini">- ✅ v3.949 총무 면제(isTreasurer), 납부율 요약, 연납 자동체크, 지출 카테고리(코트비/장비/기타)</div>
@@ -603,7 +635,7 @@
           <div style="font-size:11px; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:2px;">
             <span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5;">male</span>
             <span class="material-symbols-outlined" style="font-size:12px; color:#E8437A;">female</span>
-            <span style="color:#3A7BD5;">이성 단식 최고승률</span>
+            <span style="color:#3A7BD5;">이성간 단식 최고 승률</span>
           </div>
           <div id="res-cross-best" style="font-size:16px; margin-top:5px;">-</div>
           <div id="res-cross-best-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>
@@ -612,7 +644,7 @@
           <div style="font-size:11px; font-weight:bold; display:flex; align-items:center; justify-content:center; gap:2px;">
             <span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5;">male</span>
             <span class="material-symbols-outlined" style="font-size:12px; color:#E8437A;">female</span>
-            <span style="color:#E8437A;">이성 단식 천적</span>
+            <span style="color:#E8437A;">이성간 단식 천적</span>
           </div>
           <div id="res-cross-worst" style="font-size:16px; margin-top:5px;">-</div>
           <div id="res-cross-worst-sub" style="font-size:10px; color:var(--text-gray);">0승 0패</div>

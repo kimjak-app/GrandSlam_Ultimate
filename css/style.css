@@ -60,7 +60,13 @@
     .section-card { background: white; padding: 20px; border-radius: 20px; min-height: 450px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); display: none; margin-bottom: 20px; }
     .section-card.active { display: block; }
 
-    .tennis-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; table-layout: fixed; }
+    /* ✅ v4.0: rank-table-wrap — 이름이 잘리지 않고 오른쪽으로 스크롤 */
+    .rank-table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      width: 100%;
+    }
+    .tennis-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; table-layout: auto; }
     .tennis-table th { color: var(--wimbledon-sage); border-bottom: 2px solid var(--wimbledon-sage); padding: 8px; text-align: center; font-weight: 400; background: rgba(93, 156, 118, 0.1); }
     .tennis-table td { padding: 12px 8px; border-bottom: 1px solid #eee; text-align: center; font-weight: 400; color: var(--text-dark); overflow: hidden; text-overflow: ellipsis; }
 
@@ -213,16 +219,11 @@
 
     
     @media (max-width: 420px){
-      .tennis-table th:nth-child(1), .tennis-table td:nth-child(1){ width: 11% !important; white-space: nowrap; }
-      .tennis-table th:nth-child(2), .tennis-table td:nth-child(2){ width: 34% !important; }
-      .tennis-table th:nth-child(3), .tennis-table td:nth-child(3){ width: 21% !important; }  /* 24% → 21% (-3%) */
-      .tennis-table th:nth-child(4), .tennis-table td:nth-child(4){ width: 17% !important; white-space: nowrap; }  /* 12% → 17% (+5%) */
-      .tennis-table th:nth-child(5), .tennis-table td:nth-child(5){ width: 17% !important; white-space: nowrap; }  /* 19% → 17% (-2%) */
-      .tennis-table td{ padding: 11px 6px; }
-      .tennis-table th{ padding: 8px 6px; }
+      /* ✅ v4.0: min-width 스크롤 방식 — 퍼센트 width 강제지정 불필요, 패딩만 조정 */
+      .tennis-table td{ padding: 10px 5px; }
+      .tennis-table th{ padding: 7px 5px; }
     }
-  
-    /* v3.693: 토너먼트 지정선택(복식) 팀 미리보기 */
+      /* v3.693: 토너먼트 지정선택(복식) 팀 미리보기 */
     .manual-team-box{
       border: 2px solid #E5E5EA;
       border-radius: 15px;
