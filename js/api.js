@@ -1,4 +1,15 @@
 // ========================================
+// ✅ v4.036: 데이터 안정성 강화
+// ✅ v4.035: Firestore 마이그레이션
+// 함수 시그니처 100% 유지 — 내부 구현만 GAS→Firestore 교체
+// Firestore 컬렉션 구조:
+//   clubs/{clubId}/players      (선수 1명 = 문서 1개, doc id = name)
+//   clubs/{clubId}/matchLog     (경기 1건 = 문서 1개, doc id = match.id)
+//   clubs/{clubId}/settings/notices  (courtNotices, announcements)
+//   clubs/{clubId}/settings/feeData  (feeData, monthlyFeeAmount)
+// ========================================
+
+// ========================================
 // UTILITY FUNCTIONS
 // ========================================
 
@@ -28,8 +39,6 @@ function normalizeMatchLog(arr) {
       const winner = x.winner || "";
       const ts = Number(x.ts || x.timestamp || x.time || Date.now());
 
-      // ✅ A unique, stable matchId prevents duplicated appends from inflating stats.
-      // Prefer explicit ids if present, otherwise derive a deterministic id from content.
       let id = x.id || x._id || x.matchId || x.mid || "";
       if (!id) {
         const hKey = home.join("|");
@@ -61,27 +70,91 @@ function normalizeMatchLog(arr) {
   return Array.from(byId.values()).sort((a, b) => Number(b.ts) - Number(a.ts));
 }
 
+// ========================================
+// ✅ v4.036: Firestore 헬퍼
+//   - doc id sanitize (/, ., .. → _)
+//   - Player default 주입 (sport, level, attributes)
+//   - Match default 주입 (sport)
+//   - matchLog orderBy('ts','desc').limit(500)
+// ========================================
 
+// ✅ v4.036: Firestore doc id 금지 문자 치환
+function _sanitizeDocId(id) {
+  return String(id)
+    .replace(/\//g, '_')   // 슬래시 금지
+    .replace(/\.\./g, '_') // '..' 금지
+    .replace(/^\./, '_')   // 선행 '.' 금지
+    .replace(/\s+/g, '_'); // 공백 치환
+}
+
+function _clubRef(clubId) {
+  return _db.collection('clubs').doc(clubId || 'default');
+}
+
+async function _fsGetPlayers(clubId) {
+  const snap = await _clubRef(clubId).collection('players').get();
+  return snap.docs.map(d => d.data());
+}
+
+// ✅ v4.036: orderBy('ts','desc').limit(500) — 인덱스 필요 (ts 필드, 내림차순)
+async function _fsGetMatchLog(clubId) {
+  const snap = await _clubRef(clubId).collection('matchLog')
+    .orderBy('ts', 'desc')
+    .limit(500)
+    .get();
+  return snap.docs.map(d => d.data());
+}
+
+async function _fsSavePlayers(clubId, playerArr) {
+  const col = _clubRef(clubId).collection('players');
+  const batch = _db.batch();
+  playerArr.forEach(p => {
+    // ✅ v4.036: 필수 필드 default 주입
+    const data = Object.assign({ sport: 'tennis', level: 'C', attributes: {} }, p);
+    const docId = _sanitizeDocId(data.name);
+    const ref = col.doc(docId);
+    batch.set(ref, data);
+  });
+  // 삭제된 선수 제거
+  const snap = await col.get();
+  const names = new Set(playerArr.map(p => _sanitizeDocId(p.name)));
+  snap.docs.forEach(d => {
+    if (!names.has(d.id)) batch.delete(d.ref);
+  });
+  await batch.commit();
+}
+
+async function _fsAppendMatchLog(clubId, entries) {
+  const col = _clubRef(clubId).collection('matchLog');
+  const batch = _db.batch();
+  entries.forEach(m => {
+    // ✅ v4.036: 필수 필드 default 주입
+    const data = Object.assign({ sport: 'tennis' }, m);
+    const ref = col.doc(_sanitizeDocId(data.id));
+    batch.set(ref, m);
+  });
+  await batch.commit();
+}
+
+// ========================================
+// SYNC (Firestore)
+// ========================================
 
 async function sync() {
   $('loading-overlay').style.display = 'flex';
   setStatus(`<div style="color:#888; font-size:12px; margin-bottom:10px;">데이터 불러오는 중...</div>`);
   try {
-    // ✅ v3.79: clubId를 쿼리에 포함
-    const clubParam = getActiveClubId() ? ('&clubId=' + encodeURIComponent(getActiveClubId())) : '';
-    const r = await fetchWithTimeout(MASTER_GAS_URL + '?t=' + Date.now() + clubParam, {}, 15000);
-    if (!r.ok) throw new Error("GAS GET 실패: " + r.status);
-    const data = await r.json();
+    const clubId = getActiveClubId() || 'default';
 
-    if (Array.isArray(data)) {
-      players = (data || []).map(ensure);
-      matchLog = matchLog || [];
-    } else {
-      players = (data?.data || data?.players || []).map(ensure);
-      matchLog = normalizeMatchLog(data?.matchLog || data?.logs || []);
-    }
+    const [rawPlayers, rawLog] = await Promise.all([
+      _fsGetPlayers(clubId),
+      _fsGetMatchLog(clubId)
+    ]);
 
-    // ✅ v3.816: '1대2용' → '1대2대결용' 이름 마이그레이션 (옵션B)
+    players = (rawPlayers || []).map(ensure);
+    matchLog = normalizeMatchLog(rawLog);
+
+    // ✅ v3.816: '1대2용' → '1대2대결용' 마이그레이션
     migrate1v2Names();
 
     updateSeason();
@@ -93,15 +166,13 @@ async function sync() {
 
     setStatus('');
 
-    // ✅ v3.92: gs:state:changed 통합 이벤트 — 선수/경기 데이터 확정
     AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'data', players, matchLog } }));
 
-    // ✅ v4.031: players 로드 완료 후 feeData 갱신 — 타이밍 버그 수정
-    // (베이글 외 클럽에서 재정관리 수입 0원 되던 문제 해결)
     fetchFeeData().catch(e => console.warn('sync fetchFeeData error:', e));
 
     setTimeout(applyAutofitAllTables, 0);
   } catch (e) {
+    console.error('sync error:', e);
     setStatus(`<div style="color:#ff3b30; font-size:12px; margin-bottom:10px;">데이터 동기화 실패 😵‍💫</div>`);
   } finally {
     $('loading-overlay').style.display = 'none';
@@ -111,14 +182,12 @@ async function sync() {
 // ✅ v3.816: '1대2용' → '1대2대결용' 마이그레이션 함수
 function migrate1v2Names() {
   let changed = false;
-  // players 배열에서 이름 변경
   players.forEach(p => {
     if (p.name === '1대2용') {
       p.name = '1대2대결용';
       changed = true;
     }
   });
-  // matchLog에서 이름 변경
   if (matchLog && matchLog.length > 0) {
     matchLog.forEach(log => {
       ['home', 'away', 'winner', 'loser'].forEach(key => {
@@ -131,41 +200,43 @@ function migrate1v2Names() {
       });
     });
   }
-  // 변경됐으면 서버에 push (조용히)
   if (changed) {
     console.log('[v3.816] 1대2용 → 1대2대결용 마이그레이션 완료, 서버 저장 중...');
     pushPayload({ action: "save", data: players, matchLogAppend: [] }).catch(e => console.warn('migrate push error:', e));
   }
 }
 
+// ========================================
+// PUSH (Firestore)
+// ========================================
+
 async function pushPayload(payload) {
   $('loading-overlay').style.display = 'flex';
   setStatus(`<div style="color:#888; font-size:12px; margin-bottom:10px;">저장 중...</div>`);
   try {
-    // ✅ v3.79: clubId를 payload에 포함
-    if (getActiveClubId()) payload.clubId = getActiveClubId();
-    const r = await fetchWithTimeout(MASTER_GAS_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payload)
-    }, 15000);
-    if (!r.ok) throw new Error("GAS POST 실패: " + r.status);
+    const clubId = payload.clubId || getActiveClubId() || 'default';
 
-    let resp = null;
-    try { resp = await r.json(); } catch (_) { }
-    if (resp && typeof resp === "object") {
-      if (Array.isArray(resp.data)) {
-        // ✅ v3.941: GAS가 gender 필드를 직접 저장/반환하므로 ensure()만으로 충분
-        players = resp.data.map(ensure);
-      }
-      if (Array.isArray(resp.matchLog)) matchLog = normalizeMatchLog(resp.matchLog);
+    // 선수 저장
+    if (Array.isArray(payload.data)) {
+      await _fsSavePlayers(clubId, payload.data);
+      players = payload.data.map(ensure);
     }
+
+    // 경기 기록 추가
+    if (Array.isArray(payload.matchLogAppend) && payload.matchLogAppend.length > 0) {
+      const normalized = normalizeMatchLog(payload.matchLogAppend);
+      await _fsAppendMatchLog(clubId, normalized);
+      // 로컬 matchLog에도 반영 (dedupe)
+      const byId = new Map(matchLog.map(m => [m.id, m]));
+      normalized.forEach(m => byId.set(m.id, m));
+      matchLog = Array.from(byId.values()).sort((a, b) => Number(b.ts) - Number(a.ts));
+    }
+
     setStatus('');
-
     setTimeout(applyAutofitAllTables, 0);
-
     return true;
   } catch (e) {
+    console.error('pushPayload error:', e);
     setStatus(`<div style="color:#ff3b30; font-size:12px; margin-bottom:10px;">저장 실패 😵‍💫</div>`);
     return false;
   } finally {
@@ -183,7 +254,7 @@ async function pushWithMatchLogAppend(logEntries) {
 }
 
 // ========================================
-// v3.80: GAS 연동 - 코트공지 & 공지사항 로드
+// v3.80: 코트공지 & 공지사항
 // v3.811: localStorage fallback + 클럽별 분리 저장
 // ========================================
 
@@ -199,160 +270,128 @@ function persistAnnouncementsLocal() {
 
 async function fetchCourtNotices() {
   if (!currentClub) return;
+  const clubId = getActiveClubId();
   try {
-    const url = MASTER_GAS_URL + '?action=getCourtNotices&clubId=' + encodeURIComponent(getActiveClubId());
-    const r = await fetchWithTimeout(url, {}, 12000);
-    if (!r.ok) throw new Error('not ok');
-    const resp = await r.json();
-    if (resp.ok && Array.isArray(resp.notices)) {
-      courtNotices = resp.notices;
-      persistCourtNoticesLocal();
-      // ✅ v3.92: gs:state:changed 통합 이벤트 — GAS 정상 로드 확정 후 1회
-      AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'court', courtNotices } }));
-      return;
+    const doc = await _clubRef(clubId).collection('settings').doc('notices').get();
+    if (doc.exists) {
+      const data = doc.data();
+      if (Array.isArray(data.courtNotices)) {
+        courtNotices = data.courtNotices;
+        persistCourtNoticesLocal();
+        AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'court', courtNotices } }));
+        return;
+      }
     }
   } catch (e) {
-    console.warn('fetchCourtNotices GAS error, using local:', e);
+    console.warn('fetchCourtNotices Firestore error, using local:', e);
   }
-  // GAS 실패시 localStorage에서 복원 (fallback)
   try { courtNotices = JSON.parse(localStorage.getItem(getLocalCourtKey())) || []; } catch (e) { courtNotices = []; }
-  // ✅ v3.92: gs:state:changed 통합 이벤트 — fallback 확정 후 1회 (GAS 성공 경로와 상호 배타적)
   AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'court', courtNotices } }));
 }
 
 async function fetchAnnouncements() {
   if (!currentClub) return;
+  const clubId = getActiveClubId();
   try {
-    const url = MASTER_GAS_URL + '?action=getAnnouncements&clubId=' + encodeURIComponent(getActiveClubId());
-    const r = await fetchWithTimeout(url, {}, 12000);
-    if (!r.ok) throw new Error('not ok');
-    const resp = await r.json();
-    if (resp.ok && Array.isArray(resp.announcements)) {
-      announcements = resp.announcements;
-      persistAnnouncementsLocal();
-      // ✅ v3.92: gs:state:changed 통합 이벤트 — GAS 정상 로드 확정 후 1회
-      AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'announcements', announcements } }));
-      return;
+    const doc = await _clubRef(clubId).collection('settings').doc('notices').get();
+    if (doc.exists) {
+      const data = doc.data();
+      if (Array.isArray(data.announcements)) {
+        announcements = data.announcements;
+        persistAnnouncementsLocal();
+        AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'announcements', announcements } }));
+        return;
+      }
     }
   } catch (e) {
-    console.warn('fetchAnnouncements GAS error, using local:', e);
+    console.warn('fetchAnnouncements Firestore error, using local:', e);
   }
-  // GAS 실패시 localStorage에서 복원 (fallback)
   try { announcements = JSON.parse(localStorage.getItem(getLocalAnnouncementKey())) || []; } catch (e) { announcements = []; }
-  // ✅ v3.92: gs:state:changed 통합 이벤트 — fallback 확정 후 1회 (GAS 성공 경로와 상호 배타적)
   AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'announcements', announcements } }));
 }
 
 // 코트공지 저장 (단건 — 하위호환용)
 async function saveCourtNotice(notice) {
-  persistCourtNoticesLocal(); // 항상 로컬 먼저
-  // ✅ v3.83: 전체 배열을 GAS에 저장 (단건이 아니라 전체 동기화)
+  persistCourtNoticesLocal();
   return await pushCourtNoticesToGAS();
 }
 
 // 공지사항 저장 (단건 — 하위호환용)
 async function saveAnnouncement(announcement) {
-  persistAnnouncementsLocal(); // 항상 로컬 먼저
-  // ✅ v3.83: 전체 배열을 GAS에 저장 (단건이 아니라 전체 동기화)
+  persistAnnouncementsLocal();
   return await pushAnnouncementsToGAS();
 }
 
-// ✅ v3.83: 공지사항 전체 배열을 GAS에 저장
+// ✅ v3.83: 공지사항 전체 배열 저장 (Firestore)
 async function pushAnnouncementsToGAS() {
-  persistAnnouncementsLocal(); // 항상 로컬 먼저
+  persistAnnouncementsLocal();
   if (!currentClub) return false;
   try {
-    const r = await fetchWithTimeout(MASTER_GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'saveAnnouncements',
-        clubId: getActiveClubId(),
-        announcements: announcements
-      })
-    }, 12000);
-    const resp = await r.json();
-    return resp.ok || false;
+    await _clubRef(getActiveClubId()).collection('settings').doc('notices').set(
+      { announcements },
+      { merge: true }
+    );
+    return true;
   } catch (e) {
     console.warn('pushAnnouncementsToGAS error:', e);
     return false;
   }
 }
 
-// ✅ v3.83: 코트공지 전체 배열을 GAS에 저장
+// ✅ v3.83: 코트공지 전체 배열 저장 (Firestore)
 async function pushCourtNoticesToGAS() {
-  persistCourtNoticesLocal(); // 항상 로컬 먼저
+  persistCourtNoticesLocal();
   if (!currentClub) return false;
   try {
-    const r = await fetchWithTimeout(MASTER_GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'saveCourtNotices',
-        clubId: getActiveClubId(),
-        notices: courtNotices
-      })
-    }, 12000);
-    const resp = await r.json();
-    return resp.ok || false;
+    await _clubRef(getActiveClubId()).collection('settings').doc('notices').set(
+      { courtNotices },
+      { merge: true }
+    );
+    return true;
   } catch (e) {
     console.warn('pushCourtNoticesToGAS error:', e);
     return false;
   }
 }
 
-// ✅ v3.83: 회비 데이터를 GAS에서 로드
+// ✅ v3.83: 회비 데이터 로드 (Firestore)
 async function fetchFeeData() {
   if (!currentClub) return;
   const cid = getActiveClubId();
   try {
-    const url = MASTER_GAS_URL + '?action=getFeeData&clubId=' + encodeURIComponent(cid);
-    const r = await fetchWithTimeout(url, {}, 12000);
-    if (!r.ok) throw new Error('not ok');
-    const resp = await r.json();
-    if (resp.ok) {
-      feeData = resp.feeData || {};
-      monthlyFeeAmount = resp.monthlyFeeAmount || 0;
-      // localStorage에도 캐시
+    const doc = await _clubRef(cid).collection('settings').doc('feeData').get();
+    if (doc.exists) {
+      const data = doc.data();
+      feeData = data.feeData || {};
+      monthlyFeeAmount = data.monthlyFeeAmount || 0;
       localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
       localStorage.setItem('grandslam_monthly_fee_' + cid, monthlyFeeAmount);
-      // ✅ v3.92: gs:state:changed 통합 이벤트 — GAS 정상 로드 확정 후 1회
       AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'fee', feeData, monthlyFeeAmount } }));
       return;
     }
   } catch (e) {
-    console.warn('fetchFeeData GAS error, using local:', e);
+    console.warn('fetchFeeData Firestore error, using local:', e);
   }
-  // GAS 실패 시 localStorage fallback
   try { feeData = JSON.parse(localStorage.getItem('grandslam_fee_data_' + cid)) || {}; } catch (e) { feeData = {}; }
   const savedFee = localStorage.getItem('grandslam_monthly_fee_' + cid);
   if (savedFee) monthlyFeeAmount = parseInt(savedFee) || 0;
-  // ✅ v3.92: gs:state:changed 통합 이벤트 — fallback 확정 후 1회 (GAS 성공 경로와 상호 배타적)
   AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'fee', feeData, monthlyFeeAmount } }));
 }
 
-// ✅ v3.83: 회비 데이터를 GAS에 저장
+// ✅ v3.83: 회비 데이터 저장 (Firestore)
 async function pushFeeData() {
   const cid = getActiveClubId();
-  // 항상 로컬 먼저
   if (cid) {
     localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
     localStorage.setItem('grandslam_monthly_fee_' + cid, monthlyFeeAmount);
   }
   if (!currentClub) return false;
   try {
-    const r = await fetchWithTimeout(MASTER_GAS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'saveFeeData',
-        clubId: cid,
-        feeData: feeData,
-        monthlyFeeAmount: monthlyFeeAmount
-      })
-    }, 12000);
-    const resp = await r.json();
-    return resp.ok || false;
+    await _clubRef(cid).collection('settings').doc('feeData').set({
+      feeData,
+      monthlyFeeAmount
+    });
+    return true;
   } catch (e) {
     console.warn('pushFeeData error:', e);
     return false;

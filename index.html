@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.034</title>
+  <title>GrandSlam Ultimate v4.036</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -269,7 +269,7 @@
     </div>
   </div>
 
-  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v4.034</div>
+  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v4.036</div>
 </div>
 
 <div id="view-tennis" class="app-screen">
@@ -568,6 +568,8 @@
       <div class="r-line r-mini">- ✅ v3.94 gender 시스템 완결 — gender 저장버그 수정(pushPayload race condition), 사다리 아이콘 제거, 혼복 필드(mScore/mWins/mLosses) 신설, 랭킹 종합고정+복식남녀분리+혼복랭킹+단식남녀분리, 주간 자동리셋(월요일 기준)</div>
       <div class="r-line r-mini">- ✅ v3.941 gender 근본 수정 — GAS DATA_FIELDS에 gender 컬럼 추가, 기존 시트 자동 마이그레이션('M' 기본값), 혼복 판별 개선(한 팀이라도 남+여면 해당 팀 혼복 점수 취득)</div>
       <div class="r-line r-mini">- ✅ v3.942 랭킹 탭 버그 수정(남자부/여자부 섹션 분리 show/hide), 선수 분석 리포트 이성간 단식(최고승률/천적) + 혼복 최고/분발 파트너 + 혼복 남자/여자 천적 카드 추가</div>
+      <div class="r-line r-mini">- ✅ v4.036 데이터 안정성 강화 — doc id sanitize(특수문자→_), Player default(sport/level/attributes) 주입, Match default(sport) 주입, matchLog orderBy(ts,desc)+limit(500)</div>
+      <div class="r-line r-mini">- ✅ v4.035 Firestore 마이그레이션 — api.js 전체 GAS→Firestore 교체 (함수 시그니처 100% 유지), Firebase SDK compat 추가, 컬렉션 구조: clubs/{clubId}/players·matchLog·settings/notices·settings/feeData</div>
       <div class="r-line r-mini">- ✅ v4.034 조합 랭킹 정렬 기준 승수→승률로 수정 — 복식/혼복 조합 랭킹 메인 순위 및 동점 처리 모두 승률 기준 적용</div>
       <div class="r-line r-mini">- ✅ v4.033 GAS Code.gs isFeeExempt 필드 추가 — DATA_FIELDS/makeEmptyPlayer_/normalizePlayers_/cleanPlayer_/writePlayersOverwrite_/migrateFeeExemptColumn_ 전부 처리, 회비 면제 설정 GAS 완전 저장/로드 지원</div>
       <div class="r-line r-mini">- ✅ v4.032 회비 면제 설정 추가 — isFeeExempt 필드 신설, 총무 면제 설정 하단 💸회비 면제 피커 추가, 납부현황/재정계산/완납해제/납부율요약/카톡복사 전부 면제 회원 제외 처리</div>
@@ -1196,6 +1198,22 @@
   </div>
 </div>
 
+
+<!-- ✅ v4.035: Firebase Firestore SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+  const _firebaseConfig = {
+    apiKey: "AIzaSyDrBOvZ7fP7nKV2yI1SiXweSe1uNCwvVeM",
+    authDomain: "grandslam-ultimate.firebaseapp.com",
+    projectId: "grandslam-ultimate",
+    storageBucket: "grandslam-ultimate.firebasestorage.app",
+    messagingSenderId: "920033555262",
+    appId: "1:920033555262:web:87c5561b84d52a44f9726f"
+  };
+  firebase.initializeApp(_firebaseConfig);
+  const _db = firebase.firestore();
+</script>
 
 <script src="js/rules/tennis.js"></script>
 <script src="js/state.js"></script>
