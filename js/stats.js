@@ -464,7 +464,11 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
     const list = Object.entries(pairMap)
       .map(([key, v]) => ({ key, names: v.names, wins: v.wins, losses: v.losses, total: v.wins + v.losses }))
       .filter(v => v.total >= 1)
-      .sort((a, b) => b.wins - a.wins || b.total - a.total);
+      .sort((a, b) => {
+        const ar = a.total > 0 ? a.wins / a.total : 0;
+        const br = b.total > 0 ? b.wins / b.total : 0;
+        return br - ar || b.wins - a.wins;
+      });
 
     if (list.length === 0) {
       table.innerHTML = '<tbody><tr><td colspan="5" style="text-align:center; color:#999; font-size:12px; padding:12px;">조합 기록 없음</td></tr></tbody>';
@@ -496,7 +500,11 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
 
     let rank = 1;
     const rows = list.map((v, i) => {
-      if (i > 0 && list[i-1].wins !== v.wins) rank = i + 1;
+      if (i > 0) {
+        const pr = list[i-1].total > 0 ? list[i-1].wins / list[i-1].total : 0;
+        const cr = v.total > 0 ? v.wins / v.total : 0;
+        if (pr !== cr) rank = i + 1;
+      }
       const rate = v.total > 0 ? ((v.wins / v.total) * 100).toFixed(1) : '0.0';
       const pairLabel = v.names.map(n => `${nameIcon(n)}${dName(n)}`).join(' & ');
       return `<tr>
