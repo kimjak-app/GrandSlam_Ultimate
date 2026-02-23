@@ -28,9 +28,138 @@
     }
   }
 
+  // ========================================
+  // v4.131: REGION HELPERS (JSON provider)
+  // ========================================
+  const DEFAULT_COUNTRY = 'KR';
+
+  function _safeVal(v) { return (v === undefined || v === null) ? '' : String(v); }
+  function _trim(v) { return _safeVal(v).trim(); }
+
+  function ensureClubRegionFieldsObject(clubObj) {
+    const countryCode = _trim(clubObj.countryCode || DEFAULT_COUNTRY) || DEFAULT_COUNTRY;
+    const region1 = _trim(clubObj.region1 || '미지정') || '미지정';
+    const region2 = _trim(clubObj.region2 || '미지정') || '미지정';
+    const regionKey = _trim(clubObj.regionKey) || buildRegionKey(countryCode, region1, region2);
+    return { countryCode, region1, region2, regionKey };
+  }
+
+  // ✅ 기존 클럽 문서에 region 필드가 없으면 안전하게 추가(merge update)
+  async function ensureClubsHaveRegionFields() {
+    try {
+      if (!_db) return;
+      const missing = clubList.filter(c => !c.regionKey || !c.region1 || !c.region2 || !c.countryCode);
+      if (missing.length === 0) return;
+
+      // 너무 많이 한 번에 쏘지 않기 (MVP 전 안전)
+      for (const c of missing) {
+        const patch = ensureClubRegionFieldsObject(c);
+        await _db.collection('clubs').doc(c.clubId).set(patch, { merge: true });
+      }
+      await fetchClubList();
+    } catch(e) {
+      console.warn('ensureClubsHaveRegionFields error:', e);
+    }
+  }
+
+  function getClubRegionLabel(c) {
+    const r1 = _trim(c.region1);
+    const r2 = _trim(c.region2);
+    if (!r1 && !r2) return '';
+    if ((r1 === '미지정' && r2 === '미지정') || (!r1 && !r2)) return '지역 미지정';
+    if (r1 && r2) return `${r1} ${r2}`;
+    return r1 || r2;
+  }
+
+  function initRegionSelects() {
+    // 클럽 선택 드롭다운 필터
+    const fr1 = $('clubFilterRegion1');
+    const fr2 = $('clubFilterRegion2');
+    if (fr1 && fr1.options.length <= 1) {
+      const r1s = getRegion1List(DEFAULT_COUNTRY);
+      // ✅ v4.1311: '전체'는 필터 해제(모든 클럽), '미지정'은 실제 미지정 클럽만 보기
+      fr1.innerHTML = '<option value="__ALL__">전체</option>' +
+        '<option value="미지정">미지정(설정 필요)</option>' +
+        r1s.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+    }
+    if (fr2 && fr2.options.length <= 1) {
+      // region1이 '전체'일 때는 region2를 쓰지 않음 (비활성)
+      fr2.innerHTML = '<option value="__ALL__">전체</option>';
+      fr2.disabled = true;
+    }
+
+    // 클럽 생성/수정 폼
+    const cr1 = $('cfRegion1');
+    const cr2 = $('cfRegion2');
+    if (cr1 && cr1.options.length <= 1) {
+      const r1s = getRegion1List(DEFAULT_COUNTRY);
+      cr1.innerHTML = '<option value="">시/도 선택</option>' + r1s.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+    }
+    if (cr2 && cr2.options.length <= 1) {
+      cr2.innerHTML = '<option value="">시/군/구 선택</option>';
+    }
+  }
+
+  // 필터 region1 변경 시 region2 목록 갱신
+  function onClubFilterRegion1Change() {
+    const r1 = _trim($('clubFilterRegion1')?.value);
+    const r2Sel = $('clubFilterRegion2');
+    if (!r2Sel) return;
+    // ✅ v4.1311: '전체'면 region2 필터를 끄고, '미지정' 또는 특정 시/도면 region2 목록 제공
+    if (!r1 || r1 === '__ALL__') {
+      r2Sel.innerHTML = '<option value="__ALL__">전체</option>';
+      r2Sel.value = '__ALL__';
+      r2Sel.disabled = true;
+      renderClubDropdownList();
+      return;
+    }
+
+    const list = (r1 === '미지정') ? ['미지정'] : (getRegion2List(DEFAULT_COUNTRY, r1) || []);
+    r2Sel.disabled = false;
+    r2Sel.innerHTML = '<option value="__ALL__">전체</option>' + (list || []).filter(Boolean).map(x => {
+      if (x === '직접입력…') return '';
+      return `<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`;
+    }).join('');
+    // 기본은 전체(=해당 시/도 전체)
+    r2Sel.value = '__ALL__';
+    renderClubDropdownList();
+  }
+  window.onClubFilterRegion1Change = onClubFilterRegion1Change;
+
+  // 폼 region1 변경 시 region2 목록 갱신
+  function onClubFormRegion1Change() {
+    const r1 = _trim($('cfRegion1')?.value);
+    const r2Sel = $('cfRegion2');
+    const custom = $('cfRegion2Custom');
+    if (!r2Sel) return;
+    const list = r1 ? getRegion2List(DEFAULT_COUNTRY, r1) : [];
+    r2Sel.innerHTML = '<option value="">시/군/구 선택</option>' + (list || ['직접입력…']).filter(Boolean).map(x => {
+      return `<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`;
+    }).join('');
+    if (custom) { custom.style.display = 'none'; custom.value = ''; }
+  }
+  window.onClubFormRegion1Change = onClubFormRegion1Change;
+
+  function onClubFormRegion2Change() {
+    const v = _trim($('cfRegion2')?.value);
+    const custom = $('cfRegion2Custom');
+    if (!custom) return;
+    if (v === '직접입력…') {
+      custom.style.display = 'block';
+      setTimeout(() => { try { custom.focus(); } catch(e) {} }, 50);
+    } else {
+      custom.style.display = 'none';
+      custom.value = '';
+    }
+  }
+  window.onClubFormRegion2Change = onClubFormRegion2Change;
+
   async function initClubSystem() {
     // 1) GAS에서 클럽 목록 가져오기
     await fetchClubList();
+
+    // ✅ v4.131: 기존 클럽 region 필드 자동 보강(데이터 유지)
+    await ensureClubsHaveRegionFields();
     
     // 2) 저장된 활성 클럽 복원
     const savedId = loadActiveClubId();
@@ -41,6 +170,9 @@
       activateClub(target, false); // false = sync는 나중에
     }
     updateClubSelectorUI();
+
+    // ✅ v4.131: 지역 필터 셀렉트 초기화
+    initRegionSelects();
   }
 
   function activateClub(club, doSync) {
@@ -114,6 +246,7 @@
 
   // --- 클럽 드롭다운 ---
   function openClubDropdown() {
+    initRegionSelects();
     renderClubDropdownList();
     $('clubDropdown').classList.add('active');
   }
@@ -125,17 +258,35 @@
   function renderClubDropdownList() {
     const container = $('clubDropdownList');
     if (!container) return;
+
+    // ✅ v4.131: 지역 + 검색 필터
+    const filterR1 = _trim($('clubFilterRegion1')?.value);
+    const filterR2 = _trim($('clubFilterRegion2')?.value);
+    const q = _trim($('clubFilterSearch')?.value).toLowerCase();
+
+    let filtered = clubList.slice();
+    // ✅ v4.1311: '__ALL__'은 필터 해제
+    if (filterR1 && filterR1 !== '__ALL__') filtered = filtered.filter(c => _trim(c.region1) === filterR1);
+    if (filterR2 && filterR2 !== '__ALL__') filtered = filtered.filter(c => _trim(c.region2) === filterR2);
+    if (q) filtered = filtered.filter(c => (_trim(c.clubName) || '').toLowerCase().includes(q));
+
     if (clubList.length === 0) {
       container.innerHTML = '<div style="padding:20px; text-align:center; color:#999; font-size:13px;">등록된 클럽이 없습니다.</div>';
       return;
     }
-    container.innerHTML = clubList.map(function(c) {
+    if (filtered.length === 0) {
+      container.innerHTML = '<div style="padding:18px; text-align:center; color:#999; font-size:13px;">조건에 맞는 클럽이 없습니다.</div>';
+      return;
+    }
+
+    container.innerHTML = filtered.map(function(c) {
       const isActive = currentClub && currentClub.clubId === c.clubId;
+      const regionLabel = getClubRegionLabel(c);
       return '<div class="club-item ' + (isActive ? 'active-club' : '') + '" onclick="switchClub(\'' + c.clubId + '\')">' +
         '<span class="club-item-dot" style="background:' + (c.color || '#5D9C76') + '"></span>' +
         '<div class="club-item-info">' +
           '<div class="club-item-name">' + escapeHtml(c.clubName) + (c.isDefault ? ' <span style="font-size:10px;color:#999;">(기본)</span>' : '') + '</div>' +
-          '<div class="club-item-sub">' + escapeHtml(c.cityKo || c.city || '') + '</div>' +
+          '<div class="club-item-sub">' + escapeHtml(regionLabel) + (regionLabel ? ' · ' : '') + escapeHtml(c.cityKo || c.city || '') + '</div>' +
         '</div>' +
         (isActive ? '<span class="material-symbols-outlined club-item-check">check_circle</span>' : '') +
       '</div>';
@@ -167,11 +318,15 @@
       $('cfPin').value = '';
       $('cfCity').value = '';
       $('cfCityKo').value = '';
+      if ($('cfRegion1')) $('cfRegion1').value = '';
+      if ($('cfRegion2')) $('cfRegion2').innerHTML = '<option value="">시/군/구 선택</option>';
+      if ($('cfRegion2Custom')) { $('cfRegion2Custom').style.display = 'none'; $('cfRegion2Custom').value = ''; }
       $('cfEditId').value = '';
       renderColorChips('');
       if ($('cfGuideToggle')) $('cfGuideToggle').style.display = 'block';
       if ($('cfGuideBody')) $('cfGuideBody').style.display = 'none';
       if ($('cfGuideArrow')) $('cfGuideArrow').style.transform = '';
+      initRegionSelects();
       $('clubFormModal').classList.add('active');
     });
   }
@@ -187,6 +342,17 @@
       $('cfPin').value = club.adminPin || '';
       $('cfCity').value = club.city || '';
       $('cfCityKo').value = club.cityKo || '';
+      initRegionSelects();
+      // region preset
+      const regionPatch = ensureClubRegionFieldsObject(club);
+      if ($('cfRegion1')) {
+        $('cfRegion1').value = regionPatch.region1;
+        onClubFormRegion1Change();
+      }
+      if ($('cfRegion2')) {
+        $('cfRegion2').value = regionPatch.region2;
+        onClubFormRegion2Change();
+      }
       $('cfEditId').value = club.clubId;
       renderColorChips(club.color || '');
       if ($('cfGuideToggle')) $('cfGuideToggle').style.display = 'none';
@@ -237,6 +403,13 @@
     const color = getSelectedColor();
     const editId = $('cfEditId').value;
 
+    // ✅ v4.131: region 필드 (시/도 + 시/군/구)
+    const region1 = _trim($('cfRegion1')?.value) || '미지정';
+    let region2 = _trim($('cfRegion2')?.value) || '미지정';
+    if (region2 === '직접입력…') region2 = _trim($('cfRegion2Custom')?.value) || '미지정';
+    const countryCode = DEFAULT_COUNTRY;
+    const regionKey = buildRegionKey(countryCode, region1 || '미지정', region2 || '미지정');
+
     if (!name) { gsAlert('클럽 이름을 입력해주세요.'); return; }
     if (!pin) { gsAlert('관리자 비밀번호를 입력해주세요.'); return; }
 
@@ -249,7 +422,8 @@
         // ✅ v4.037: Firestore 클럽 수정
         await _db.collection('clubs').doc(editId).update({
           clubName: name, adminPin: pin,
-          city: city || 'Gwangmyeong', cityKo: cityKo || city || '도시', color: color
+          city: city || 'Gwangmyeong', cityKo: cityKo || city || '도시', color: color,
+          countryCode, region1, region2, regionKey
         });
         localStorage.setItem('grandslam_admin_pin_' + editId, pin);
         await fetchClubList();
@@ -269,7 +443,8 @@
         await _db.collection('clubs').doc(newId).set({
           clubId: newId, clubName: name, adminPin: pin,
           city: city || 'Gwangmyeong', cityKo: cityKo || city || '도시',
-          color: color, isDefault: false, sport: 'tennis', createdAt: Date.now()
+          color: color, isDefault: false, sport: 'tennis', createdAt: Date.now(),
+          countryCode, region1, region2, regionKey
         });
         await fetchClubList();
         gsAlert('"' + name + '" 클럽이 생성되었습니다!', () => {
@@ -329,6 +504,8 @@
     }
     container.innerHTML = clubList.map(function(c) {
       const isActive = currentClub && currentClub.clubId === c.clubId;
+      const regionLabel = getClubRegionLabel(c);
+      const needsRegion = (regionLabel === '지역 미지정');
       return '<div class="club-card-manage" style="' + (isActive ? 'border-color:' + (c.color || '#5D9C76') + ';' : '') + '">' +
         '<span class="club-manage-dot" style="background:' + (c.color || '#5D9C76') + '"></span>' +
         '<div class="club-manage-info">' +
@@ -336,7 +513,10 @@
             (isActive ? ' <span style="font-size:11px;color:var(--wimbledon-sage);">(활성)</span>' : '') +
             (c.isDefault ? ' <span style="font-size:10px;color:#999;">(기본)</span>' : '') + 
           '</div>' +
-          '<div class="club-manage-url">' + escapeHtml(c.cityKo || c.city || '') + '</div>' +
+          '<div class="club-manage-url">' +
+            (needsRegion ? '<span style="display:inline-block; font-size:11px; color:#d32f2f; background:rgba(211,47,47,0.08); padding:2px 8px; border-radius:999px; margin-right:6px;">지역 설정 필요</span>' : '') +
+            escapeHtml(regionLabel) + (regionLabel ? ' · ' : '') + escapeHtml(c.cityKo || c.city || '') +
+          '</div>' +
         '</div>' +
         '<div class="club-manage-actions">' +
           '<button class="club-manage-btn" style="background:var(--aussie-blue);" onclick="openClubEdit(\'' + c.clubId + '\')">수정</button>' +

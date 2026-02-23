@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.12</title>
+  <title>GrandSlam Ultimate v4.131</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -80,6 +80,16 @@
       <span class="material-symbols-outlined">home_work</span>
       클럽 선택
     </div>
+    <!-- ✅ v4.131: 지역(시/군/구) 기반 클럽 찾기 (확장 대비) -->
+    <div style="display:flex; gap:8px; margin:10px 0 8px;">
+      <select id="clubFilterRegion1" onchange="onClubFilterRegion1Change()" style="flex:1; padding:10px 12px; border:1px solid #e5e5ea; border-radius:12px; font-size:13px; background:white;">
+        <option value="">시/도 선택</option>
+      </select>
+      <select id="clubFilterRegion2" onchange="renderClubDropdownList()" style="flex:1; padding:10px 12px; border:1px solid #e5e5ea; border-radius:12px; font-size:13px; background:white;">
+        <option value="">시/군/구 선택</option>
+      </select>
+    </div>
+    <input id="clubFilterSearch" type="text" placeholder="클럽명 검색" oninput="renderClubDropdownList()" style="width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #e5e5ea; border-radius:12px; font-size:13px; outline:none; margin-bottom:10px;" />
     <div id="clubDropdownList"></div>
     <div class="club-dropdown-footer">
       <button class="club-add-btn" onclick="openClubCreate()">
@@ -153,6 +163,21 @@
     <div class="club-form-group">
       <label class="club-form-label">클럽 이름 *</label>
       <input type="text" class="club-form-input" id="cfName" placeholder="예: 광명 테니스클럽" />
+    </div>
+
+    <!-- ✅ v4.131: 지역(시/도 + 시/군/구) 선택 (확장 대비) -->
+    <div class="club-form-group">
+      <label class="club-form-label">지역 (시/도 + 시/군/구)</label>
+      <div style="display:flex; gap:8px;">
+        <select id="cfRegion1" onchange="onClubFormRegion1Change()" style="flex:1; padding:12px 12px; border:1px solid #e5e5ea; border-radius:12px; font-size:14px; background:white;">
+          <option value="">시/도 선택</option>
+        </select>
+        <select id="cfRegion2" onchange="onClubFormRegion2Change()" style="flex:1; padding:12px 12px; border:1px solid #e5e5ea; border-radius:12px; font-size:14px; background:white;">
+          <option value="">시/군/구 선택</option>
+        </select>
+      </div>
+      <input id="cfRegion2Custom" type="text" placeholder="시/군/구 직접입력" style="display:none; width:100%; box-sizing:border-box; padding:12px 12px; border:1px solid #e5e5ea; border-radius:12px; font-size:14px; outline:none; margin-top:8px;" />
+      <div class="club-form-hint">💡 서울은 ‘구’, 지방은 ‘시/군’ 정도로 선택하면 충분해.</div>
     </div>
 
     <div class="club-form-group">
@@ -270,7 +295,7 @@
     </div>
   </div>
 
-  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v4.12</div>
+  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v4.131</div>
 </div>
 
 <div id="view-tennis" class="app-screen">
@@ -992,6 +1017,7 @@
         <div>- ✅ <b>v4.038</b>: nav 버그 수정, 라운드 구조 복구, 사다리 성별 아이콘</div>
         <div>- ✅ <b>v4.1</b>: 데이터 백업/복원 — JSON export/import (선수·경기·회비·공지·코트)</div>
         <div>- ✅ <b>v4.12</b>: 모바일 첫 로딩 체감 개선 (players 먼저), matchLog 페이지네이션 (500개씩 더보기)</div>
+        <div>- ✅ <b>v4.131</b>: 지역(시/도·시/군/구) 기반 클럽 필터 및 생성 — regions.js 추가</div>
       </div>
     </div>
 
@@ -1251,6 +1277,7 @@
 <script src="js/state.js"></script>
 <script src="js/api.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/regions.js"></script>
 <script src="js/club.js"></script>
 <script src="js/game.js"></script>
 <script src="js/tournament.js"></script>
