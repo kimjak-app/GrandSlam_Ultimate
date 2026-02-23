@@ -15,6 +15,43 @@
     localStorage.setItem(ACTIVE_CLUB_KEY, id || '');
   }
 
+
+  // ✅ v4.14: 클럽 즐겨찾기/최근 (localStorage)
+  const PINNED_CLUBS_KEY = 'grandslam_pinned_clubs_v1';
+  const RECENT_CLUBS_KEY = 'grandslam_recent_clubs_v1';
+
+  function _loadIdArray(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr.map(String).filter(Boolean) : [];
+    } catch(e) { return []; }
+  }
+  function _saveIdArray(key, arr) {
+    try { localStorage.setItem(key, JSON.stringify(arr)); } catch(e) {}
+  }
+  function loadPinnedClubIds() { return _loadIdArray(PINNED_CLUBS_KEY); }
+  function loadRecentClubIds() { return _loadIdArray(RECENT_CLUBS_KEY); }
+
+  function togglePinnedClub(clubId) {
+    if(!clubId) return;
+    const pinned = loadPinnedClubIds();
+    const idx = pinned.indexOf(String(clubId));
+    if(idx >= 0) pinned.splice(idx, 1);
+    else pinned.unshift(String(clubId));
+    // 너무 길어지는 건 UX 별로라 상한만 살짝 (필요하면 늘리면 됨)
+    const next = pinned.slice(0, 30);
+    _saveIdArray(PINNED_CLUBS_KEY, next);
+    renderClubDropdownList();
+  }
+
+  function pushRecentClub(clubId) {
+    if(!clubId) return;
+    const id = String(clubId);
+    const recent = loadRecentClubIds().filter(x => x !== id);
+    recent.unshift(id);
+    _saveIdArray(RECENT_CLUBS_KEY, recent.slice(0, 5));
+  }
   // ✅ v4.037: Firestore에서 클럽 목록 불러오기
   async function fetchClubList() {
     try {
@@ -124,6 +161,9 @@
     r2Sel.value = '__ALL__';
     renderClubDropdownList();
   }
+  window.togglePinnedClub = togglePinnedClub;
+  window.getActiveClubId = getActiveClubId;
+  window.initClubSystem = initClubSystem;
   window.onClubFilterRegion1Change = onClubFilterRegion1Change;
 
   // 폼 region1 변경 시 region2 목록 갱신
@@ -188,6 +228,8 @@
     const savedPin = localStorage.getItem('grandslam_admin_pin_' + club.clubId);
     ADMIN_PIN = savedPin || club.adminPin || '0707';
     saveActiveClubId(club.clubId);
+    // ✅ v4.14: 최근 클럽 자동 기록
+    pushRecentClub(club.clubId);
     
     updateClubSelectorUI();
     updateClubThemeColor(club.color);
@@ -264,33 +306,89 @@
     const filterR2 = _trim($('clubFilterRegion2')?.value);
     const q = _trim($('clubFilterSearch')?.value).toLowerCase();
 
-    let filtered = clubList.slice();
-    // ✅ v4.1311: '__ALL__'은 필터 해제
-    if (filterR1 && filterR1 !== '__ALL__') filtered = filtered.filter(c => _trim(c.region1) === filterR1);
-    if (filterR2 && filterR2 !== '__ALL__') filtered = filtered.filter(c => _trim(c.region2) === filterR2);
-    if (q) filtered = filtered.filter(c => (_trim(c.clubName) || '').toLowerCase().includes(q));
-
     if (clubList.length === 0) {
       container.innerHTML = '<div style="padding:20px; text-align:center; color:#999; font-size:13px;">등록된 클럽이 없습니다.</div>';
       return;
     }
-    if (filtered.length === 0) {
-      container.innerHTML = '<div style="padding:18px; text-align:center; color:#999; font-size:13px;">조건에 맞는 클럽이 없습니다.</div>';
-      return;
+
+    // ✅ v4.14: 즐겨찾기/최근 (지역 필터와 무관하게 상단 고정, 검색어는 적용)
+    const pinnedIds = loadPinnedClubIds();
+    const recentIds = loadRecentClubIds();
+
+    const byId = new Map(clubList.map(c => [String(c.clubId), c]));
+
+    const pinnedClubs = pinnedIds.map(id => byId.get(String(id))).filter(Boolean);
+    const recentClubs = recentIds.map(id => byId.get(String(id))).filter(Boolean);
+
+    const qMatch = (c) => !q || ((_trim(c.clubName) || '').toLowerCase().includes(q));
+
+    const pinnedSet = new Set(pinnedClubs.map(c => String(c.clubId)));
+
+    // 메인 리스트(지역 필터 + 검색) — pinned/recent는 중복 제거
+    let main = clubList.slice();
+    // ✅ v4.1311: '__ALL__'은 필터 해제
+    if (filterR1 && filterR1 !== '__ALL__') main = main.filter(c => _trim(c.region1) === filterR1);
+    if (filterR2 && filterR2 !== '__ALL__') main = main.filter(c => _trim(c.region2) === filterR2);
+    if (q) main = main.filter(qMatch);
+
+    const recentOnly = recentClubs.filter(c => !pinnedSet.has(String(c.clubId)));
+
+    const used = new Set([...pinnedClubs, ...recentOnly].map(c => String(c.clubId)));
+    main = main.filter(c => !used.has(String(c.clubId)));
+
+    function sectionTitle(icon, text) {
+      return '<div style="margin:10px 0 6px; color:#777; font-size:12px; font-weight:700; display:flex; align-items:center; gap:6px;">' +
+        '<span class="material-symbols-outlined" style="font-size:16px; color:#777;">' + icon + '</span>' +
+        escapeHtml(text) +
+      '</div>';
     }
 
-    container.innerHTML = filtered.map(function(c) {
+    function clubItemHtml(c) {
       const isActive = currentClub && currentClub.clubId === c.clubId;
+      const isPinned = pinnedSet.has(String(c.clubId));
       const regionLabel = getClubRegionLabel(c);
+      const starIcon = isPinned ? 'star' : 'star_border';
+
       return '<div class="club-item ' + (isActive ? 'active-club' : '') + '" onclick="switchClub(\'' + c.clubId + '\')">' +
         '<span class="club-item-dot" style="background:' + (c.color || '#5D9C76') + '"></span>' +
         '<div class="club-item-info">' +
           '<div class="club-item-name">' + escapeHtml(c.clubName) + (c.isDefault ? ' <span style="font-size:10px;color:#999;">(기본)</span>' : '') + '</div>' +
           '<div class="club-item-sub">' + escapeHtml(regionLabel) + (regionLabel ? ' · ' : '') + escapeHtml(c.cityKo || c.city || '') + '</div>' +
         '</div>' +
+        '<span class="material-symbols-outlined" title="즐겨찾기" ' +
+          'onclick="event.stopPropagation();togglePinnedClub(\'' + c.clubId + '\');" ' +
+          'style="font-size:20px; color:' + (isPinned ? '#C4A55A' : '#b0b0b0') + '; margin-left:auto; padding:6px; border-radius:10px; cursor:pointer;">' + starIcon + '</span>' +
         (isActive ? '<span class="material-symbols-outlined club-item-check">check_circle</span>' : '') +
       '</div>';
-    }).join('');
+    }
+
+    let html = '';
+
+    const pinnedShown = pinnedClubs.filter(qMatch);
+    if (pinnedShown.length) {
+      html += sectionTitle('star', '즐겨찾기');
+      html += pinnedShown.map(clubItemHtml).join('');
+    }
+
+    const recentShown = recentOnly.filter(qMatch);
+    if (recentShown.length) {
+      html += sectionTitle('history', '최근');
+      html += recentShown.map(clubItemHtml).join('');
+    }
+
+    if (!pinnedShown.length && !recentShown.length && main.length === 0) {
+      container.innerHTML = '<div style="padding:18px; text-align:center; color:#999; font-size:13px;">조건에 맞는 클럽이 없습니다.</div>';
+      return;
+    }
+
+    if (main.length) {
+      if (pinnedShown.length || recentShown.length) {
+        html += '<div style="height:10px;"></div>';
+      }
+      html += main.map(clubItemHtml).join('');
+    }
+
+    container.innerHTML = html || '<div style="padding:18px; text-align:center; color:#999; font-size:13px;">조건에 맞는 클럽이 없습니다.</div>';
   }
 
   async function switchClub(clubId) {
