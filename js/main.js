@@ -149,9 +149,3 @@ window.addEventListener('beforeunload', () => {
     pushDataOnly().catch(e => console.warn('beforeunload 자동저장 오류:', e));
   }
 });
-
-// ✅ v4.037: 데이터 백업 모달 열기
-function openBackupModal() {
-  const modal = document.getElementById('backupModal');
-  if (modal) modal.style.display = 'flex';
-}

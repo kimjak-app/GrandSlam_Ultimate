@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.038</title>
+  <title>GrandSlam Ultimate v4.1</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -18,49 +18,7 @@
 </div>
 <div id="loading-overlay">⌛ 데이터 동기화 중...</div>
 
-<!-- ✅ v4.037: 데이터 백업 & 업데이트 브리핑 모달 -->
-<div id="backupModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:25000; justify-content:center; align-items:flex-start; overflow-y:auto; padding:20px 0;">
-  <div style="background:#fff; border-radius:20px; padding:24px 20px 20px; width:340px; max-width:92vw; margin:20px auto; box-shadow:0 8px 32px rgba(0,0,0,0.2);">
-    <div style="font-size:16px; font-weight:700; color:var(--text-dark); margin-bottom:4px; display:flex; align-items:center; gap:8px;">
-      <span class="material-symbols-outlined" style="color:var(--wimbledon-sage);">cloud_sync</span>데이터 백업
-    </div>
-    <div style="font-size:12px; color:#999; margin-bottom:16px;">백업 기능은 추후 추가 예정입니다.</div>
-
-    <div style="border-top:1px solid #eee; padding-top:14px;">
-      <div style="font-size:13px; font-weight:700; color:var(--wimbledon-sage); margin-bottom:10px; display:flex; align-items:center; gap:6px;">
-        <span class="material-symbols-outlined" style="font-size:16px;">database</span>주요 업데이트 브리핑
-      </div>
-      <div style="font-size:10px; color:#555; line-height:1.7; max-height:55vh; overflow-y:auto; padding-right:4px;">
-        <div style="color:#888; margin-bottom:6px;">- <b>Data</b>: 전체 덮어쓰기 / <b>MatchLog</b>: appendRow 누적</div>
-        <div style="color:#888; margin-bottom:6px;">- 개인통계(파트너/천적/최근폼)는 <b>MatchLog 기반</b>으로 계산</div>
-        <div style="color:#888; margin-bottom:10px;">- 토너먼트 <b>실전 모드</b>: 진행 중 버퍼 → 우승 확정 순간에만 커밋</div>
-        <div>- ✅ v1.0: 광명 날씨 앱</div>
-        <div>- ✅ v2.0: 단일게임(단복식) 로직 완성, 랭킹 로직 완성</div>
-        <div>- ✅ v3.0: 토너먼트 방식 로직 완성, 사다리게임 도입</div>
-        <div>- ✅ v3.4~v3.44: 버그픽스 시리즈 (토너/랭킹/통계)</div>
-        <div>- ✅ v3.52~v3.61: 레이아웃/CSS/Flex 통일 작업</div>
-        <div>- ✅ v3.71: 라운드 모드 추가 — Circle Method, Kimjak Algorithm</div>
-        <div>- ✅ v3.78428: 라운드 모드 완결, 핸드폰 최적화</div>
-        <div>- ✅ v3.792: 다중 클럽 시스템</div>
-        <div>- ✅ v3.8205~v3.8206: 결과저장 버그수정, 당일 게스트 추가</div>
-        <div>- ✅ v3.90: 코드분리, 데이타 클라우드 시스템 도입</div>
-        <div>- ✅ v3.92: 성별 시스템 (남/녀 랭킹 분리, 혼복 자동배치)</div>
-        <div>- ✅ v3.93~v3.94: gender 시스템 완결, 혼복 필드 신설</div>
-        <div>- ✅ v3.941~v3.942: GAS gender 컬럼 추가, 분석리포트 강화</div>
-        <div>- ✅ v3.943~v3.944: 동성 필터링, 랭킹 테이블 성별 아이콘</div>
-        <div>- ✅ v3.945~v3.949: 주간리셋 개선, 혼복랭킹, 조합랭킹, 연납</div>
-        <div>- ✅ v3.9491~v3.9492: 연납 토글, 분석리포트 카드 재정렬</div>
-        <div>- ✅ v4.0: 다종목 확장 구조, 급수(A/B/C) 시스템 도입</div>
-        <div>- ✅ v4.02: 규칙 엔진 분리 (js/rules/tennis.js)</div>
-        <div>- ✅ v4.03~v4.036: 버그수정, Firestore 마이그레이션, 데이터 안정성 강화</div>
-        <div>- ✅ v4.037: 인트로 개선, 점수기준 UI 통일, 사다리 버튼 통일</div>
-        <div>- ✅ v4.038: 하단 nav 버그 수정, 라운드 대진표 구조 복구, 홈화면 스무스 전환</div>
-      </div>
-    </div>
-
-    <button onclick="document.getElementById('backupModal').style.display='none'" style="width:100%; margin-top:16px; padding:13px; background:var(--wimbledon-sage); color:white; border:none; border-radius:12px; font-size:15px; font-weight:400; cursor:pointer;">닫기</button>
-  </div>
-</div>
+<!-- ✅ v4.1: 데이터 백업 & 복원 화면 -->
 
 <!-- ✅ v3.820: 커스텀 Alert 모달 -->
 <div id="gsAlertModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.45); z-index:25000; justify-content:center; align-items:center;">
@@ -312,7 +270,7 @@
     </div>
   </div>
 
-  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v4.038</div>
+  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v4.1</div>
 </div>
 
 <div id="view-tennis" class="app-screen">
@@ -958,14 +916,78 @@
         <button class="btn-purple-main" onclick="enterTreasurer()" style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--roland-clay);">
           <span class="material-symbols-outlined">lock</span> 총무 모드
         </button>
-        <button class="btn-purple-main" onclick="openBackupModal()" style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--text-gray);">
-          <span class="material-symbols-outlined">cloud_sync</span> 데이터 백업 (추가 예정)
+        <button class="btn-purple-main" onclick="showView('backup')" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+          <span class="material-symbols-outlined">cloud_sync</span> 데이터 백업
         </button>
       </div>
     </div>
   </div>
   <div style="padding: 0 15px;">
     <button class="btn-main" onclick="showView('weather')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
+  </div>
+</div>
+
+<!-- ✅ v4.1: 데이터 백업 & 복원 화면 -->
+<div id="view-backup" class="app-screen" style="display:none;">
+  <div class="header-banner"><span class="material-symbols-outlined" style="font-size:32px;">cloud_sync</span>데이터 백업 / 복원</div>
+  <div style="padding:14px;">
+
+    <!-- 백업 섹션 -->
+    <div style="background:#f8fffe; border:1.5px solid #d0ede5; border-radius:16px; padding:16px; margin-bottom:14px;">
+      <div style="font-size:13px; font-weight:700; color:var(--wimbledon-sage); margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+        <span class="material-symbols-outlined" style="font-size:18px;">download</span>백업 (Export)
+      </div>
+      <div style="font-size:12px; color:#666; margin-bottom:12px; line-height:1.6;">
+        선수 · 경기기록 · 회비 · 공지 · 코트 정보를 JSON 파일로 저장합니다.
+      </div>
+      <button id="backupExportBtn" onclick="exportBackup()" class="btn-purple-main" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+        <span class="material-symbols-outlined">save</span>📥 백업 다운로드
+      </button>
+    </div>
+
+    <!-- 복원 섹션 -->
+    <div style="background:#fff8f8; border:1.5px solid #f0d0d0; border-radius:16px; padding:16px; margin-bottom:14px;">
+      <div style="font-size:13px; font-weight:700; color:var(--roland-clay); margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+        <span class="material-symbols-outlined" style="font-size:18px;">upload</span>복원 (Import)
+      </div>
+      <div style="font-size:12px; color:#666; margin-bottom:12px; line-height:1.6;">
+        ⚠️ 현재 데이터가 백업 파일로 <b>완전 교체</b>됩니다.<br>관리자 비번 확인 후 진행됩니다.
+      </div>
+      <input type="file" id="restoreFileInput" accept=".json" style="display:none;" onchange="importBackup(this.files[0]); this.value=''">
+      <button onclick="document.getElementById('restoreFileInput').click()" class="btn-purple-main" style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--roland-clay);">
+        <span class="material-symbols-outlined">folder_open</span>백업 파일 선택해서 복원
+      </button>
+    </div>
+
+    <!-- 주요 업데이트 브리핑 -->
+    <div class="section-card" style="display:block;">
+      <div class="sub-rank-title" style="display:flex; align-items:center; gap:6px; margin-bottom:12px;">
+        <span class="material-symbols-outlined" style="font-size:20px; vertical-align:middle;">history</span>주요 업데이트 브리핑
+      </div>
+      <div style="font-size:11px; color:#555; line-height:1.8; max-height:220px; overflow-y:auto; padding:12px; border:1px solid #eee; border-radius:10px;">
+        <div style="color:#888; margin-bottom:8px; font-size:10px;">📌 아키텍처 참고</div>
+        <div style="color:#999; margin-bottom:4px;">- <b>Data</b>: 전체 덮어쓰기 / <b>MatchLog</b>: appendRow 누적</div>
+        <div style="color:#999; margin-bottom:4px;">- 개인통계(파트너/천적/최근폼)는 <b>MatchLog 기반</b>으로 계산</div>
+        <div style="color:#999; margin-bottom:10px;">- 토너먼트 <b>실전 모드</b>: 진행 중 버퍼 → 우승 확정 순간에만 커밋</div>
+        <div style="border-top:1px dashed #eee; margin-bottom:8px;"></div>
+        <div>- ✅ <b>v1.0</b>: 광명 날씨 앱</div>
+        <div>- ✅ <b>v2.0</b>: 단일게임(단/복식) 로직 완성, 랭킹 로직 완성</div>
+        <div>- ✅ <b>v2.5</b>: 토너먼트 모드 도입</div>
+        <div>- ✅ <b>v3.0</b>: 사다리게임 추가</div>
+        <div>- ✅ <b>v3.4~v3.61</b>: 버그픽스, 레이아웃/CSS 통일</div>
+        <div>- ✅ <b>v3.71~v3.792</b>: 라운드 모드, 다중 클럽 시스템</div>
+        <div>- ✅ <b>v3.82~v3.90</b>: 버그수정, 당일 게스트, 클라우드 도입</div>
+        <div>- ✅ <b>v3.92~v3.949</b>: 성별 시스템, 혼복, 랭킹 강화</div>
+        <div>- ✅ <b>v4.0~v4.036</b>: 다종목 구조, 급수, Firestore 마이그레이션</div>
+        <div>- ✅ <b>v4.037</b>: 인트로 개선, 점수기준 UI 통일, 사다리 버튼 통일</div>
+        <div>- ✅ <b>v4.038</b>: nav 버그 수정, 라운드 구조 복구, 사다리 성별 아이콘</div>
+        <div>- ✅ <b>v4.1</b>: 데이터 백업/복원 — JSON export/import (선수·경기·회비·공지·코트)</div>
+      </div>
+    </div>
+
+  </div>
+  <div style="padding: 0 15px;">
+    <button class="btn-main" onclick="showView('admin')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
   </div>
 </div>
 

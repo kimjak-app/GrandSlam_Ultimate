@@ -397,3 +397,137 @@ async function pushFeeData() {
     return false;
   }
 }
+
+// ========================================
+// ✅ v4.1: 데이터 백업 / 복원
+// ========================================
+
+async function exportBackup() {
+  const btn = document.getElementById('backupExportBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '백업 중...'; }
+  try {
+    const clubId = getActiveClubId() || 'default';
+    const clubName = (currentClub && currentClub.name) ? currentClub.name : clubId;
+
+    // Firestore에서 최신 데이터 직접 읽기
+    const [playerSnap, logSnap, noticeDoc, feeDoc] = await Promise.all([
+      _clubRef(clubId).collection('players').get(),
+      _clubRef(clubId).collection('matchLog').orderBy('ts', 'desc').limit(500).get(),
+      _clubRef(clubId).collection('settings').doc('notices').get(),
+      _clubRef(clubId).collection('settings').doc('feeData').get(),
+    ]);
+
+    const backupData = {
+      version: 'v4.1',
+      exportedAt: new Date().toISOString(),
+      clubId,
+      clubName,
+      players: playerSnap.docs.map(d => d.data()),
+      matchLog: logSnap.docs.map(d => d.data()),
+      courtNotices: noticeDoc.exists ? (noticeDoc.data().courtNotices || []) : [],
+      announcements: noticeDoc.exists ? (noticeDoc.data().announcements || []) : [],
+      feeData: feeDoc.exists ? (feeDoc.data().feeData || {}) : {},
+      monthlyFeeAmount: feeDoc.exists ? (feeDoc.data().monthlyFeeAmount || 0) : 0,
+    };
+
+    const json = JSON.stringify(backupData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `GrandSlam_${clubName}_${dateStr}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    gsAlert(`✅ 백업 완료!\n\n파일: GrandSlam_${clubName}_${dateStr}.json\n선수 ${backupData.players.length}명 / 경기 ${backupData.matchLog.length}건 포함`);
+  } catch (e) {
+    console.error('exportBackup error:', e);
+    gsAlert('❌ 백업 실패\n\n' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📥 백업 다운로드'; }
+  }
+}
+
+async function importBackup(file) {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+
+    // 기본 유효성 검사
+    if (!data.players || !data.matchLog) {
+      gsAlert('❌ 유효하지 않은 백업 파일입니다.');
+      return;
+    }
+
+    const playerCount = data.players.length;
+    const logCount = data.matchLog.length;
+    const exportedAt = data.exportedAt ? data.exportedAt.slice(0, 10) : '알 수 없음';
+
+    gsConfirm(
+      `⚠️ 복원 확인\n\n백업 날짜: ${exportedAt}\n클럽: ${data.clubName || data.clubId}\n선수: ${playerCount}명 / 경기: ${logCount}건\n\n현재 데이터가 모두 교체됩니다.\n계속하시겠습니까?`,
+      async (ok) => {
+        if (!ok) return;
+        // 관리자 비번 확인
+        checkClubPin(async (passed) => {
+          if (!passed) return;
+          const overlay = $('loading-overlay');
+          if (overlay) overlay.style.display = 'flex';
+          try {
+            const clubId = getActiveClubId() || 'default';
+
+            // 선수 복원
+            await _fsSavePlayers(clubId, data.players);
+            players = data.players.map(ensure);
+
+            // matchLog 복원 (기존 삭제 후 재저장)
+            const logCol = _clubRef(clubId).collection('matchLog');
+            const oldSnap = await logCol.get();
+            const delBatch = _db.batch();
+            oldSnap.docs.forEach(d => delBatch.delete(d.ref));
+            await delBatch.commit();
+            if (data.matchLog.length > 0) {
+              await _fsAppendMatchLog(clubId, data.matchLog);
+            }
+            matchLog = normalizeMatchLog(data.matchLog);
+
+            // notices 복원
+            await _clubRef(clubId).collection('settings').doc('notices').set({
+              courtNotices: data.courtNotices || [],
+              announcements: data.announcements || [],
+            });
+            courtNotices = data.courtNotices || [];
+            announcements = data.announcements || [];
+
+            // feeData 복원
+            await _clubRef(clubId).collection('settings').doc('feeData').set({
+              feeData: data.feeData || {},
+              monthlyFeeAmount: data.monthlyFeeAmount || 0,
+            });
+            feeData = data.feeData || {};
+            monthlyFeeAmount = data.monthlyFeeAmount || 0;
+
+            // UI 갱신
+            updateSeason();
+            updateWeekly();
+            renderLadderPlayerPool();
+            initTournament();
+            renderStatsPlayerList();
+            loadCourtInfo();
+            loadNotices();
+
+            gsAlert(`✅ 복원 완료!\n선수 ${playerCount}명 / 경기 ${logCount}건 복원되었습니다.`);
+          } catch (e) {
+            console.error('importBackup error:', e);
+            gsAlert('❌ 복원 실패\n\n' + e.message);
+          } finally {
+            if (overlay) overlay.style.display = 'none';
+          }
+        });
+      }
+    );
+  } catch (e) {
+    gsAlert('❌ 파일 읽기 실패\n\nJSON 형식이 올바르지 않습니다.');
+  }
+}
