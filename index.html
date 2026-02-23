@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.036</title>
+  <title>GrandSlam Ultimate v4.038</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -15,9 +15,52 @@
 <body>
 <div id="splash">
   <img src="icon.png" alt="GrandSlam Logo">
-  <div class="loading-text">⌛ 데이터 동기화 중...</div>
 </div>
 <div id="loading-overlay">⌛ 데이터 동기화 중...</div>
+
+<!-- ✅ v4.037: 데이터 백업 & 업데이트 브리핑 모달 -->
+<div id="backupModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:25000; justify-content:center; align-items:flex-start; overflow-y:auto; padding:20px 0;">
+  <div style="background:#fff; border-radius:20px; padding:24px 20px 20px; width:340px; max-width:92vw; margin:20px auto; box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+    <div style="font-size:16px; font-weight:700; color:var(--text-dark); margin-bottom:4px; display:flex; align-items:center; gap:8px;">
+      <span class="material-symbols-outlined" style="color:var(--wimbledon-sage);">cloud_sync</span>데이터 백업
+    </div>
+    <div style="font-size:12px; color:#999; margin-bottom:16px;">백업 기능은 추후 추가 예정입니다.</div>
+
+    <div style="border-top:1px solid #eee; padding-top:14px;">
+      <div style="font-size:13px; font-weight:700; color:var(--wimbledon-sage); margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+        <span class="material-symbols-outlined" style="font-size:16px;">database</span>주요 업데이트 브리핑
+      </div>
+      <div style="font-size:10px; color:#555; line-height:1.7; max-height:55vh; overflow-y:auto; padding-right:4px;">
+        <div style="color:#888; margin-bottom:6px;">- <b>Data</b>: 전체 덮어쓰기 / <b>MatchLog</b>: appendRow 누적</div>
+        <div style="color:#888; margin-bottom:6px;">- 개인통계(파트너/천적/최근폼)는 <b>MatchLog 기반</b>으로 계산</div>
+        <div style="color:#888; margin-bottom:10px;">- 토너먼트 <b>실전 모드</b>: 진행 중 버퍼 → 우승 확정 순간에만 커밋</div>
+        <div>- ✅ v1.0: 광명 날씨 앱</div>
+        <div>- ✅ v2.0: 단일게임(단복식) 로직 완성, 랭킹 로직 완성</div>
+        <div>- ✅ v3.0: 토너먼트 방식 로직 완성, 사다리게임 도입</div>
+        <div>- ✅ v3.4~v3.44: 버그픽스 시리즈 (토너/랭킹/통계)</div>
+        <div>- ✅ v3.52~v3.61: 레이아웃/CSS/Flex 통일 작업</div>
+        <div>- ✅ v3.71: 라운드 모드 추가 — Circle Method, Kimjak Algorithm</div>
+        <div>- ✅ v3.78428: 라운드 모드 완결, 핸드폰 최적화</div>
+        <div>- ✅ v3.792: 다중 클럽 시스템</div>
+        <div>- ✅ v3.8205~v3.8206: 결과저장 버그수정, 당일 게스트 추가</div>
+        <div>- ✅ v3.90: 코드분리, 데이타 클라우드 시스템 도입</div>
+        <div>- ✅ v3.92: 성별 시스템 (남/녀 랭킹 분리, 혼복 자동배치)</div>
+        <div>- ✅ v3.93~v3.94: gender 시스템 완결, 혼복 필드 신설</div>
+        <div>- ✅ v3.941~v3.942: GAS gender 컬럼 추가, 분석리포트 강화</div>
+        <div>- ✅ v3.943~v3.944: 동성 필터링, 랭킹 테이블 성별 아이콘</div>
+        <div>- ✅ v3.945~v3.949: 주간리셋 개선, 혼복랭킹, 조합랭킹, 연납</div>
+        <div>- ✅ v3.9491~v3.9492: 연납 토글, 분석리포트 카드 재정렬</div>
+        <div>- ✅ v4.0: 다종목 확장 구조, 급수(A/B/C) 시스템 도입</div>
+        <div>- ✅ v4.02: 규칙 엔진 분리 (js/rules/tennis.js)</div>
+        <div>- ✅ v4.03~v4.036: 버그수정, Firestore 마이그레이션, 데이터 안정성 강화</div>
+        <div>- ✅ v4.037: 인트로 개선, 점수기준 UI 통일, 사다리 버튼 통일</div>
+        <div>- ✅ v4.038: 하단 nav 버그 수정, 라운드 대진표 구조 복구, 홈화면 스무스 전환</div>
+      </div>
+    </div>
+
+    <button onclick="document.getElementById('backupModal').style.display='none'" style="width:100%; margin-top:16px; padding:13px; background:var(--wimbledon-sage); color:white; border:none; border-radius:12px; font-size:15px; font-weight:400; cursor:pointer;">닫기</button>
+  </div>
+</div>
 
 <!-- ✅ v3.820: 커스텀 Alert 모달 -->
 <div id="gsAlertModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.45); z-index:25000; justify-content:center; align-items:center;">
@@ -269,7 +312,7 @@
     </div>
   </div>
 
-  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v4.036</div>
+  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v4.038</div>
 </div>
 
 <div id="view-tennis" class="app-screen">
@@ -530,65 +573,7 @@
     <table id="pL" class="tennis-table player-mgmt-table"><tbody></tbody></table>
     
 
-    <div class="rule-box" style="margin-top:16px;">
-      <div class="r-tt"><span class="material-symbols-outlined">database</span>주요 업데이트 브리핑</div>
-      <div class="r-mini">- <b>Data</b>: 전체 덮어쓰기</div>
-      <div class="r-mini">- <b>MatchLog</b>: appendRow로 누적</div>
-      <div class="r-line r-mini">- 개인통계(파트너/천적/최근폼)는 <b>MatchLog 기반</b>으로 계산</div>
-      <div class="r-line r-mini">- 토너먼트 <b>실전 모드</b>: 진행 중 버퍼 → 우승 확정 순간에만 커밋</div>
 
-      <div class="r-line r-mini">- ✅ v1.0: 광명 토브 클럽이 있는 광명 날씨 알려주는 앱</div>
-      <div class="r-line r-mini">- ✅ v2.0: 클럽 회원내 단일게임(단복식) 로직 완성, 승점에 따른 랭킹로직 완성, 그랜드슬램 이름사용</div>
-      <div class="r-line r-mini">- ✅ v3.0: 토너먼트 방식 로직 완성, 사다리게임 도입</div>
-      <div class="r-line r-mini">- ✅ v3.4: 토너먼트 버튼 클릭 버그(하단 네비 겹침) 픽스</div>
-      <div class="r-line r-mini">- ✅ v3.41: 단식 9명 출전 시 최하위 증발 버그 픽스(예선/대기석 방식)</div>
-      <div class="r-line r-mini">- ✅ v3.42: 시즌/주간 + 종목별 테이블 전부 ▲▼ 변동 표시 + (-위) 버그 픽스</div>
-      <div class="r-line r-mini">- ✅ v3.43: 개인통계 선택 버튼 활성화 + 최근폼/멘트 불일치 픽스</div>
-      <div class="r-line r-mini">- ✅ v3.44: 랭킹 승률 칸 확대 + 개인통계(단/복 분리) 개선</div>
-      <div class="r-line r-mini">- ✅ v3.52 Stable: 표에서 말줄임(...) 발생 시 자동 2줄 표시(autofit)</div>
-      <div class="r-line r-mini">- ✅ v3.54: 게스트 분리 랭킹(시즌 종합/복식/단식) + 경기 입력 풀 [G] 표시</div>
-      <div class="r-line r-mini">- ✅ v3.58: 경기 입력 선수 풀 — 회원/게스트 영역 시각 분리 (GUEST LIST 구분선)</div>
-      <div class="r-line r-mini">- ✅ v3.59: 토너/통계/사다리 Flex 레이아웃 통일 — 단일게임 스타일 적용 (상하분리+큼직버튼)</div>
-      <div class="r-line r-mini">- ✅ v3.60: CSS 클래스 충돌 제거 — 순수 인라인 스타일 + !important로 Grid 충돌 완전 해결</div>
-      <div class="r-line r-mini">- ✅ v3.61: HTML 부모 컨테이너 클래스 제거 — player-grid/pool-ladder 클래스 삭제로 Grid 완전 차단</div>
-      <div class="r-line r-mini">- ✅ v3.693: UI 통일 완성 — ① 게스트 라벨만 회색 ② 왼쪽정렬 ③ 전체 뒤로가기 버튼 ④ 차트 게스트제외</div>
-      <div class="r-line r-mini">- ✅ v3.71: 라운드 모드 추가 — Circle Method 원형 회전 방식, Kimjak Algorithm 순위 산정, 토너먼트 전환</div>
-      <div class="r-line r-mini">- ✅ v3.78428: 라운드 모드 완결. 핸드폰 화면 최적화 </div>
-      <div class="r-line r-mini">- ✅ v3.792: 다중 클럽 시스템 — 자동 시트 생성, 마스터 보안, 은은한 클럽 색상, 레이아웃 수정</div>
-      <div class="r-line r-mini">- ✅ v3.8205: 버그수정 — 단일게임/토너먼트/코트예약 결과저장 불가 버그 수정 (중괄호 누락 5건)</div>
-      <div class="r-line r-mini">- ✅ v3.8205_1: 버그수정 — 전체삭제 시 GAS 응답으로 선수 데이터 복원되는 버그 수정</div>
-      <div class="r-line r-mini">- ✅ v3.8205_2: 버그수정 — 전체삭제 후 reload→sync() 레이스컨디션 제거, UI 직접 갱신으로 변경</div>
-      <div class="r-line r-mini">- ✅ v3.8205_3: 버그수정 — 전체삭제 GAS adminResetAll+DELETE 직접 호출로 서버 데이터 완전 삭제</div>
-      <div class="r-line r-mini">- ✅ v3.8205_4: 버그수정 — 복식 최고 파트너 승1개 이상 조건 추가, 0승 파트너는 분발 파트너로 이동</div>
-      <div class="r-line r-mini">- ✅ v3.8206: 신기능 — 당일 게스트 추가 (순위/통계 제외, matchLog만 기록), 1대2대결용 버튼 대체</div>
-      <div class="r-line r-mini">- ✅ v3.90: 코드분리작업, 데이타 클라우드 시스템 도입</div>
-      <div class="r-line r-mini">- ✅ v3.92: 프로급 이벤트 아키텍처 보강</div>
-      <div class="r-line r-mini">- ✅ v3.92 남/녀 성별 시스템 — 등록/목록/풀 뱃지, 랭킹 종합·남자부·여자부 탭 분리, 혼성 복식 자동배치, 토너먼트·라운드 기존 배치방식(랭킹/무작위/지정) 동작 확인</div>
-      <div class="r-line r-mini">- ✅ v3.93 디자인 통일 — 이모지 전면 제거, Material Symbols Outlined(male/female 아이콘)으로 교체. 랭킹 테이블 성별 컬럼 제거 → 이름 셀 인라인 아이콘. state.js gender 필드('M'|'F') 명세 정규화</div>
-      <div class="r-line r-mini">- ✅ v3.94 gender 시스템 완결 — gender 저장버그 수정(pushPayload race condition), 사다리 아이콘 제거, 혼복 필드(mScore/mWins/mLosses) 신설, 랭킹 종합고정+복식남녀분리+혼복랭킹+단식남녀분리, 주간 자동리셋(월요일 기준)</div>
-      <div class="r-line r-mini">- ✅ v3.941 gender 근본 수정 — GAS DATA_FIELDS에 gender 컬럼 추가, 기존 시트 자동 마이그레이션('M' 기본값), 혼복 판별 개선(한 팀이라도 남+여면 해당 팀 혼복 점수 취득)</div>
-      <div class="r-line r-mini">- ✅ v3.942 랭킹 탭 버그 수정(남자부/여자부 섹션 분리 show/hide), 선수 분석 리포트 이성간 단식(최고승률/천적) + 혼복 최고/분발 파트너 + 혼복 남자/여자 천적 카드 추가</div>
-      <div class="r-line r-mini">- ✅ v4.036 데이터 안정성 강화 — doc id sanitize(특수문자→_), Player default(sport/level/attributes) 주입, Match default(sport) 주입, matchLog orderBy(ts,desc)+limit(500)</div>
-      <div class="r-line r-mini">- ✅ v4.035 Firestore 마이그레이션 — api.js 전체 GAS→Firestore 교체 (함수 시그니처 100% 유지), Firebase SDK compat 추가, 컬렉션 구조: clubs/{clubId}/players·matchLog·settings/notices·settings/feeData</div>
-      <div class="r-line r-mini">- ✅ v4.034 조합 랭킹 정렬 기준 승수→승률로 수정 — 복식/혼복 조합 랭킹 메인 순위 및 동점 처리 모두 승률 기준 적용</div>
-      <div class="r-line r-mini">- ✅ v4.033 GAS Code.gs isFeeExempt 필드 추가 — DATA_FIELDS/makeEmptyPlayer_/normalizePlayers_/cleanPlayer_/writePlayersOverwrite_/migrateFeeExemptColumn_ 전부 처리, 회비 면제 설정 GAS 완전 저장/로드 지원</div>
-      <div class="r-line r-mini">- ✅ v4.032 회비 면제 설정 추가 — isFeeExempt 필드 신설, 총무 면제 설정 하단 💸회비 면제 피커 추가, 납부현황/재정계산/완납해제/납부율요약/카톡복사 전부 면제 회원 제외 처리</div>
-      <div class="r-line r-mini">- ✅ v4.031 버그수정(sync() 완료 후 fetchFeeData 병렬 호출→전 클럽 재정관리 수입 정상화), 1VS2 클럽게임설정 완전 제거, 랭킹 서브탭 버튼 A조/B조/C조, 선수관리 뱃지/버튼/라디오 A/B/C 알파벳만, 분석리포트 제목 (A조) 유지</div>
-      <div class="r-line r-mini">- ✅ v4.03 버그수정(isTreasurer ensure 누락→토브클럽 회비→재정 수입0원), 이성단식 최고승률 텍스트 확정+아이콘제거, 혼복/연승/연패 카드 아이콘 제거, A급→A조(랭킹탭/선수관리/뱃지/버튼/알럿), 분석리포트 제목 (A조) 표시, 조합랭킹 min-width 순위/승패 세로세워짐 해결, 승률1위 셀 호주색 하이라이트</div>
-      <div class="r-line r-mini">- ✅ v4.02 규칙 엔진 분리 — js/rules/tennis.js 신설, 전 파일 하드코딩 점수 상수 제거, state.js SCORING_RULES 상수 rules/tennis.js로 이전</div>
-      <div class="r-line r-mini">- ✅ v4.0 다종목 확장 구조 씨앗 — DEFAULT_SPORT/MATCH_TYPE 상수, player.level(A/B/C 급수) + player.attributes 필드 신설, 랭킹 급수 필터 탭, 선수관리 급수 라디오+뱃지+토글버튼, 랭킹 테이블 min-width 가로스크롤 방식으로 이름 말줄임 완전 해결</div>
-      <div class="r-line r-mini">- ✅ v3.9492 분석리포트 카드 재정렬(복식그룹/혼복그룹), 신규카드(연속기록/상대전적TOP3/요일별승률/월별활동), 단식라이벌</div>
-      <div class="r-line r-mini">- ✅ v3.9491 연납 토글 버튼 추가, 연납자 납부 집계 수정(syncFeeToFinance/copyFeeStatus/feeSummary)</div>
-      <div class="r-line r-mini">- ✅ v3.949 총무 면제(isTreasurer), 납부율 요약, 연납 자동체크, 지출 카테고리(코트비/장비/기타)</div>
-      <div class="r-line r-mini">- ✅ v3.948 랭킹 차트 성별 탭 연동(남자부/여자부 선택 시 해당 선수만 순위 추이 표시)</div>
-      <div class="r-line r-mini">- ✅ v3.947 혼복필드 matchLog 재계산(updateSeason 진입시 mScore/mWins/mLosses 보정)</div>
-      <div class="r-line r-mini">- ✅ v3.946 이성간단식복식 종합만반영(sScore/dScore미포함), 혼복랭킹 직접렌더(기록없음버그수정), 단식복식 0경기선수 미표시</div>
-      <div class="r-line r-mini">- ✅ v3.945 주간리셋 방식 변경(앱로드→첫게임저장시 조용히 리셋, UTC버그 제거), 혼복랭킹 남/여 분리 표시, 복식/혼복 조합 랭킹 추가(승리수정렬+승률+상하스크롤)</div>
-      <div class="r-line r-mini">- ✅ v3.943 동성 필터링(단식/복식 파트너/천적 동성만 집계), 이성간/혼복 카드 제목 가운데정렬, 선수풀 CSS Grid 반응형(3열→2열→1열 자동, 버튼 균등 확장)</div>
-      <div class="r-line r-mini">- ✅ v3.944 랭킹 테이블 성별 아이콘만 세로모드 숨김/가로모드 표시 — 선수풀/통계 아이콘은 항상 표시</div>
-    </div>
-  
-    
     <hr>
     <button class="btn-sub sky" onclick="resetScoresKeepPlayers()">점수 초기화 (선수유지)</button>
     <button class="btn-sub royal" onclick="resetWeeklyOnly()">주간 리셋</button>
@@ -790,11 +775,15 @@
       <button class="btn-main" onclick="makeBracket()"><span class="material-symbols-outlined title-ico">account_tree</span>대진표 생성하기</button>
 
       <div class="rule-box" style="margin-top:14px;">
-        <div class="r-tt"><span class="material-symbols-outlined">bug_report</span>v3.4 토너 버튼 픽스</div>
-        <div class="r-mini">- 하단 네비 겹침/터치 씹힘 방지: 화면 padding-bottom 확장</div>
-        <div class="r-mini">- 버튼 클릭 안정: z-index / pointer-events / touch-action 보강</div>
-        <div class="r-line r-mini">✅ v3.41: 단식 9명 이상 → 예선(8위 vs 9위) 승자가 8강 진입</div>
-        <div class="r-line r-mini">✅ v3.42: 토너 실전 커밋 시 “지난순위 스냅샷” 저장 → 전 테이블 ▲▼ 정상 표시</div>
+        <div class="r-tt"><span class="material-symbols-outlined">info</span>토너먼트 점수 획득 기준</div>
+        <div class="r-mini">🎾 <b>참여</b>: +1 (토너먼트당 1회)</div>
+        <div class="r-line r-mini">👥 <b>복식</b></div>
+        <div class="r-mini">- 승리: <b>+2</b> (총점 3점) / W+1</div>
+        <div class="r-mini">- 패배: <b>-0.5</b> (총점 0.5점) / L+1</div>
+        <div class="r-line r-mini">👤 <b>단식</b></div>
+        <div class="r-mini">- 승리: <b>+3</b> (총점 4점) / W+1</div>
+        <div class="r-mini">- 패배: <b>-0.5</b> (총점 0.5점) / L+1</div>
+        <div class="r-line r-mini">🏆 <b>진출 보너스</b>: 우승(+3), 준우승(+2), 4강(+1), 8강(+0.5)</div>
       </div>
     </div>
 
@@ -877,6 +866,19 @@
       </div>
 
       <button id="round-gen-btn" class="btn-purple-main" onclick="generateRoundSchedule()" style="opacity:0.6; background:var(--roland-clay);"><span class="material-symbols-outlined title-ico">description</span>대진표 생성하기</button>
+
+      <div class="rule-box" style="margin-top:14px;">
+        <div class="r-tt"><span class="material-symbols-outlined">info</span>라운드 점수 획득 기준</div>
+        <div class="r-mini">🎾 <b>참여</b>: +1</div>
+        <div class="r-line r-mini">👥 <b>복식</b></div>
+        <div class="r-mini">- 승리: <b>+2</b> (총점 3점) / W+1</div>
+        <div class="r-mini">- 패배: <b>-0.7</b> (총점 0.3점) / L+1</div>
+        <div class="r-line r-mini">👤 <b>단식</b></div>
+        <div class="r-mini">- 승리: <b>+3</b> (총점 4점) / W+1</div>
+        <div class="r-mini">- 패배: <b>-0.5</b> (총점 0.5점) / L+1</div>
+        <div class="r-line r-mini">🏆 <b>미니 토너먼트</b>: 승리당 +1점, 부전승 +1점</div>
+        <div class="r-line r-mini">📊 <b>순위</b>: 점수 &gt; 승률 &gt; 승수 &gt; 경기참여수</div>
+      </div>
     </div>
 
     <div id="round-match-area" style="display:none;">
@@ -900,6 +902,10 @@
       </div>
       
       <button id="round-tournament-btn" class="btn-purple-main" onclick="convertRoundToTournament()" style="opacity:0.6; background:var(--roland-clay); margin-top:10px;"><span class="material-symbols-outlined title-ico">tour</span>토너먼트 Go</button>
+      <div class="rule-box" style="margin-top:12px;">
+        <div class="r-mini">✅ <b>완료</b> 버튼을 누르면 현재까지의 대진이 인정되며 라운드가 완료됩니다.</div>
+        <div class="r-line r-mini">🏆 <b>토너먼트 Go</b> 버튼을 누르면 라운드 완료 후 이벤트 형태의 미니 토너먼트가 생성됩니다.</div>
+      </div>
     </div>
   </div>
   <div style="padding: 0 15px;">
@@ -927,12 +933,9 @@
           <span class="material-symbols-outlined">stairs</span> 사다리 (번외)
         </button>
         <button class="btn-purple-main" onclick="comingSoon('교류전')" style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--text-gray);">
-          <span class="material-symbols-outlined">handshake</span> 교류전 (4.0 예정)
+          <span class="material-symbols-outlined">handshake</span> 교류전 (5.0 예정)
         </button>
       </div>
-      <p style="margin-top:12px; color:#8E8E93; font-size:12px; line-height:1.4;">
-        ※ v3.80: 홈 화면 개편! 교류전은 v4.0에서 본격 도입.
-      </p>
     </div>
   <div style="padding: 0 15px;">
     <button class="btn-main" onclick="showView('weather')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
@@ -955,13 +958,10 @@
         <button class="btn-purple-main" onclick="enterTreasurer()" style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--roland-clay);">
           <span class="material-symbols-outlined">lock</span> 총무 모드
         </button>
-        <button class="btn-purple-main" onclick="comingSoon('데이터 백업')" style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--text-gray);">
+        <button class="btn-purple-main" onclick="openBackupModal()" style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--text-gray);">
           <span class="material-symbols-outlined">cloud_sync</span> 데이터 백업 (추가 예정)
         </button>
       </div>
-            <p style="margin-top:12px; color:#8E8E93; font-size:12px; line-height:1.4;">
-        ※ v3.81: 총무 모드 추가! (회비·재정·코트공지·공지사항 관리)
-      </p>
     </div>
   </div>
   <div style="padding: 0 15px;">

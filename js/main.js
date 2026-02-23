@@ -1,12 +1,24 @@
-// ✅ Splash(인트로) 안전 종료: 네트워크/CDN 지연으로 window.load가 늦어져도 앱이 멈춘 것처럼 보이지 않게
+// ✅ v4.038: Splash 안전 종료 — 1초 홀드 후 페이드아웃, 홈 화면 스무스 등장
 function hideSplashSafe() {
   const sp = $('splash');
   if (!sp) return;
-  // 이미 숨김 처리된 경우 중복 실행 방지
   if (sp.dataset.hidden === '1') return;
   sp.dataset.hidden = '1';
-  sp.classList.add('hide');
-  setTimeout(() => { sp.style.display = 'none'; }, 700);
+
+  const homeEl = document.getElementById('view-home');
+  if (homeEl) {
+    homeEl.style.opacity = '0';
+    homeEl.style.transition = 'opacity 0.5s ease';
+  }
+
+  // 1초 홀드 후 원본 방식 그대로 hide
+  setTimeout(() => {
+    sp.classList.add('hide');
+    setTimeout(() => {
+      sp.style.display = 'none';
+      if (homeEl) homeEl.style.opacity = '1';
+    }, 700);
+  }, 1000);
 }
 
 // ✅ v3.817: DOMContentLoaded로 변경 + 병렬 fetch로 스플래시 딜레이 최소화
@@ -137,3 +149,9 @@ window.addEventListener('beforeunload', () => {
     pushDataOnly().catch(e => console.warn('beforeunload 자동저장 오류:', e));
   }
 });
+
+// ✅ v4.037: 데이터 백업 모달 열기
+function openBackupModal() {
+  const modal = document.getElementById('backupModal');
+  if (modal) modal.style.display = 'flex';
+}

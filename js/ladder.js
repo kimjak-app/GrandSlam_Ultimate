@@ -7,16 +7,24 @@
     // ✅ v3.816: HIDDEN_PLAYERS 제외
     const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name));
 
+    // ✅ v4.037: 랭킹 계산
+    let rankMap = {};
+    try { rankMap = computeRanksByScoreOnly('score', 'wins', 'losses'); } catch(e) {}
+
     let html = '<div style="border: 2px solid #E5E5EA; border-radius: 15px; padding: 15px; background: white; margin-bottom: 30px;">';
 
     // 1. 정식 회원 섹션
     html += '<div style="font-size:12px; color:#666; margin-bottom:8px; font-weight:bold; text-align:left; padding-left:5px;">정식 회원</div>';
-    html += '<div style="display:flex !important; flex-wrap:wrap !important; justify-content:flex-start !important; gap:8px; margin-bottom:20px;">';
+    html += '<div class="player-pool" style="margin-bottom:20px;">';
     members.forEach((p, i) => {
       const chkId = `ladder_p_${i}`;
       const isChecked = ldP.includes(p.name);
+      const rank = rankMap[p.name] || (i + 1);
+      const gIcon = (p.gender === 'F')
+        ? '<span class="material-symbols-outlined" style="font-size:12px; color:#E8437A; vertical-align:middle;">female</span>'
+        : '<span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5; vertical-align:middle;">male</span>';
       html += `<input type="checkbox" id="${chkId}" class="p-chk" value="${escapeHtml(p.name)}" ${isChecked ? 'checked' : ''} onclick="tkL('${escapeHtml(p.name).replace(/'/g,"&#39;")}')">`;
-      html += `<label for="${chkId}" class="p-label" style="min-width:80px; flex:0 0 auto;">${escapeHtml(p.name)}</label>`;
+      html += `<label for="${chkId}" class="p-label">${gIcon}${escapeHtml(p.name)}<span class="p-rank">${rank}위</span></label>`;
     });
     html += '</div>';
 
@@ -25,13 +33,12 @@
       html += '<div style="width:100%; margin:10px 0 15px; border-top:1px dashed #ddd; position:relative;">';
       html += '<span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:#fff; padding:0 10px; font-size:11px; color:#999; font-weight:bold;">GUEST LIST</span>';
       html += '</div>';
-
-      html += '<div style="display:flex !important; flex-wrap:wrap !important; justify-content:flex-start !important; gap:8px;">';
+      html += '<div class="player-pool">';
       guests.forEach((p, i) => {
         const chkId = `ladder_g_${i}`;
         const isChecked = ldP.includes(p.name);
         html += `<input type="checkbox" id="${chkId}" class="p-chk" value="${escapeHtml(p.name)}" ${isChecked ? 'checked' : ''} onclick="tkL('${escapeHtml(p.name).replace(/'/g,"&#39;")}')">`;
-        html += `<label for="${chkId}" class="p-label guest-label" style="min-width:80px; flex:0 0 auto;">[G] ${escapeHtml(p.name)}</label>`;
+        html += `<label for="${chkId}" class="p-label guest-label">[G] ${escapeHtml(p.name)}</label>`;
       });
       html += '</div>';
     }
@@ -41,12 +48,12 @@
       html += '<div style="width:100%; margin:10px 0 15px; border-top:1px dashed #ddd; position:relative;">';
       html += '<span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:white; padding:0 10px; font-size:11px; color:var(--aussie-blue); font-weight:bold;">당일 게스트</span>';
       html += '</div>';
-      html += '<div style="display:flex !important; flex-wrap:wrap !important; justify-content:flex-start !important; gap:8px;">';
+      html += '<div class="player-pool">';
       oneTimePlayers.forEach((name, i) => {
         const chkId = `ladder_ot_${i}`;
         const isChecked = ldP.includes(name);
         html += `<input type="checkbox" id="${chkId}" class="p-chk" value="${escapeHtml(name)}" ${isChecked ? 'checked' : ''} onclick="tkL('${escapeHtml(name).replace(/'/g,"&#39;")}')">`;
-        html += `<label for="${chkId}" class="p-label day-guest-label" style="min-width:80px; flex:0 0 auto;">[당일] ${escapeHtml(name)}</label>`;
+        html += `<label for="${chkId}" class="p-label day-guest-label" style="position:relative; padding-right:22px;">[당일] ${escapeHtml(name)}</label>`;
       });
       html += '</div>';
     }
