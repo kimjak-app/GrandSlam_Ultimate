@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.1</title>
+  <title>GrandSlam Ultimate v4.12</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -270,7 +270,7 @@
     </div>
   </div>
 
-  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v4.1</div>
+  <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">v4.12</div>
 </div>
 
 <div id="view-tennis" class="app-screen">
@@ -697,6 +697,15 @@
     <div id="welcome-msg" style="text-align:center; padding:50px 0; color:#ccc;">
       <span class="material-symbols-outlined" style="font-size:40px;">query_stats</span><br>선수를 클릭하면 분석이 시작됩니다.
     </div>
+
+    <!-- ✅ v4.12: matchLog 더보기 버튼 -->
+    <div style="margin:16px 0 4px; text-align:center;">
+      <button id="btn-load-more-log" onclick="loadMoreMatchLog()" class="btn-purple-main" style="background:var(--aussie-blue); font-size:13px; padding:10px 18px;">
+        <span class="material-symbols-outlined" style="font-size:16px; vertical-align:middle;">history</span> 이전 기록 더 불러오기 (500개씩)
+      </button>
+      <div style="margin-top:6px; font-size:11px; color:var(--text-gray);">※ 최근 500건만 먼저 로딩 — 통계가 부족하면 더 불러오기</div>
+    </div>
+
   </div>
   <div style="padding: 0 15px;">
     <button class="btn-main" onclick="showView('weather')" style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
@@ -982,6 +991,7 @@
         <div>- ✅ <b>v4.037</b>: 인트로 개선, 점수기준 UI 통일, 사다리 버튼 통일</div>
         <div>- ✅ <b>v4.038</b>: nav 버그 수정, 라운드 구조 복구, 사다리 성별 아이콘</div>
         <div>- ✅ <b>v4.1</b>: 데이터 백업/복원 — JSON export/import (선수·경기·회비·공지·코트)</div>
+        <div>- ✅ <b>v4.12</b>: 모바일 첫 로딩 체감 개선 (players 먼저), matchLog 페이지네이션 (500개씩 더보기)</div>
       </div>
     </div>
 

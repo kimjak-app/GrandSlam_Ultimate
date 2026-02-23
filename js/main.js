@@ -70,6 +70,13 @@ if (!listenersBound) {
   AppEvents.addEventListener('gs:state:changed', (e) => {
     const { type } = e.detail || {};
 
+    if (type === 'players') {
+      // ✅ v4.10: players만 먼저 로드된 상태 — 빠른 체감용 렌더(랭킹/명단 중심)
+      try { if (typeof renderHome === 'function') renderHome(); } catch (e) { console.warn('[AppEvents] renderHome error:', e); }
+      try { if (typeof renderStatsPlayerList === 'function') renderStatsPlayerList(); } catch (e) { }
+      console.log('[AppEvents] gs:state:changed(players) → 빠른 렌더 완료');
+    }
+
     if (type === 'data') {
       // 선수/경기 데이터 확정 → 홈 화면 + 시즌/주간 통계 갱신
       try { if (typeof renderHome === 'function') renderHome(); } catch (e) { console.warn('[AppEvents] renderHome error:', e); }

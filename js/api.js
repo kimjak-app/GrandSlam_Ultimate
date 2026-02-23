@@ -87,6 +87,15 @@ function _sanitizeDocId(id) {
     .replace(/\s+/g, '_'); // 공백 치환
 }
 
+// ========================================
+// ✅ v4.10: matchLog 페이지네이션 (모바일 초기 로딩 최적화)
+// - 첫 로딩: 최근 N개만
+// - 더보기: startAfter 커서 기반으로 N개씩 추가 로딩
+// ========================================
+let _matchLogLastDoc = null;
+let _matchLogExhausted = false;
+let _matchLogPageSize = 500;
+
 function _clubRef(clubId) {
   return _db.collection('clubs').doc(clubId || 'default');
 }
@@ -97,11 +106,46 @@ async function _fsGetPlayers(clubId) {
 }
 
 // ✅ v4.036: orderBy('ts','desc').limit(500) — 인덱스 필요 (ts 필드, 내림차순)
+// ✅ v4.10: 첫 로딩은 최근 N개만 (orderBy+limit)
 async function _fsGetMatchLog(clubId) {
+  _matchLogLastDoc = null;
+  _matchLogExhausted = false;
+
   const snap = await _clubRef(clubId).collection('matchLog')
     .orderBy('ts', 'desc')
-    .limit(500)
+    .limit(_matchLogPageSize)
     .get();
+
+  if (snap.empty) {
+    _matchLogExhausted = true;
+    return [];
+  }
+
+  _matchLogLastDoc = snap.docs[snap.docs.length - 1];
+  if (snap.docs.length < _matchLogPageSize) _matchLogExhausted = true;
+
+  return snap.docs.map(d => d.data());
+}
+
+// ✅ v4.10: 더보기(이전 기록) — 페이지 추가 로딩
+async function _fsGetMatchLogMore(clubId) {
+  if (_matchLogExhausted) return [];
+  if (!_matchLogLastDoc) return [];
+
+  const snap = await _clubRef(clubId).collection('matchLog')
+    .orderBy('ts', 'desc')
+    .startAfter(_matchLogLastDoc)
+    .limit(_matchLogPageSize)
+    .get();
+
+  if (snap.empty) {
+    _matchLogExhausted = true;
+    return [];
+  }
+
+  _matchLogLastDoc = snap.docs[snap.docs.length - 1];
+  if (snap.docs.length < _matchLogPageSize) _matchLogExhausted = true;
+
   return snap.docs.map(d => d.data());
 }
 
@@ -146,17 +190,33 @@ async function sync() {
   try {
     const clubId = getActiveClubId() || 'default';
 
-    const [rawPlayers, rawLog] = await Promise.all([
-      _fsGetPlayers(clubId),
-      _fsGetMatchLog(clubId)
-    ]);
-
+    // ========================================
+    // ✅ v4.10: 1단계 — players 먼저 로드해서 '즉시 렌더'
+    // (랭킹/명단 기반 화면을 먼저 띄워서 모바일 체감 개선)
+    // ========================================
+    const rawPlayers = await _fsGetPlayers(clubId);
     players = (rawPlayers || []).map(ensure);
+
+    // matchLog는 아직 없음(또는 이전 값) — 일단 비워두고 빠르게 렌더
+    matchLog = Array.isArray(matchLog) ? matchLog : [];
+    try {
+      AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'players', players } }));
+    } catch (e) { }
+
+    // ✅ overlay는 players만 받아도 일단 내려서 사용자 체감 속도 확보
+    $('loading-overlay').style.display = 'none';
+    setStatus(`<div style="color:#888; font-size:12px;">최근 경기 불러오는 중...</div>`);
+
+    // ========================================
+    // ✅ v4.10: 2단계 — matchLog는 최근 N개만 로드 (페이지네이션)
+    // ========================================
+    const rawLog = await _fsGetMatchLog(clubId);
     matchLog = normalizeMatchLog(rawLog);
 
     // ✅ v3.816: '1대2용' → '1대2대결용' 마이그레이션
     migrate1v2Names();
 
+    // 기존 흐름 유지 (통계/사다리/토너먼트 등)
     updateSeason();
     updateWeekly();
     if (tabNow === 1) updateChartRange(0);
@@ -168,14 +228,65 @@ async function sync() {
 
     AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'data', players, matchLog } }));
 
+    // ✅ v4.12: fetchFeeData 복구 (채코치 패치에서 누락)
     fetchFeeData().catch(e => console.warn('sync fetchFeeData error:', e));
 
+    // ✅ v4.12: applyAutofitAllTables 복구 (채코치 패치에서 누락)
     setTimeout(applyAutofitAllTables, 0);
+
   } catch (e) {
-    console.error('sync error:', e);
-    setStatus(`<div style="color:#ff3b30; font-size:12px; margin-bottom:10px;">데이터 동기화 실패 😵‍💫</div>`);
-  } finally {
+    console.error(e);
+    setStatus(`<div style="color:#d33; font-weight:bold;">❌ 데이터 로딩 실패: ${e.message}</div>`);
     $('loading-overlay').style.display = 'none';
+  }
+}
+
+// ========================================
+// ✅ v4.10: matchLog 더보기 (이전 기록 추가 로딩)
+// - stats 화면 버튼에서 호출
+// ========================================
+async function loadMoreMatchLog() {
+  try {
+    const clubId = getActiveClubId() || 'default';
+    setStatus(`<div style="color:#888; font-size:12px;">이전 기록 불러오는 중...</div>`);
+
+    const more = await _fsGetMatchLogMore(clubId);
+    if (!more || more.length === 0) {
+      setStatus('');
+      const btn = document.getElementById('btn-load-more-log');
+      if (btn) {
+        btn.textContent = '더 불러올 기록 없음';
+        btn.disabled = true;
+        btn.style.opacity = 0.55;
+      }
+      return;
+    }
+
+    matchLog = normalizeMatchLog(matchLog.concat(more));
+
+    // matchLog가 늘었으니 시즌/주간/통계 재계산
+    if (typeof updateSeason === 'function') updateSeason();
+    if (typeof updateWeekly === 'function') updateWeekly();
+    if (typeof renderStatsPlayerList === 'function') renderStatsPlayerList();
+    if (typeof renderHome === 'function') renderHome();
+
+    setStatus('');
+
+    AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'data', players } }));
+
+    // 더보기 끝났으면 버튼 비활성
+    if (_matchLogExhausted) {
+      const btn = document.getElementById('btn-load-more-log');
+      if (btn) {
+        btn.textContent = '더 불러올 기록 없음';
+        btn.disabled = true;
+        btn.style.opacity = 0.55;
+      }
+    }
+
+  } catch (e) {
+    console.error(e);
+    setStatus(`<div style="color:#d33; font-weight:bold;">❌ 더보기 실패: ${e.message}</div>`);
   }
 }
 
