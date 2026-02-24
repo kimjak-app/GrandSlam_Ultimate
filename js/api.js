@@ -322,10 +322,19 @@ function migrate1v2Names() {
 // ========================================
 
 async function pushPayload(payload) {
+  // ✅ v4.15: 저장 시도 시 권한(Auth) 검사 (VIP룸 자물쇠)
+  if (typeof requireAuth === 'function') {
+    // 글로벌 로그인이나 클럽 내 이름 연동이 안 되어 있다면?
+    if (!currentUserAuth || !currentLoggedPlayer) {
+      requireAuth(); // 부드럽게 권한 요구 모달 띄우기 (확인 시 로그인 창 열림)
+      return false;  // 이번 저장은 강제 중단 (로그인 후 다시 누르도록 유도)
+    }
+  }
+
   $('loading-overlay').style.display = 'flex';
   setStatus(`<div style="color:#888; font-size:12px; margin-bottom:10px;">저장 중...</div>`);
   try {
-    const clubId = payload.clubId || getActiveClubId() || 'default';
+    const clubId = payload.clubId || (typeof getActiveClubId === 'function' ? getActiveClubId() : 'default');
 
     // 선수 저장
     if (Array.isArray(payload.data)) {
@@ -642,3 +651,153 @@ async function importBackup(file) {
     gsAlert('❌ 파일 읽기 실패\n\nJSON 형식이 올바르지 않습니다.');
   }
 }
+
+// ========================================
+// ✅ v4.15: 액션 기반 Auth Guard (VIP룸 문지기 시스템)
+// ========================================
+let currentUserAuth = null;
+let currentLoggedPlayer = null;
+
+firebase.auth().onAuthStateChanged((user) => {
+  const authOverlay = document.getElementById('auth-overlay');
+  const logoutBtnWrap = document.getElementById('logout-btn-wrap');
+  const loginStatusText = document.getElementById('login-status-text');
+  if (user) {
+    currentUserAuth = user;
+    if (authOverlay) authOverlay.style.display = 'none';
+    if (logoutBtnWrap) logoutBtnWrap.style.display = 'block';
+    if (loginStatusText) {
+      loginStatusText.textContent = '👤 로그인됨';
+      loginStatusText.style.color = '#4CAF50';
+      loginStatusText.style.cursor = 'pointer';
+      loginStatusText.onclick = () => gsConfirm('로그아웃하시겠습니까?', ok => { if (ok) handleLogout(); });
+    }
+  } else {
+    currentUserAuth = null;
+    currentLoggedPlayer = null;
+    if (authOverlay) authOverlay.style.display = 'none'; // 눈팅을 위해 기본 숨김
+    if (logoutBtnWrap) logoutBtnWrap.style.display = 'none';
+    if (loginStatusText) {
+      loginStatusText.textContent = '👤 비로그인';
+      loginStatusText.style.color = '#888';
+      loginStatusText.style.cursor = 'pointer';
+      loginStatusText.onclick = () => requireAuth();
+    }
+  }
+});
+
+async function handleGoogleLogin() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try {
+    await firebase.auth().signInWithPopup(provider);
+  } catch (error) {
+    const errEl = document.getElementById('auth-error');
+    if (errEl) { errEl.textContent = error.message; errEl.style.display = 'block'; }
+  }
+}
+
+async function handleEmailLogin() {
+  const email = document.getElementById('auth-email').value;
+  const pwd = document.getElementById('auth-password').value;
+  const errEl = document.getElementById('auth-error');
+  if (!email || !pwd) {
+    if (errEl) { errEl.textContent = '이메일과 비밀번호를 모두 입력해줘.'; errEl.style.display = 'block'; }
+    return;
+  }
+  try {
+    await firebase.auth().signInWithEmailAndPassword(email, pwd);
+  } catch (error) {
+    if (errEl) { errEl.textContent = '로그인 실패: ' + error.message; errEl.style.display = 'block'; }
+  }
+}
+
+function handleLogout() {
+  if (typeof gsConfirm === 'function') {
+    gsConfirm('로그아웃 하시겠습니까?', (res) => {
+      if (res) firebase.auth().signOut();
+    });
+  } else {
+    if (confirm('로그아웃 하시겠습니까?')) firebase.auth().signOut();
+  }
+}
+
+// ✅ 핵심: 특정 액션(경기 추가, 저장 등)을 할 때만 호출하는 권한 체크 함수
+async function requireAuth(onSuccess) {
+  const clubId = typeof getActiveClubId === 'function' ? getActiveClubId() : null;
+  if (!clubId) {
+    gsAlert('소속 클럽을 먼저 선택하시면 실명 대조 및 로그인이 가능합니다.');
+    return;
+  }
+
+  // 1. 로그인 안 된 상태
+  if (!currentUserAuth) {
+    gsConfirm('이 기능을 사용하려면 로그인이 필요합니다. 지금 로그인하시겠습니까?', (res) => {
+      if (res) {
+        const authOverlay = document.getElementById('auth-overlay');
+        if (authOverlay) authOverlay.style.display = 'flex';
+      }
+    });
+    return;
+  }
+
+  try {
+    const playersRef = _clubRef(clubId).collection('players');
+    const snapshot = await playersRef.where('uid', '==', currentUserAuth.uid).get();
+
+    // 2. 이미 해당 클럽에 연동된 경우
+    if (!snapshot.empty) {
+      currentLoggedPlayer = snapshot.docs[0].data();
+      if (onSuccess) onSuccess();
+      return;
+    }
+    // 3. 로그인은 했지만 클럽에 이름이 연동 안 된 경우
+    // 로컬 스토리지에 저장된 이름이 있는지 먼저 확인
+    const savedName = localStorage.getItem(`auth_name_${clubId}_${currentUserAuth.uid}`);
+    if (savedName) {
+      const playerDoc = await playersRef.doc(savedName).get();
+      if (playerDoc.exists && playerDoc.data().uid === currentUserAuth.uid) {
+        currentLoggedPlayer = playerDoc.data();
+        if (onSuccess) onSuccess();
+        return;
+      }
+    }
+    // 전체 명단 미리 가져오기 (추천 리스트용)
+    const allPlayersSnap = await playersRef.get();
+    const allPlayerNames = allPlayersSnap.docs.map(doc => doc.id);
+    gsEditName('', async (enteredName) => {
+      enteredName = (enteredName || '').trim();
+      if (!enteredName) {
+        gsAlert('정확한 실명을 입력하거나 목록에서 선택해 주세요.');
+        return;
+      }
+
+      const playerDoc = await playersRef.doc(enteredName).get();
+      if (playerDoc.exists) {
+        await playersRef.doc(enteredName).update({
+          uid: currentUserAuth.uid,
+          email: currentUserAuth.email || ''
+        });
+        localStorage.setItem(`auth_name_${clubId}_${currentUserAuth.uid}`, enteredName);
+        currentLoggedPlayer = playerDoc.data();
+        currentLoggedPlayer.uid = currentUserAuth.uid;
+        gsAlert(`반갑습니다, ${enteredName}님! 인증이 완료되었습니다.`);
+        if (onSuccess) onSuccess();
+      } else {
+        gsAlert('클럽 명단에 등록되지 않은 이름입니다. 총무님께 등록을 요청해 주세요.');
+      }
+    }, {
+      title: "실명 대조",
+      placeholder: "클럽 등록 실명을 입력하세요",
+      suggestions: allPlayerNames
+    });
+    setTimeout(() => {
+      const title = document.getElementById('gsEditNameTitle');
+      if (title) title.textContent = '권한 확인을 위해 성함을 입력해 주세요';
+    }, 150);
+
+  } catch (e) {
+    console.error("Auth Guard error: ", e);
+    gsAlert('권한 확인 중 오류가 발생했습니다.');
+  }
+}
+
