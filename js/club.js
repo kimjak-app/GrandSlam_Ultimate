@@ -576,7 +576,7 @@ async function deleteClub(clubId) {
     if (!ok) return;
     const club = clubList.find(function (c) { return c.clubId === clubId; });
     if (!club) return;
-    if (club.isDefault) { gsAlert('기본 클럽은 삭제할 수 없습니다.'); return; }
+    // ✅ v4.7: isDefault 체크 제거 - 모든 클럽 삭제 가능
     if (currentClub && currentClub.clubId === clubId) {
       gsAlert('현재 활성화된 클럽은 삭제할 수 없습니다.\n다른 클럽으로 전환 후 삭제해주세요.');
       return;
