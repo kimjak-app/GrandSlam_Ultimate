@@ -1,5 +1,5 @@
 // ========================================
-// vv4.6.1-tov-fixed: MULTI-CLUB MANAGEMENT (Master GAS)
+// v3.79: MULTI-CLUB MANAGEMENT (Master GAS)
 // GAS URL 하나로 통합, clubId로 라우팅
 // ========================================
 
@@ -587,12 +587,28 @@ async function deleteClub(clubId) {
       try {
         // ✅ v4.037: Firestore 클럽 삭제
         await _db.collection('clubs').doc(clubId).delete();
+        
+        // 🚨 설계 보강: localStorage 청소 (잼코치 처방)
+        if (localStorage.getItem('selectedClubId') === clubId) {
+          localStorage.removeItem('selectedClubId');
+        }
+        if (localStorage.getItem('grandslam_active_club_v2') === clubId) {
+          localStorage.removeItem('grandslam_active_club_v2');
+        }
+        
         await fetchClubList();
-        renderClubManageList();
-        gsAlert('클럽 등록이 해제되었습니다.');
+        
+        // 🚨 설계 보강: 삭제된 클럽이 현재 선택된 클럽이었다면 기본 클럽으로 전환
+        const defaultClub = clubList.find(c => c.isDefault) || clubList[0];
+        if (defaultClub) {
+          saveActiveClubId(defaultClub.clubId);
+        }
+        
+        // 🚨 설계 보강: 화면 강제 새로고침 (유령 데이터 박멸)
+        gsAlert('클럽 등록이 해제되었습니다.\n페이지를 새로고침합니다.');
+        setTimeout(() => location.reload(), 1000);
       } catch (e) {
         gsAlert('오류: ' + e.message);
-      } finally {
         $('loading-overlay').style.display = 'none';
       }
     });
