@@ -1,5 +1,5 @@
 // ========================================
-// v3.79: MULTI-CLUB MANAGEMENT (Master GAS)
+// vv4.6.1-tov-fixed: MULTI-CLUB MANAGEMENT (Master GAS)
 // GAS URL 하나로 통합, clubId로 라우팅
 // ========================================
 
