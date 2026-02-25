@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.41</title>
+  <title>GrandSlam Ultimate v4.6</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -375,7 +375,7 @@
     </div>
 
     <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">
-      v4.41</div>
+      v4.6</div>
   </div>
 
   <div id="view-tennis" class="app-screen">
@@ -1143,7 +1143,7 @@
           </button>
           <button class="btn-purple-main" onclick="openExchange()"
             style="display:flex; align-items:center; justify-content:center; gap:8px;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;display:inline-block;vertical-align:middle;"><path d="M9 11.5L6.5 14c-1.5 1.5-1.5 3.5 0 5s3.5 1.5 5 0L15 15.5"/><path d="M15 12.5L17.5 10c1.5-1.5 1.5-3.5 0-5s-3.5-1.5-5 0L9 8.5"/><path d="M10.5 14l3.5-3.5"/><path d="M12.5 16l3.5-3.5"/><path d="M8.5 12l3.5-3.5"/></svg> 교류전
+            <span class="material-symbols-outlined" style="font-size:20px;">handshake</span> 교류전
           </button>
           <button class="btn-purple-main" onclick="openLadder()"
             style="display:flex; align-items:center; justify-content:center; gap:8px;">
@@ -1204,39 +1204,92 @@
       복원</div>
     <div style="padding:14px;">
 
-      <!-- 백업 섹션 -->
-      <div
-        style="background:#f8fffe; border:1.5px solid #d0ede5; border-radius:16px; padding:16px; margin-bottom:14px;">
-        <div
-          style="font-size:13px; font-weight:700; color:var(--wimbledon-sage); margin-bottom:6px; display:flex; align-items:center; gap:6px;">
-          <span class="material-symbols-outlined" style="font-size:18px;">download</span>백업 (Export)
+      <!-- ✅ v4.5 관리자 모드 선택 영역 -->
+      <div id="admin-mode-selector" class="section-card active" style="display:block;">
+        <div class="sub-rank-title" style="margin-bottom:16px;">
+          <span class="material-symbols-outlined"
+            style="vertical-align:middle; font-size:20px; margin-right:5px;">admin_panel_settings</span>관리자 모드 선택
         </div>
-        <div style="font-size:12px; color:#666; margin-bottom:12px; line-height:1.6;">
-          선수 · 경기기록 · 회비 · 공지 · 코트 정보를 JSON 파일로 저장합니다.
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <button class="btn-purple-main" onclick="showAdminAuth('master')"
+            style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--aussie-blue);">
+            <span class="material-symbols-outlined">verified_user</span> 총괄관리자 모드
+          </button>
+          <button class="btn-purple-main" onclick="showAdminAuth('manager')"
+            style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--wimbledon-sage);">
+            <span class="material-symbols-outlined">manage_accounts</span> 클럽관리자(총무포함) 모드
+          </button>
         </div>
-        <button id="backupExportBtn" onclick="exportBackup()" class="btn-purple-main"
-          style="display:flex; align-items:center; justify-content:center; gap:8px;">
-          <span class="material-symbols-outlined">save</span>📥 백업 다운로드
-        </button>
       </div>
 
-      <!-- 복원 섹션 -->
-      <div
-        style="background:#fff8f8; border:1.5px solid #f0d0d0; border-radius:16px; padding:16px; margin-bottom:14px;">
+      <!-- ✅ v4.5 PIN 입력 모달 -->
+      <div id="admin-pin-modal"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.45); z-index:25000; justify-content:center; align-items:center;">
         <div
-          style="font-size:13px; font-weight:700; color:var(--roland-clay); margin-bottom:6px; display:flex; align-items:center; gap:6px;">
-          <span class="material-symbols-outlined" style="font-size:18px;">upload</span>복원 (Import)
+          style="background:#fff; border-radius:20px; padding:28px 24px 20px; width:300px; max-width:88vw; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+          <span class="material-symbols-outlined"
+            style="font-size:40px; color:var(--wimbledon-sage); display:block; margin-bottom:10px;">lock</span>
+          <div id="admin-pin-title"
+            style="font-size:15px; color:var(--text-dark); margin-bottom:16px; font-weight:400;">관리자 비밀번호를 입력하세요</div>
+          <input type="password" id="admin-pin-input" maxlength="10" placeholder="••••"
+            style="width:100%; box-sizing:border-box; padding:12px 14px; border:2px solid var(--wimbledon-sage); border-radius:12px; font-size:16px; text-align:center; letter-spacing:4px; outline:none; margin-bottom:16px;"
+            onkeydown="if(event.key==='Enter')confirmAdminPin()" />
+          <div style="display:flex; gap:10px;">
+            <button onclick="confirmAdminPin()"
+              style="flex:1; padding:13px; background:var(--wimbledon-sage); color:white; border:none; border-radius:12px; font-size:15px; font-weight:400; cursor:pointer;">확인</button>
+            <button onclick="closeAdminPinModal()"
+              style="flex:1; padding:13px; background:#8E8E93; color:white; border:none; border-radius:12px; font-size:15px; font-weight:400; cursor:pointer;">취소</button>
+          </div>
         </div>
-        <div style="font-size:12px; color:#666; margin-bottom:12px; line-height:1.6;">
-          ⚠️ 현재 데이터가 백업 파일로 <b>완전 교체</b>됩니다.<br>관리자 비번 확인 후 진행됩니다.
-        </div>
-        <input type="file" id="restoreFileInput" accept=".json" style="display:none;"
-          onchange="importBackup(this.files[0]); this.value=''">
-        <button onclick="document.getElementById('restoreFileInput').click()" class="btn-purple-main"
-          style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--roland-clay);">
-          <span class="material-symbols-outlined">folder_open</span>백업 파일 선택해서 복원
-        </button>
       </div>
+
+      <!-- ✅ v4.5 총괄관리자 탭 컨테이너 -->
+      <div id="tab-master-admin" style="display:none;">
+        <!-- 총괄관리자 전용 기능 (2단계에서 채워질 자리) -->
+      </div>
+
+      <!-- ✅ v4.5 클럽관리자 탭 컨테이너 -->
+      <div id="tab-manager-admin" style="display:none;">
+        <!-- 클럽관리자 전용 기능 (2단계에서 채워질 자리) -->
+      </div>
+
+      <!-- 백업 섹션 (legacy — display:none 처리, 원본 보존) -->
+      <div data-legacy="backup-export"
+        style="display:none; background:#f8fffe; border:1.5px solid #d0ede5; border-radius:16px; padding:16px; margin-bottom:14px;">
+        <div
+          style="background:#f8fffe; border:1.5px solid #d0ede5; border-radius:16px; padding:16px; margin-bottom:14px;">
+          <div
+            style="font-size:13px; font-weight:700; color:var(--wimbledon-sage); margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+            <span class="material-symbols-outlined" style="font-size:18px;">download</span>백업 (Export)
+          </div>
+          <div style="font-size:12px; color:#666; margin-bottom:12px; line-height:1.6;">
+            선수 · 경기기록 · 회비 · 공지 · 코트 정보를 JSON 파일로 저장합니다.
+          </div>
+          <button id="backupExportBtn" onclick="exportBackup()" class="btn-purple-main"
+            style="display:flex; align-items:center; justify-content:center; gap:8px;">
+            <span class="material-symbols-outlined">save</span>📥 백업 다운로드
+          </button>
+        </div>
+
+        <!-- 복원 섹션 -->
+        <div
+          style="background:#fff8f8; border:1.5px solid #f0d0d0; border-radius:16px; padding:16px; margin-bottom:14px;">
+          <div
+            style="font-size:13px; font-weight:700; color:var(--roland-clay); margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+            <span class="material-symbols-outlined" style="font-size:18px;">upload</span>복원 (Import)
+          </div>
+          <div style="font-size:12px; color:#666; margin-bottom:12px; line-height:1.6;">
+            ⚠️ 현재 데이터가 백업 파일로 <b>완전 교체</b>됩니다.<br>관리자 비번 확인 후 진행됩니다.
+          </div>
+          <input type="file" id="restoreFileInput" accept=".json" style="display:none;"
+            onchange="importBackup(this.files[0]); this.value=''">
+          <button onclick="document.getElementById('restoreFileInput').click()" class="btn-purple-main"
+            style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--roland-clay);">
+            <span class="material-symbols-outlined">folder_open</span>백업 파일 선택해서 복원
+          </button>
+        </div>
+
+      </div><!-- /data-legacy="backup-export" -->
 
       <!-- 주요 업데이트 브리핑 -->
       <div class="section-card" style="display:block;">
@@ -1277,6 +1330,13 @@
           <div>- ✅ <b>v4.3</b>: 교류전 기능 MVP 출시 — 교류전 생성/진행/집계, 전광판, 핸디캡 시스템, 상대 클럽 선수 로드</div>
           <div>- ✅ <b>v4.4</b>: 커스텀 SVG 아이콘 시스템 도입 (잼코치 제작), 성별 색상 시각화, 모달 z-index 수정, 교류전 UI 전면 개선</div>
           <div>- ✅ <b>v4.41</b>: 교류전 악수 아이콘 개선, 시뮬레이션 모드 점수 집계 버그 수정</div>
+          <div>- ✅ <b>v4.411</b>: 교류전 UI 아이콘 정밀 복구(handshake 🤝) 및 잼코치 절대 원칙 준수 이식</div>
+          <div>- ✅ <b>v4.412</b>: 교류전 UX 개선(뒤로가기 추가), 경기 유형별 라이브 가이드 문구 적용, 종료 잔상 및 경로 버그 수정</div>
+          <div>- ✅ <b>v4.413</b>: 교류전 가이드 문구 초기 노출 적용, 종료 확인 모달 디자인 통일(gsConfirm 이식)</div>
+          <div>- ✅ <b>v4.5</b>: v4.5 1단계 — 총괄/클럽 관리자 권한 분리 및 PIN 인증 UI 구축 시작</div>
+          <div>- ✅ <b>v4.5-2</b>: 마스터 백업, 선별 복원, 클럽 ID 세이프티 가드 로직 이식 완료 (admin.js 신규)</div>
+          <div>- ✅ <b>v4.6</b>: PIN 루프 버그 수정, clubId 누락 시 현재 클럽 강제 연결, 이중 PIN 확인 제거</div>
+
         </div>
       </div>
 
@@ -1369,7 +1429,8 @@
       <div id="treasurer-fee" style="display:none;">
         <div class="section-card active" style="display:block;">
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-            <div class="sub-rank-title" style="margin:0;"><span class="material-symbols-outlined">checklist</span>회비 납부
+            <div class="sub-rank-title" style="margin:0;"><span class="material-symbols-outlined">checklist</span>회비
+              납부
               현황</div>
             <select id="feeYear" onchange="renderFeeTable()"
               style="padding:8px 12px; border:2px solid #E5E5EA; border-radius:10px; font-size:14px; font-weight:400;">
@@ -1397,12 +1458,14 @@
           </div>
           <!-- ✅ v3.949: 총무 지정 피커 -->
           <div style="background:#f8f8f8; border-radius:10px; padding:12px; margin-bottom:12px;">
-            <div style="font-size:12px; color:var(--text-gray); margin-bottom:8px; font-weight:bold;">🏅 총무 면제 설정</div>
+            <div style="font-size:12px; color:var(--text-gray); margin-bottom:8px; font-weight:bold;">🏅 총무 면제 설정
+            </div>
             <div id="treasurerPickerArea"></div>
           </div>
           <!-- ✅ v4.032: 회비 면제 설정 -->
           <div style="background:#f8f8f8; border-radius:10px; padding:12px; margin-bottom:12px;">
-            <div style="font-size:12px; color:var(--text-gray); margin-bottom:8px; font-weight:bold;">💸 회비 면제 설정</div>
+            <div style="font-size:12px; color:var(--text-gray); margin-bottom:8px; font-weight:bold;">💸 회비 면제 설정
+            </div>
             <div style="font-size:11px; color:var(--text-gray); margin-bottom:8px;">면제된 회원은 납부 현황에서 제외되며 재정 계산에도 포함되지
               않습니다.</div>
             <div id="feeExemptPickerArea"></div>
@@ -1595,11 +1658,20 @@
   <script src="js/treasurer.js"></script>
   <script src="js/main.js"></script>
   <nav class="bottom-nav">
-    <div class="nav-item active" onclick="switchView('home', this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;display:block;margin:0 auto 2px;"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>홈</div>
-    <div class="nav-item" onclick="switchView('game', this)"><span class="material-symbols-outlined nav-icon">sports_tennis</span>게임</div>
-    <div class="nav-item" onclick="switchView('tennis', this)"><span class="material-symbols-outlined nav-icon">emoji_events</span>랭킹</div>
-    <div class="nav-item" onclick="switchView('stats', this)"><span class="material-symbols-outlined nav-icon">monitoring</span>통계</div>
-    <div class="nav-item" onclick="switchView('admin', this)"><span class="material-symbols-outlined nav-icon">settings</span>운영</div>
+    <div class="nav-item active" onclick="switchView('home', this)"><svg viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+        style="width:28px;height:28px;display:block;margin:0 auto 2px;">
+        <path
+          d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>홈</div>
+    <div class="nav-item" onclick="switchView('game', this)"><span
+        class="material-symbols-outlined nav-icon">sports_tennis</span>게임</div>
+    <div class="nav-item" onclick="switchView('tennis', this)"><span
+        class="material-symbols-outlined nav-icon">emoji_events</span>랭킹</div>
+    <div class="nav-item" onclick="switchView('stats', this)"><span
+        class="material-symbols-outlined nav-icon">monitoring</span>통계</div>
+    <div class="nav-item" onclick="switchView('admin', this)"><span
+        class="material-symbols-outlined nav-icon">settings</span>운영</div>
   </nav>
 
   <!-- ========================================
@@ -1637,14 +1709,19 @@
 
   <!-- ✅ v5.0 교류전 뷰 -->
   <div id="view-exchange" class="app-screen" style="display:none;">
-    <div class="header-banner"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;display:inline-block;vertical-align:middle;"><path d="M9 11.5L6.5 14c-1.5 1.5-1.5 3.5 0 5s3.5 1.5 5 0L15 15.5"/><path d="M15 12.5L17.5 10c1.5-1.5 1.5-3.5 0-5s-3.5-1.5-5 0L9 8.5"/><path d="M10.5 14l3.5-3.5"/><path d="M12.5 16l3.5-3.5"/><path d="M8.5 12l3.5-3.5"/></svg> 교류전</div>
+    <div class="header-banner"><span class="material-symbols-outlined"
+        style="font-size:30px; margin-right:8px;">handshake</span> 교류전</div>
 
     <!-- 탭 바 -->
     <div class="ex-tab-bar">
-      <button id="ex-tab-game"    class="ex-tab-btn active" onclick="switchExchangeTab('game')"><span class="material-symbols-outlined" style="font-size:14px;">sports_tennis</span> 게임</button>
-      <button id="ex-tab-ranking" class="ex-tab-btn"        onclick="switchExchangeTab('ranking')"><span class="material-symbols-outlined" style="font-size:14px;">emoji_events</span> 랭킹</button>
-      <button id="ex-tab-stats"   class="ex-tab-btn"        onclick="switchExchangeTab('stats')"><span class="material-symbols-outlined" style="font-size:14px;">monitoring</span> 통계</button>
-      <button id="ex-tab-history" class="ex-tab-btn"        onclick="switchExchangeTab('history')"><span class="material-symbols-outlined" style="font-size:14px;">history</span> 기록</button>
+      <button id="ex-tab-game" class="ex-tab-btn active" onclick="switchExchangeTab('game')"><span
+          class="material-symbols-outlined" style="font-size:14px;">sports_tennis</span> 게임</button>
+      <button id="ex-tab-ranking" class="ex-tab-btn" onclick="switchExchangeTab('ranking')"><span
+          class="material-symbols-outlined" style="font-size:14px;">emoji_events</span> 랭킹</button>
+      <button id="ex-tab-stats" class="ex-tab-btn" onclick="switchExchangeTab('stats')"><span
+          class="material-symbols-outlined" style="font-size:14px;">monitoring</span> 통계</button>
+      <button id="ex-tab-history" class="ex-tab-btn" onclick="switchExchangeTab('history')"><span
+          class="material-symbols-outlined" style="font-size:14px;">history</span> 기록</button>
     </div>
 
     <!-- 게임 탭 -->
@@ -1672,11 +1749,13 @@
         <div class="ex-detail-row">
           <div class="ex-detail-box">
             <div class="ex-detail-label">홈 단식 / 복식</div>
-            <div id="ex-detail-a" class="ex-detail-score">단식 <span class="win">0</span>승<span class="lose">0</span>패 | 복식 <span class="win">0</span>승<span class="lose">0</span>패</div>
+            <div id="ex-detail-a" class="ex-detail-score">단식 <span class="win">0</span>승<span class="lose">0</span>패 |
+              복식 <span class="win">0</span>승<span class="lose">0</span>패</div>
           </div>
           <div class="ex-detail-box">
             <div class="ex-detail-label">원정 단식 / 복식</div>
-            <div id="ex-detail-b" class="ex-detail-score">단식 <span class="win">0</span>승<span class="lose">0</span>패 | 복식 <span class="win">0</span>승<span class="lose">0</span>패</div>
+            <div id="ex-detail-b" class="ex-detail-score">단식 <span class="win">0</span>승<span class="lose">0</span>패 |
+              복식 <span class="win">0</span>승<span class="lose">0</span>패</div>
           </div>
         </div>
       </div>
@@ -1686,12 +1765,18 @@
         <div class="ex-section-card" style="text-align:center; padding:30px 20px;">
           <div style="font-size:48px; margin-bottom:12px;">🤝</div>
           <div style="font-size:17px; font-weight:800; color:var(--text-dark); margin-bottom:8px;">교류전을 시작하세요</div>
-          <div style="font-size:13px; color:#8E8E93; margin-bottom:24px; line-height:1.6;">상대 클럽과 대결해보세요.<br>단식·복식 점수가 실시간으로 집계됩니다.</div>
+          <div style="font-size:13px; color:#8E8E93; margin-bottom:24px; line-height:1.6;">상대 클럽과 대결해보세요.<br>단식·복식 점수가
+            실시간으로 집계됩니다.</div>
           <button class="ex-save-btn" onclick="openExchangeSetupModal()">
             <span class="material-symbols-outlined" style="font-size:18px;">add_circle</span> 교류전 시작하기
           </button>
-          <button onclick="startExchangeSimulation()" style="margin-top:10px; width:100%; padding:12px; background:transparent; border:2px dashed #aaa; border-radius:14px; color:#888; font-size:14px; font-weight:400; cursor:pointer;">
+          <button onclick="startExchangeSimulation()"
+            style="margin-top:10px; width:100%; padding:12px; background:transparent; border:2px dashed #aaa; border-radius:14px; color:#888; font-size:14px; font-weight:400; cursor:pointer;">
             🔧 시뮬레이션 모드 (테스트용)
+          </button>
+          <button class="btn-main" onclick="showView('game')" style="background:var(--text-gray); margin-top:12px;">
+            <span class="material-symbols-outlined"
+              style="font-size:18px;vertical-align:middle;margin-right:5px;">arrow_back</span>뒤로가기
           </button>
         </div>
       </div>
@@ -1700,23 +1785,35 @@
       <div id="ex-game-area" style="display:none;">
         <!-- 단/복식 + 결과타입 -->
         <div class="ex-section-card">
-          <div class="ex-section-title"><span class="material-symbols-outlined" style="font-size:16px;">sports_tennis</span> 경기 유형</div>
+          <div class="ex-section-title"><span class="material-symbols-outlined"
+              style="font-size:16px;">sports_tennis</span> 경기 유형</div>
           <div class="ex-cat-row">
-            <button id="ex-cat-singles" class="ex-cat-btn active" onclick="setExMatchCategory('singles')"><span class="material-symbols-outlined" style="font-size:16px;">person</span> 단식</button>
-            <button id="ex-cat-doubles" class="ex-cat-btn"        onclick="setExMatchCategory('doubles')"><span class="material-symbols-outlined" style="font-size:16px;">group</span> 복식</button>
+            <button id="ex-cat-singles" class="ex-cat-btn active" onclick="setExMatchCategory('singles')"><span
+                class="material-symbols-outlined" style="font-size:16px;">person</span> 단식</button>
+            <button id="ex-cat-doubles" class="ex-cat-btn" onclick="setExMatchCategory('doubles')"><span
+                class="material-symbols-outlined" style="font-size:16px;">group</span> 복식</button>
           </div>
           <div class="ex-result-row">
-            <button class="ex-result-btn active"  onclick="setExResultType(this,'normal')"    data-type="normal">정상경기</button>
-            <button class="ex-result-btn forfeit" onclick="setExResultType(this,'forfeit')"   data-type="forfeit">기권승</button>
-            <button class="ex-result-btn cancel"  onclick="setExResultType(this,'cancelled')" data-type="cancelled">경기취소</button>
+            <button class="ex-result-btn active" onclick="setExResultType(this,'normal')"
+              data-type="normal">정상경기</button>
+            <button class="ex-result-btn forfeit" onclick="setExResultType(this,'forfeit')"
+              data-type="forfeit">기권승</button>
+            <button class="ex-result-btn cancel" onclick="setExResultType(this,'cancelled')"
+              data-type="cancelled">경기취소</button>
+          </div>
+          <div id="ex-result-guide"
+            style="margin-top:8px; font-size:12px; color:#8E8E93; line-height:1.5; padding:8px 10px; background:#f9f9f9; border-radius:10px;">
           </div>
         </div>
 
         <!-- 클럽A 선수 -->
         <div class="ex-section-card">
           <div class="ex-section-title" style="justify-content:space-between;">
-            <span style="display:flex;align-items:center;gap:6px;"><span class="material-symbols-outlined" style="font-size:16px;">group</span><span id="ex-club-label-a">홈 클럽 선수</span></span>
-            <button onclick="openExchangeGuestModal('A')" style="border:none;background:var(--aussie-blue);color:white;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;">+ 당일게스트</button>
+            <span style="display:flex;align-items:center;gap:6px;"><span class="material-symbols-outlined"
+                style="font-size:16px;">group</span><span id="ex-club-label-a">홈 클럽 선수</span></span>
+            <button onclick="openExchangeGuestModal('A')"
+              style="border:none;background:var(--aussie-blue);color:white;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;">+
+              당일게스트</button>
           </div>
           <div id="ex-pool-A" class="player-pool ex-player-pool"></div>
           <div id="ex-hint-A" class="ex-hint"></div>
@@ -1725,8 +1822,11 @@
         <!-- 클럽B 선수 -->
         <div class="ex-section-card">
           <div class="ex-section-title" style="justify-content:space-between;">
-            <span style="display:flex;align-items:center;gap:6px;"><span class="material-symbols-outlined" style="font-size:16px;">group</span><span id="ex-club-label-b">원정 클럽 선수</span></span>
-            <button onclick="openExchangeGuestModal('B')" style="border:none;background:var(--roland-clay);color:white;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;">+ 당일게스트</button>
+            <span style="display:flex;align-items:center;gap:6px;"><span class="material-symbols-outlined"
+                style="font-size:16px;">group</span><span id="ex-club-label-b">원정 클럽 선수</span></span>
+            <button onclick="openExchangeGuestModal('B')"
+              style="border:none;background:var(--roland-clay);color:white;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;">+
+              당일게스트</button>
           </div>
           <div id="ex-pool-B" class="player-pool ex-player-pool"></div>
           <div id="ex-hint-B" class="ex-hint"></div>
@@ -1741,19 +1841,23 @@
 
         <!-- 점수 입력 -->
         <div class="ex-section-card">
-          <div class="ex-section-title"><span class="material-symbols-outlined" style="font-size:16px;">scoreboard</span> 점수 입력</div>
+          <div class="ex-section-title"><span class="material-symbols-outlined"
+              style="font-size:16px;">scoreboard</span> 점수 입력</div>
           <div class="ex-score-input-row">
             <input id="ex-score-home" class="ex-score-input" type="number" min="0" placeholder="0">
             <div class="ex-score-colon">:</div>
             <input id="ex-score-away" class="ex-score-input" type="number" min="0" placeholder="0">
           </div>
-          <button class="ex-save-btn" onclick="saveExchangeResult()"><span class="material-symbols-outlined" style="font-size:18px;">save</span> 결과 저장</button>
+          <button class="ex-save-btn" onclick="saveExchangeResult()"><span class="material-symbols-outlined"
+              style="font-size:18px;">save</span> 결과 저장</button>
         </div>
 
-        <button class="ex-finish-btn" onclick="finishExchange()"><span class="material-symbols-outlined" style="font-size:18px;">flag</span> 교류전 종료</button>
+        <button class="ex-finish-btn" onclick="finishExchange()"><span class="material-symbols-outlined"
+            style="font-size:18px;">flag</span> 교류전 종료</button>
         <div style="margin-top:10px; margin-bottom:80px;">
-          <button class="btn-main" onclick="showView('home')" style="background:var(--text-gray);">
-            <span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:5px;">arrow_back</span>뒤로가기
+          <button class="btn-main" onclick="showView('game')" style="background:var(--text-gray);">
+            <span class="material-symbols-outlined"
+              style="font-size:18px;vertical-align:middle;margin-right:5px;">arrow_back</span>뒤로가기
           </button>
         </div>
       </div>
@@ -1763,17 +1867,22 @@
     <div id="ex-view-ranking" style="display:none;">
       <div class="ex-section-card">
         <div style="display:flex;gap:6px;margin-bottom:14px;">
-          <button onclick="switchExRankingTab('club')"   id="ex-rank-tab-club"   class="tab-btn active" style="font-size:13px;">🏢 클럽 랭킹</button>
-          <button onclick="switchExRankingTab('player')" id="ex-rank-tab-player" class="tab-btn"         style="font-size:13px;">👤 개인 랭킹</button>
+          <button onclick="switchExRankingTab('club')" id="ex-rank-tab-club" class="tab-btn active"
+            style="font-size:13px;">🏢 클럽 랭킹</button>
+          <button onclick="switchExRankingTab('player')" id="ex-rank-tab-player" class="tab-btn"
+            style="font-size:13px;">👤 개인 랭킹</button>
         </div>
-        <div id="ex-ranking-content"><p style="color:#8E8E93;text-align:center;padding:30px 0;">교류전 데이터가 쌓이면 랭킹이 표시됩니다.</p></div>
+        <div id="ex-ranking-content">
+          <p style="color:#8E8E93;text-align:center;padding:30px 0;">교류전 데이터가 쌓이면 랭킹이 표시됩니다.</p>
+        </div>
       </div>
     </div>
 
     <!-- 통계 탭 -->
     <div id="ex-view-stats" style="display:none;">
       <div class="ex-section-card">
-        <div class="ex-section-title"><span class="material-symbols-outlined" style="font-size:16px;">analytics</span> 선수 통계 (교류전 전용)</div>
+        <div class="ex-section-title"><span class="material-symbols-outlined" style="font-size:16px;">analytics</span>
+          선수 통계 (교류전 전용)</div>
         <div id="ex-stats-player-list" class="ex-player-pool" style="margin-bottom:14px;"></div>
         <div id="ex-stats-report" style="display:none;"></div>
       </div>
@@ -1781,7 +1890,9 @@
 
     <!-- 기록 탭 -->
     <div id="ex-view-history" style="display:none;">
-      <div id="ex-history-list"><p style="color:#8E8E93;text-align:center;padding:30px 0;">교류전 기록이 없습니다.</p></div>
+      <div id="ex-history-list">
+        <p style="color:#8E8E93;text-align:center;padding:30px 0;">교류전 기록이 없습니다.</p>
+      </div>
     </div>
   </div>
 
@@ -1793,10 +1904,11 @@
       <div style="font-size:13px;font-weight:700;color:var(--text-dark);margin-bottom:10px;">상대 클럽 선택</div>
       <div class="ex-search-tabs">
         <button class="ex-search-tab-btn active" onclick="switchExSearchTab('direct')">직접 입력</button>
-        <button class="ex-search-tab-btn"        onclick="switchExSearchTab('region')">지역으로 찾기</button>
+        <button class="ex-search-tab-btn" onclick="switchExSearchTab('region')">지역으로 찾기</button>
       </div>
       <div id="ex-search-direct">
-        <input id="ex-club-search-input" class="ex-club-search-input" placeholder="클럽명을 입력하세요" oninput="searchClubInModal(this.value)">
+        <input id="ex-club-search-input" class="ex-club-search-input" placeholder="클럽명을 입력하세요"
+          oninput="searchClubInModal(this.value)">
         <div id="ex-club-search-results" class="ex-club-results"></div>
       </div>
       <div id="ex-search-region" style="display:none;">
@@ -1820,12 +1932,14 @@
         <label class="ex-victory-card selected" onclick="selectVictoryMode(this,'wins')">
           <input type="radio" name="ex-victory-mode" value="wins" checked style="display:none;">
           <div class="ex-victory-card-title">⚡ 데이비스컵 방식</div>
-          <div class="ex-victory-card-desc">경기 승수가 많은 팀이 이깁니다. 에이스 한 명이 여러 경기를 뛰어도 각 경기의 승패만 카운트됩니다. 전통적인 팀 대항전 방식.</div>
+          <div class="ex-victory-card-desc">경기 승수가 많은 팀이 이깁니다. 에이스 한 명이 여러 경기를 뛰어도 각 경기의 승패만 카운트됩니다. 전통적인 팀 대항전 방식.
+          </div>
         </label>
         <label class="ex-victory-card" onclick="selectVictoryMode(this,'score')">
           <input type="radio" name="ex-victory-mode" value="score" style="display:none;">
           <div class="ex-victory-card-title">🏆 총점 방식</div>
-          <div class="ex-victory-card-desc">모든 선수의 개인 점수를 합산해 총점이 높은 팀이 이깁니다. 핸디캡을 켜면 많이 뛴 선수의 점수가 줄어들어 전원 참여가 유리해집니다.</div>
+          <div class="ex-victory-card-desc">모든 선수의 개인 점수를 합산해 총점이 높은 팀이 이깁니다. 핸디캡을 켜면 많이 뛴 선수의 점수가 줄어들어 전원 참여가 유리해집니다.
+          </div>
         </label>
       </div>
       <div class="ex-toggle-row">
@@ -1833,9 +1947,11 @@
           <div class="ex-toggle-label">⚖️ 에이스 핸디캡</div>
           <div class="ex-toggle-desc">같은 선수가 3번째 경기부터 승리 점수 -0.2점씩 차감. 전원 참여를 유도합니다.</div>
         </div>
-        <label class="ex-toggle"><input type="checkbox" id="ex-handicap-toggle"><span class="ex-toggle-slider"></span></label>
+        <label class="ex-toggle"><input type="checkbox" id="ex-handicap-toggle"><span
+            class="ex-toggle-slider"></span></label>
       </div>
-      <button class="ex-save-btn" onclick="confirmExchangeSetup()" style="margin-top:16px;"><span class="material-symbols-outlined" style="font-size:18px;">play_arrow</span> 교류전 시작</button>
+      <button class="ex-save-btn" onclick="confirmExchangeSetup()" style="margin-top:16px;"><span
+          class="material-symbols-outlined" style="font-size:18px;">play_arrow</span> 교류전 시작</button>
       <button class="ex-finish-btn" onclick="closeExchangeSetupModal()">취소</button>
     </div>
   </div>
@@ -1843,11 +1959,13 @@
   <!-- ✅ v5.0 게스트 모달 -->
   <div id="ex-guest-modal" class="ex-guest-modal-overlay">
     <div class="ex-guest-modal-box">
-      <div style="font-size:16px;font-weight:400;color:var(--text-dark);margin-bottom:16px;text-align:center;">당일 게스트 추가</div>
+      <div style="font-size:16px;font-weight:400;color:var(--text-dark);margin-bottom:16px;text-align:center;">당일 게스트
+        추가
+      </div>
       <input id="ex-guest-name" class="ex-club-search-input" placeholder="이름 입력" style="margin-bottom:0;">
       <div class="ex-gender-row">
         <button class="ex-gender-btn male active" onclick="toggleExGender(this,'M')">♂ 남</button>
-        <button class="ex-gender-btn female"      onclick="toggleExGender(this,'F')">♀ 여</button>
+        <button class="ex-gender-btn female" onclick="toggleExGender(this,'F')">♀ 여</button>
       </div>
       <button class="ex-save-btn" onclick="confirmExchangeGuest()" style="margin-bottom:8px;">추가</button>
       <button class="ex-finish-btn" onclick="closeExchangeGuestModal()">취소</button>
@@ -1864,17 +1982,32 @@
     }
     // 검색 탭 전환
     function switchExSearchTab(tab) {
-      document.querySelectorAll('.ex-search-tab-btn').forEach((b,i) =>
-        b.classList.toggle('active', (i===0&&tab==='direct')||(i===1&&tab==='region')));
-      $('ex-search-direct').style.display = tab==='direct' ? 'block' : 'none';
-      $('ex-search-region').style.display = tab==='region' ? 'block' : 'none';
+      document.querySelectorAll('.ex-search-tab-btn').forEach((b, i) =>
+        b.classList.toggle('active', (i === 0 && tab === 'direct') || (i === 1 && tab === 'region')));
+      $('ex-search-direct').style.display = tab === 'direct' ? 'block' : 'none';
+      $('ex-search-region').style.display = tab === 'region' ? 'block' : 'none';
     }
     // 결과 타입 선택
     let exResultType = 'normal';
+    const EX_GUIDE = {
+      wins: {
+        normal: '승리 팀에 1승을 추가합니다. (점수는 기록용)',
+        forfeit: '점수 입력 없이 승리 팀에 즉시 1승을 부여합니다.',
+        cancelled: '이 경기를 무효 처리하며, 전체 승수에 영향을 주지 않습니다.',
+      },
+      score: {
+        normal: '양 팀의 득점을 합산하여 전체 스코어에 반영합니다.',
+        forfeit: '승리 팀에 6:0 승리 점수를 부여하고 전체 합산 스코어에 반영합니다.',
+        cancelled: '득점을 기록하지 않으며, 전체 합산 점수에 포함되지 않습니다.',
+      },
+    };
     function setExResultType(el, type) {
       exResultType = type;
       document.querySelectorAll('.ex-result-btn').forEach(b => b.classList.remove('active'));
       el.classList.add('active');
+      const mode = (activeExchange && activeExchange.victoryMode) ? activeExchange.victoryMode : 'wins';
+      const guideEl = $('ex-result-guide');
+      if (guideEl) guideEl.textContent = (EX_GUIDE[mode] || EX_GUIDE.wins)[type] || '';
     }
     // 게스트 성별 토글
     function toggleExGender(el, gender) {
@@ -1885,16 +2018,16 @@
     function filterClubByRegion(el, region) {
       document.querySelectorAll('.ex-region-chip').forEach(b => b.classList.remove('active'));
       el.classList.add('active');
-      const filtered = (clubList||[]).filter(c=>(c.regionMajor||'').includes(region));
+      const filtered = (clubList || []).filter(c => (c.regionMajor || '').includes(region));
       const container = $('ex-club-region-results');
       if (!container) return;
       container.innerHTML = filtered.length
-        ? filtered.map(c=>`<div class="ex-club-result-item" onclick="selectExchangeClubB('${c.id}','${c.name}')"><strong>${c.name}</strong><span class="ex-club-result-region">${c.regionMajor||''}</span></div>`).join('')
+        ? filtered.map(c => `<div class="ex-club-result-item" onclick="selectExchangeClubB('${c.id}','${c.name}')"><strong>${c.name}</strong><span class="ex-club-result-region">${c.regionMajor || ''}</span></div>`).join('')
         : '<p style="color:#8E8E93;padding:12px;">해당 지역 클럽이 없습니다.</p>';
     }
     // 랭킹 서브탭
     function switchExRankingTab(tab) {
-      ['club','player'].forEach(t => $(`ex-rank-tab-${t}`)?.classList.toggle('active', t===tab));
+      ['club', 'player'].forEach(t => $(`ex-rank-tab-${t}`)?.classList.toggle('active', t === tab));
       if (typeof renderExchangeRanking === 'function') renderExchangeRanking(tab);
     }
     // showView 훅 — exchange 진입 시 initExchangeView 호출
@@ -1902,6 +2035,9 @@
     // if (v === 'exchange') initExchangeView();
     // (showView 재정의 방식은 호이스팅 충돌로 제거)
   </script>
+
+  <!-- ✅ v4.6: 관리자 권한 분리 + PIN 루프 수정 + 클럽ID 누락 강제 연결 -->
+  <script src="js/admin.js"></script>
 
 </body>
 

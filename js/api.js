@@ -569,7 +569,9 @@ async function exportBackup() {
   }
 }
 
-async function importBackup(file) {
+// ✅ v4.6: importBackup — admin.js의 importBackupWithGuard 경로는 confirmAdminPin() 인증 완료 상태
+// checkClubPin 이중 호출 제거 (비번 루프 버그 수정)
+async function importBackup(file, { skipPinCheck = false } = {}) {
   if (!file) return;
   try {
     const text = await file.text();
@@ -586,15 +588,16 @@ async function importBackup(file) {
     const exportedAt = data.exportedAt ? data.exportedAt.slice(0, 10) : '알 수 없음';
 
     gsConfirm(
-      `⚠️ 복원 확인\n\n백업 날짜: ${exportedAt}\n클럽: ${data.clubName || data.clubId}\n선수: ${playerCount}명 / 경기: ${logCount}건\n\n현재 데이터가 모두 교체됩니다.\n계속하시겠습니까?`,
+      `⚠️ 복원 확인\n\n백업 날짜: ${exportedAt}\n클럽: ${data.clubName || data.clubId || '현재 클럽'}\n선수: ${playerCount}명 / 경기: ${logCount}건\n\n현재 데이터가 모두 교체됩니다.\n계속하시겠습니까?`,
       async (ok) => {
         if (!ok) return;
-        // 관리자 비번 확인
-        checkClubPin(async (passed) => {
-          if (!passed) return;
+
+        // ✅ v4.6: skipPinCheck=true(admin 경로)면 PIN 재확인 생략, 아니면 clubPin 확인
+        const _doRestore = async () => {
           const overlay = $('loading-overlay');
           if (overlay) overlay.style.display = 'flex';
           try {
+            // ✅ v4.6: clubId 누락 시 현재 활성 클럽으로 강제 연결
             const clubId = getActiveClubId() || 'default';
 
             // 선수 복원
@@ -644,7 +647,18 @@ async function importBackup(file) {
           } finally {
             if (overlay) overlay.style.display = 'none';
           }
-        });
+        };
+
+        if (skipPinCheck) {
+          // admin 경로: 이미 confirmAdminPin() 인증 완료 → PIN 재요구 없이 바로 복원
+          await _doRestore();
+        } else {
+          // 직접 호출 경로: clubPin 확인 후 복원
+          checkClubPin(async (passed) => {
+            if (!passed) return;
+            await _doRestore();
+          });
+        }
       }
     );
   } catch (e) {

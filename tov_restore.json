@@ -1,0 +1,41 @@
+{
+  "clubs": [
+    {
+      "id": "tov",
+      "name": "토브테니스클럽",
+      "players": [
+        {"name":"류종찬","score":19.8663,"wins":6,"losses":6,"gender":"M"},
+        {"name":"김성현","score":23.1771,"wins":7,"losses":7,"gender":"M"},
+        {"name":"박상범","score":15,"wins":5,"losses":0,"gender":"M","isFeeExempt":true},
+        {"name":"최재광","score":17.4,"wins":5,"losses":8,"gender":"M","isFeeExempt":true},
+        {"name":"이우재","score":9.6,"wins":3,"losses":2,"gender":"M"},
+        {"name":"고상권","score":6.9,"wins":2,"losses":3,"gender":"M"},
+        {"name":"이진관","score":13.5,"wins":4,"losses":5,"gender":"M"},
+        {"name":"조오곤","score":15.6,"wins":5,"losses":2,"gender":"M"},
+        {"name":"오문환","score":3.9,"wins":1,"losses":3,"gender":"M"},
+        {"name":"이동하","score":0,"wins":0,"losses":0,"gender":"M","isGuest":true}
+      ],
+      "matchLog": [
+        {"date":"2026-02-11","type":"double","home":["박상범","이진관"],"away":["최재광","김성현"],"hs":6,"as":3,"winner":"home","ts":1770768000000},
+        {"date":"2026-02-11","type":"double","home":["박상범","최재광"],"away":["류종찬","이진관"],"hs":6,"as":3,"winner":"home","ts":1770768000001},
+        {"date":"2026-02-11","type":"double","home":["김성현","이진관"],"away":["최재광","이우재"],"hs":6,"as":5,"winner":"home","ts":1770768000002},
+        {"date":"2026-02-11","type":"double","home":["박상범","이우재"],"away":["김성현","최재광"],"hs":6,"as":1,"winner":"home","ts":1770768000003},
+        {"date":"2026-02-11","type":"double","home":["이진관","고상권"],"away":["류종찬","오문환"],"hs":6,"as":4,"winner":"home","ts":1770768000004},
+        {"date":"2026-02-11","type":"double","home":["최재광","김성현"],"away":["류종찬","오문환"],"hs":6,"as":2,"winner":"home","ts":1770768000005},
+        {"date":"2026-02-11","type":"double","home":["박상범","이우재"],"away":["고상권","조오곤"],"hs":6,"as":2,"winner":"home","ts":1770768000006},
+        {"date":"2026-02-11","type":"double","home":["박상범","이우재"],"away":["김성현","최재광"],"hs":7,"as":6,"winner":"home","ts":1770768000007},
+        {"date":"2026-02-11","type":"double","home":["류종찬","오문환"],"away":["고상권","조오곤"],"hs":6,"as":4,"winner":"home","ts":1770768000008},
+        {"date":"2026-02-11","type":"double","home":["조오곤","최재광"],"away":["오문환","이우재"],"hs":6,"as":5,"winner":"home","ts":1770768000009},
+        {"date":"2026-02-11","type":"double","home":["고상권","김성현"],"away":["류종찬","이동하"],"hs":4,"as":6,"winner":"away","ts":1770768000010},
+        {"date":"2026-02-11","type":"double","home":["이동하","고상권"],"away":["류종찬","김성현"],"hs":4,"as":6,"winner":"away","ts":1770768000011},
+        {"date":"2026-02-20","type":"double","home":["이진관","류종찬"],"away":["김성현","최재광"],"hs":5,"as":6,"winner":"away","ts":1771545600000},
+        {"date":"2026-02-20","type":"double","home":["김성현","최재광"],"away":["이진관","류종찬"],"hs":6,"as":0,"winner":"home","ts":1771545600001},
+        {"date":"2026-02-20","type":"double","home":["최재광","김성현"],"away":["류종찬","이진관"],"hs":6,"as":5,"winner":"home","ts":1771545600002},
+        {"date":"2026-02-20","type":"double","home":["최재광","김성현"],"away":["류종찬","조오곤"],"hs":5,"as":6,"winner":"away","ts":1771545600003},
+        {"date":"2026-02-20","type":"double","home":["최재광","이진관"],"away":["김성현","조오곤"],"hs":4,"as":6,"winner":"away","ts":1771545600004},
+        {"date":"2026-02-20","type":"double","home":["최재광","김성현"],"away":["류종찬","조오곤"],"hs":4,"as":6,"winner":"away","ts":1771545600005},
+        {"date":"2026-02-20","type":"double","home":["김성현","이진관"],"away":["류종찬","조오곤"],"hs":4,"as":6,"winner":"away","ts":1771545600006}
+      ]
+    }
+  ]
+}

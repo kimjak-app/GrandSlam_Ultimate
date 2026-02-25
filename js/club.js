@@ -4,14 +4,19 @@
 // ========================================
 
 function getActiveClubId() {
-  return currentClub ? currentClub.clubId : '';
+  return (currentClub && currentClub.clubId)
+    ? currentClub.clubId
+    : (localStorage.getItem('selectedClubId') || 'tov');
 }
 
 function loadActiveClubId() {
-  return localStorage.getItem(ACTIVE_CLUB_KEY) || '';
+  return localStorage.getItem('selectedClubId')
+    || localStorage.getItem(ACTIVE_CLUB_KEY)
+    || 'tov';
 }
 
 function saveActiveClubId(id) {
+  localStorage.setItem('selectedClubId', id || '');
   localStorage.setItem(ACTIVE_CLUB_KEY, id || '');
 }
 
@@ -207,7 +212,7 @@ async function initClubSystem() {
   const target = saved || clubList.find(c => c.isDefault) || clubList[0];
 
   if (target) {
-    activateClub(target, false); // false = sync는 나중에
+    activateClub(target, true); // true = 바로 데이터 불러오기!
   }
   updateClubSelectorUI();
 

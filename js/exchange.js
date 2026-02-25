@@ -18,17 +18,17 @@
 // ========================================
 const EXCHANGE_LANG = {
   // status
-  ongoing:   '진행중',
-  finished:  '완료',
+  ongoing: '진행중',
+  finished: '완료',
   // victoryMode
-  wins:      '데이비스컵 방식',
-  score:     '총점 방식',
+  wins: '데이비스컵 방식',
+  score: '총점 방식',
   // matchCategory
-  singles:   '단식',
-  doubles:   '복식',
+  singles: '단식',
+  doubles: '복식',
   // resultType
-  normal:    '정상경기',
-  forfeit:   '기권승',
+  normal: '정상경기',
+  forfeit: '기권승',
   cancelled: '경기취소',
 };
 
@@ -66,30 +66,30 @@ async function createExchange(config) {
 
   const exchange = {
     id,
-    clubAId:        clubId,
-    clubBId:        config.clubBId || null,
-    clubBName:      config.clubBName,
-    isClubBTemp:    config.isClubBTemp || false,
-    victoryMode:    config.victoryMode,   // 'wins' | 'score'
+    clubAId: clubId,
+    clubBId: config.clubBId || null,
+    clubBName: config.clubBName,
+    isClubBTemp: config.isClubBTemp || false,
+    victoryMode: config.victoryMode,   // 'wins' | 'score'
     handicapEnabled: config.handicapEnabled,
-    status:         'ongoing',
-    gameIds:        [],
-    scoreA:         0,
-    scoreB:         0,
-    winsA:          0,
-    winsB:          0,
-    singlesWinsA:   0,
-    singlesWinsB:   0,
-    doublesWinsA:   0,
-    doublesWinsB:   0,
-    singlesLossA:   0,
-    singlesLossB:   0,
-    doublesLossA:   0,
-    doublesLossB:   0,
-    seasonId:       'season1',   // UI 미노출 — 미래 시즌 확장용
-    createdAt:      ts,
-    date:           ds,
-    finishedAt:     null,
+    status: 'ongoing',
+    gameIds: [],
+    scoreA: 0,
+    scoreB: 0,
+    winsA: 0,
+    winsB: 0,
+    singlesWinsA: 0,
+    singlesWinsB: 0,
+    doublesWinsA: 0,
+    doublesWinsB: 0,
+    singlesLossA: 0,
+    singlesLossB: 0,
+    doublesLossA: 0,
+    doublesLossB: 0,
+    seasonId: 'season1',   // UI 미노출 — 미래 시즌 확장용
+    createdAt: ts,
+    date: ds,
+    finishedAt: null,
   };
 
   try {
@@ -106,14 +106,19 @@ async function createExchange(config) {
 
 async function finishExchange() {
   if (isSimulation) {
-    if (!confirm('시뮬레이션을 종료할까요?')) return;
-    activeExchange = null;
-    isSimulation = false;
-    initExchangeView();
+    gsConfirm('시뮬레이션을 종료하시겠습니까?\n종료 후에는 점수 수정이 불가능합니다.', (ok) => {
+      if (!ok) return;
+      activeExchange = null;
+      isSimulation = false;
+      if ($('ex-game-area')) $('ex-game-area').style.display = 'none';
+      if ($('ex-start-area')) $('ex-start-area').style.display = 'block';
+      if ($('ex-scoreboard')) $('ex-scoreboard').style.display = 'none';
+      initExchangeView();
+    });
     return;
   }
   if (!activeExchange) return;
-  gsConfirm('교류전을 종료할까요?', async (ok) => {
+  gsConfirm('교류전을 종료하시겠습니까?\n종료 후에는 점수 수정이 불가능합니다.', async (ok) => {
     if (!ok) return;
     const { ts } = nowISO();
     try {
@@ -123,9 +128,12 @@ async function finishExchange() {
       });
       activeExchange.status = 'finished';
       activeExchange.finishedAt = ts;
+      activeExchange = null;
+      if ($('ex-game-area')) $('ex-game-area').style.display = 'none';
+      if ($('ex-start-area')) $('ex-start-area').style.display = 'block';
+      if ($('ex-scoreboard')) $('ex-scoreboard').style.display = 'none';
       gsAlert('교류전이 종료되었습니다!');
-      renderExchangeScoreBar();
-      switchExchangeTab('history');
+      showView('game');
     } catch (e) {
       console.error('[exchange] finishExchange error:', e);
       gsAlert('종료 처리 실패 😵');
@@ -229,22 +237,22 @@ async function updateExchangeAggregate(exchange, logEntry, points) {
   const update = {
     scoreA: firebase.firestore.FieldValue.increment(deltaA),
     scoreB: firebase.firestore.FieldValue.increment(deltaB),
-    winsA:  firebase.firestore.FieldValue.increment(aWin ? 1 : 0),
-    winsB:  firebase.firestore.FieldValue.increment(aWin ? 0 : 1),
+    winsA: firebase.firestore.FieldValue.increment(aWin ? 1 : 0),
+    winsB: firebase.firestore.FieldValue.increment(aWin ? 0 : 1),
     gameIds: firebase.firestore.FieldValue.arrayUnion(logEntry.id),
   };
 
   // 단식/복식 세부 집계
   if (isSingles) {
-    update.singlesWinsA  = firebase.firestore.FieldValue.increment(aWin ? 1 : 0);
-    update.singlesWinsB  = firebase.firestore.FieldValue.increment(aWin ? 0 : 1);
-    update.singlesLossA  = firebase.firestore.FieldValue.increment(aWin ? 0 : 1);
-    update.singlesLossB  = firebase.firestore.FieldValue.increment(aWin ? 1 : 0);
+    update.singlesWinsA = firebase.firestore.FieldValue.increment(aWin ? 1 : 0);
+    update.singlesWinsB = firebase.firestore.FieldValue.increment(aWin ? 0 : 1);
+    update.singlesLossA = firebase.firestore.FieldValue.increment(aWin ? 0 : 1);
+    update.singlesLossB = firebase.firestore.FieldValue.increment(aWin ? 1 : 0);
   } else {
-    update.doublesWinsA  = firebase.firestore.FieldValue.increment(aWin ? 1 : 0);
-    update.doublesWinsB  = firebase.firestore.FieldValue.increment(aWin ? 0 : 1);
-    update.doublesLossA  = firebase.firestore.FieldValue.increment(aWin ? 0 : 1);
-    update.doublesLossB  = firebase.firestore.FieldValue.increment(aWin ? 1 : 0);
+    update.doublesWinsA = firebase.firestore.FieldValue.increment(aWin ? 1 : 0);
+    update.doublesWinsB = firebase.firestore.FieldValue.increment(aWin ? 0 : 1);
+    update.doublesLossA = firebase.firestore.FieldValue.increment(aWin ? 0 : 1);
+    update.doublesLossB = firebase.firestore.FieldValue.increment(aWin ? 1 : 0);
   }
 
   try {
@@ -272,12 +280,12 @@ async function saveExchangeGame(baseLogEntry, matchCategory, resultType, clubSid
 
   const logEntry = {
     ...baseLogEntry,
-    exchangeId:    activeExchange.id,
+    exchangeId: activeExchange.id,
     matchCategory,
     resultType,
     clubSideHome,
-    clubAId:       activeExchange.clubAId,
-    clubBId:       activeExchange.clubBId,
+    clubAId: activeExchange.clubAId,
+    clubBId: activeExchange.clubBId,
   };
 
   const points = calcExchangePoints(logEntry, activeExchange);
@@ -349,7 +357,7 @@ function getExchangeStatsForPlayer(playerName) {
     const isSingles = g.matchCategory === 'singles';
 
     if (isSingles) { isWin ? singleWin++ : singleLoss++; }
-    else           { isWin ? doubleWin++ : doubleLoss++; }
+    else { isWin ? doubleWin++ : doubleLoss++; }
 
     // 상대 클럽 전적
     const opponentClubId = inHome ? g.clubBId : g.clubAId;
@@ -389,15 +397,15 @@ function switchExchangeTab(tab) {
   });
 
   if (tab === 'ranking') renderExchangeRanking();
-  if (tab === 'stats')   renderExchangeStatsView();
+  if (tab === 'stats') renderExchangeStatsView();
   if (tab === 'history') renderExchangeHistory();
 }
 
 function renderExchangeView() {
   if (activeExchange && activeExchange.status === 'ongoing') {
-    if ($('ex-start-area'))  $('ex-start-area').style.display  = 'none';
-    if ($('ex-game-area'))   $('ex-game-area').style.display   = 'block';
-    if ($('ex-scoreboard'))  $('ex-scoreboard').style.display  = 'block';
+    if ($('ex-start-area')) $('ex-start-area').style.display = 'none';
+    if ($('ex-game-area')) $('ex-game-area').style.display = 'block';
+    if ($('ex-scoreboard')) $('ex-scoreboard').style.display = 'block';
     renderExchangeScoreBar();
     renderExchangePlayerPool('A');
     // 클럽B — 등록 클럽이면 Firestore 로드, 당일팀이면 게스트만
@@ -413,9 +421,19 @@ function renderExchangeView() {
     if ($('ex-club-label-b') && activeExchange) {
       $('ex-club-label-b').textContent = activeExchange.clubBName + ' 선수';
     }
+    // 가이드 문구 기본값(정상경기) 즉시 노출
+    const _guideEl = $('ex-result-guide');
+    if (_guideEl) {
+      const _mode = activeExchange.victoryMode || 'wins';
+      const _guides = {
+        wins: { normal: '승리 팀에 1승을 추가합니다. (점수는 기록용)' },
+        score: { normal: '양 팀의 득점을 합산하여 전체 스코어에 반영합니다.' },
+      };
+      _guideEl.textContent = (_guides[_mode] || _guides.wins).normal;
+    }
   } else {
-    if ($('ex-start-area'))  $('ex-start-area').style.display  = 'block';
-    if ($('ex-game-area'))   $('ex-game-area').style.display   = 'none';
+    if ($('ex-start-area')) $('ex-start-area').style.display = 'block';
+    if ($('ex-game-area')) $('ex-game-area').style.display = 'none';
   }
 }
 
@@ -430,15 +448,15 @@ function renderExchangeScoreBar() {
   const scoreA = ex.victoryMode === 'score' ? ex.scoreA.toFixed(1) : ex.winsA;
   const scoreB = ex.victoryMode === 'score' ? ex.scoreB.toFixed(1) : ex.winsB;
 
-  if ($('ex-score-a'))       $('ex-score-a').textContent = scoreA;
-  if ($('ex-score-b'))       $('ex-score-b').textContent = scoreB;
-  if ($('ex-club-name-a'))   $('ex-club-name-a').textContent = clubAName;
-  if ($('ex-club-name-b'))   $('ex-club-name-b').textContent = clubBName;
-  if ($('ex-detail-a'))      $('ex-detail-a').textContent =
+  if ($('ex-score-a')) $('ex-score-a').textContent = scoreA;
+  if ($('ex-score-b')) $('ex-score-b').textContent = scoreB;
+  if ($('ex-club-name-a')) $('ex-club-name-a').textContent = clubAName;
+  if ($('ex-club-name-b')) $('ex-club-name-b').textContent = clubBName;
+  if ($('ex-detail-a')) $('ex-detail-a').textContent =
     `단식 ${ex.singlesWinsA}승${ex.singlesLossA}패 | 복식 ${ex.doublesWinsA}승${ex.doublesLossA}패`;
-  if ($('ex-detail-b'))      $('ex-detail-b').textContent =
+  if ($('ex-detail-b')) $('ex-detail-b').textContent =
     `단식 ${ex.singlesWinsB}승${ex.singlesLossB}패 | 복식 ${ex.doublesWinsB}승${ex.doublesLossB}패`;
-  if ($('ex-mode-badge'))    $('ex-mode-badge').textContent =
+  if ($('ex-mode-badge')) $('ex-mode-badge').textContent =
     EXCHANGE_LANG[ex.victoryMode] + (ex.handicapEnabled ? ' · 핸디캡' : '');
 
   // 득점 애니메이션
@@ -538,8 +556,8 @@ async function renderExchangeHistory() {
       </div>
       <div class="ex-history-score">
         ${ex.victoryMode === 'score'
-          ? `${ex.scoreA.toFixed(1)} : ${ex.scoreB.toFixed(1)}점`
-          : `${ex.winsA}승 : ${ex.winsB}승`}
+      ? `${ex.scoreA.toFixed(1)} : ${ex.scoreB.toFixed(1)}점`
+      : `${ex.winsA}승 : ${ex.winsB}승`}
       </div>
       <div class="ex-history-mode">${EXCHANGE_LANG[ex.victoryMode]}</div>
     </div>
@@ -683,7 +701,7 @@ function exchangePickPlayer(side, name) {
       // 초과 시 기존 선택 해제
       const removed = target.shift();
       const oldChk = document.getElementById(`ex-chk-${side}-${removed}`) ||
-                     document.getElementById(`ex-chk-${side}-g-${removed}`);
+        document.getElementById(`ex-chk-${side}-g-${removed}`);
       if (oldChk) oldChk.checked = false;
     }
     target.push(name);
@@ -749,14 +767,14 @@ async function saveExchangeResult() {
   const resultType = document.querySelector('input[name="ex-result-type"]:checked')?.value || 'normal';
 
   const logEntry = {
-    id:      `${ts}-${Math.floor(Math.random() * 100000)}`,
+    id: `${ts}-${Math.floor(Math.random() * 100000)}`,
     ts, date: ds,
-    type:    exMatchCategory === 'doubles' ? 'double' : 'single',
-    home:    [...exPickedHome],
-    away:    [...exPickedAway],
-    hs:      homeScore,
-    as:      awayScore,
-    winner:  homeWin ? 'home' : 'away',
+    type: exMatchCategory === 'doubles' ? 'double' : 'single',
+    home: [...exPickedHome],
+    away: [...exPickedAway],
+    hs: homeScore,
+    as: awayScore,
+    winner: homeWin ? 'home' : 'away',
   };
 
   // 기존 개인 통계도 함께 적용
