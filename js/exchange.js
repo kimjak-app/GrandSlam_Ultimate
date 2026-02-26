@@ -639,6 +639,7 @@ function renderExPlayerRanking(el) {
         </tr>`).join('')}
       </tbody>
     </table>`;
+}
 
 function renderExchangeStatsView() {
   const listEl = $('ex-stats-player-list');
@@ -711,6 +712,7 @@ function viewExchangeStats(name) {
         <tbody>${vsRows}</tbody>
       </table>` : '<p style="color:#8E8E93;font-size:13px;">상대 클럽 전적 없음</p>'}
     </div>`;
+}
 
 async function renderExchangeHistory() {
   const clubId = getActiveClubId();
