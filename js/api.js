@@ -775,13 +775,21 @@ async function requireAuth(onSuccess) {
         return;
       }
     }
-    // 전체 명단 미리 가져오기 (추천 리스트용)
+    // 현재 선수 목록/명단 미리 가져오기 (추천 리스트용)
     const allPlayersSnap = await playersRef.get();
-    const allPlayerNames = allPlayersSnap.docs.map(doc => doc.id);
+    const rosterNames = (allPlayersSnap && allPlayersSnap.docs) ? allPlayersSnap.docs.map(doc => doc.id) : [];
+    const currentPlayerNames = Array.isArray(players) ? players.map(p => p && p.name).filter(Boolean) : [];
+    const allPlayerNames = currentPlayerNames.length ? currentPlayerNames : rosterNames;
     gsEditName('', async (enteredName) => {
       enteredName = (enteredName || '').trim();
       if (!enteredName) {
         gsAlert('정확한 실명을 입력하거나 목록에서 선택해 주세요.');
+        return;
+      }
+
+      const isCurrentPlayer = currentPlayerNames.includes(enteredName);
+      if (!isCurrentPlayer) {
+        gsAlert('현재 선수 목록에 없는 이름입니다. 정확한 이름을 입력하거나 목록에서 선택해 주세요.');
         return;
       }
 
@@ -791,14 +799,12 @@ async function requireAuth(onSuccess) {
           uid: currentUserAuth.uid,
           email: currentUserAuth.email || ''
         });
-        localStorage.setItem(`auth_name_${clubId}_${currentUserAuth.uid}`, enteredName);
-        currentLoggedPlayer = playerDoc.data();
-        currentLoggedPlayer.uid = currentUserAuth.uid;
-        gsAlert(`반갑습니다, ${enteredName}님! 인증이 완료되었습니다.`);
-        if (onSuccess) onSuccess();
-      } else {
-        gsAlert('클럽 명단에 등록되지 않은 이름입니다. 총무님께 등록을 요청해 주세요.');
       }
+      localStorage.setItem(`auth_name_${clubId}_${currentUserAuth.uid}`, enteredName);
+      currentLoggedPlayer = playerDoc.exists ? playerDoc.data() : (players.find(p => p && p.name === enteredName) || { name: enteredName });
+      currentLoggedPlayer.uid = currentUserAuth.uid;
+      gsAlert(`반갑습니다, ${enteredName}님! 인증이 완료되었습니다.`);
+      if (onSuccess) onSuccess();
     }, {
       title: "실명 대조",
       placeholder: "클럽 등록 실명을 입력하세요",
@@ -814,4 +820,3 @@ async function requireAuth(onSuccess) {
     gsAlert('권한 확인 중 오류가 발생했습니다.');
   }
 }
-
