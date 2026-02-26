@@ -649,41 +649,53 @@ function saveRoundResults() {
         const wp = players.find(p => p.name === winner);
         const lp = players.find(p => p.name === loser);
         if (wp) {
-          wp.sWins = (wp.sWins || 0) + 1;
-          wp.sScore = (wp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win);
-          wp.weekly = (wp.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win);
-          wp.wsScore = (wp.wsScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win);
-          wp.wWins = (wp.wWins || 0) + 1;
-          wp.wsWins = (wp.wsWins || 0) + 1;
+          const earn = TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win;
+          wp.score  = (wp.score  || 0) + earn;
+          wp.wins   = (wp.wins   || 0) + 1;
+          wp.sWins  = (wp.sWins  || 0) + 1;
+          wp.sScore = (wp.sScore || 0) + earn;
+          wp.weekly  = (wp.weekly  || 0) + earn;
+          wp.wsScore = (wp.wsScore || 0) + earn;
+          wp.wWins   = (wp.wWins   || 0) + 1;
+          wp.wsWins  = (wp.wsWins  || 0) + 1;
         }
         if (lp) {
+          const earn = TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss;
+          lp.score   = (lp.score   || 0) + earn;
+          lp.losses  = (lp.losses  || 0) + 1;
           lp.sLosses = (lp.sLosses || 0) + 1;
-          lp.sScore = (lp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss);
-          lp.weekly = (lp.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss);
-          lp.wsScore = (lp.wsScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss);
-          lp.wLosses = (lp.wLosses || 0) + 1;
+          lp.sScore  = (lp.sScore  || 0) + earn;
+          lp.weekly   = (lp.weekly   || 0) + earn;
+          lp.wsScore  = (lp.wsScore  || 0) + earn;
+          lp.wLosses  = (lp.wLosses  || 0) + 1;
           lp.wsLosses = (lp.wsLosses || 0) + 1;
         }
       } else {
         winner.forEach(name => {
           const p = players.find(pl => pl.name === name);
           if (p) {
-            p.dWins = (p.dWins || 0) + 1;
-            p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win);
-            p.weekly = (p.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win);
-            p.wdScore = (p.wdScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win);
-            p.wWins = (p.wWins || 0) + 1;
-            p.wdWins = (p.wdWins || 0) + 1;
+            const earn = TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win;
+            p.score   = (p.score   || 0) + earn;
+            p.wins    = (p.wins    || 0) + 1;
+            p.dWins   = (p.dWins   || 0) + 1;
+            p.dScore  = (p.dScore  || 0) + earn;
+            p.weekly  = (p.weekly  || 0) + earn;
+            p.wdScore = (p.wdScore || 0) + earn;
+            p.wWins   = (p.wWins   || 0) + 1;
+            p.wdWins  = (p.wdWins  || 0) + 1;
           }
         });
         loser.forEach(name => {
           const p = players.find(pl => pl.name === name);
           if (p) {
-            p.dLosses = (p.dLosses || 0) + 1;
-            p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss);
-            p.weekly = (p.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss);
-            p.wdScore = (p.wdScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss);
-            p.wLosses = (p.wLosses || 0) + 1;
+            const earn = TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss;
+            p.score    = (p.score    || 0) + earn;
+            p.losses   = (p.losses   || 0) + 1;
+            p.dLosses  = (p.dLosses  || 0) + 1;
+            p.dScore   = (p.dScore   || 0) + earn;
+            p.weekly   = (p.weekly   || 0) + earn;
+            p.wdScore  = (p.wdScore  || 0) + earn;
+            p.wLosses  = (p.wLosses  || 0) + 1;
             p.wdLosses = (p.wdLosses || 0) + 1;
           }
         });
@@ -701,11 +713,11 @@ function saveRoundResults() {
 
       if (roundMode === 'single') {
         const p = players.find(pl => pl.name === s.name);
-        if (p) p.sScore = (p.sScore || 0) + bonus;
+        if (p) { p.sScore = (p.sScore || 0) + bonus; p.score = (p.score || 0) + bonus; }
       } else {
         s.name.forEach(name => {
           const p = players.find(pl => pl.name === name);
-          if (p) p.dScore = (p.dScore || 0) + bonus;
+          if (p) { p.dScore = (p.dScore || 0) + bonus; p.score = (p.score || 0) + bonus; }
         });
       }
     });
@@ -717,11 +729,11 @@ function saveRoundResults() {
       if (stat && stat.matches === 0) {
         if (roundMode === 'single') {
           const p = players.find(pl => pl.name === participant);
-          if (p) p.sScore = (p.sScore || 0) + TENNIS_RULES.roundBonus[5];
+          if (p) { p.sScore = (p.sScore || 0) + TENNIS_RULES.roundBonus[5]; p.score = (p.score || 0) + TENNIS_RULES.roundBonus[5]; }
         } else {
           participant.forEach(name => {
             const p = players.find(pl => pl.name === name);
-            if (p) p.dScore = (p.dScore || 0) + TENNIS_RULES.roundBonus[5];
+            if (p) { p.dScore = (p.dScore || 0) + TENNIS_RULES.roundBonus[5]; p.score = (p.score || 0) + TENNIS_RULES.roundBonus[5]; }
           });
         }
       }
@@ -1020,38 +1032,50 @@ async function saveRoundDataToLog(finishedMatches) {
       const wp = players.find(p => p.name === winner);
       const lp = players.find(p => p.name === loser);
       if (wp) {
-        wp.sWins = (wp.sWins || 0) + 1;
-        wp.sScore = (wp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win);
-        wp.weekly = (wp.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win);
-        wp.wsScore = (wp.wsScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win);
-        wp.wWins = (wp.wWins || 0) + 1; wp.wsWins = (wp.wsWins || 0) + 1;
+        const earn = TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win;
+        wp.score  = (wp.score  || 0) + earn;
+        wp.wins   = (wp.wins   || 0) + 1;
+        wp.sWins  = (wp.sWins  || 0) + 1;
+        wp.sScore = (wp.sScore || 0) + earn;
+        wp.weekly  = (wp.weekly  || 0) + earn;
+        wp.wsScore = (wp.wsScore || 0) + earn;
+        wp.wWins   = (wp.wWins   || 0) + 1; wp.wsWins = (wp.wsWins || 0) + 1;
       }
       if (lp) {
+        const earn = TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss;
+        lp.score   = (lp.score   || 0) + earn;
+        lp.losses  = (lp.losses  || 0) + 1;
         lp.sLosses = (lp.sLosses || 0) + 1;
-        lp.sScore = (lp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss);
-        lp.weekly = (lp.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss);
-        lp.wsScore = (lp.wsScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss);
-        lp.wLosses = (lp.wLosses || 0) + 1; lp.wsLosses = (lp.wsLosses || 0) + 1;
+        lp.sScore  = (lp.sScore  || 0) + earn;
+        lp.weekly   = (lp.weekly   || 0) + earn;
+        lp.wsScore  = (lp.wsScore  || 0) + earn;
+        lp.wLosses  = (lp.wLosses  || 0) + 1; lp.wsLosses = (lp.wsLosses || 0) + 1;
       }
     } else {
       winner.forEach(name => {
         const p = players.find(pl => pl.name === name);
         if (p) {
-          p.dWins = (p.dWins || 0) + 1;
-          p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win);
-          p.weekly = (p.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win);
-          p.wdScore = (p.wdScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win);
-          p.wWins = (p.wWins || 0) + 1; p.wdWins = (p.wdWins || 0) + 1;
+          const earn = TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win;
+          p.score   = (p.score   || 0) + earn;
+          p.wins    = (p.wins    || 0) + 1;
+          p.dWins   = (p.dWins   || 0) + 1;
+          p.dScore  = (p.dScore  || 0) + earn;
+          p.weekly  = (p.weekly  || 0) + earn;
+          p.wdScore = (p.wdScore || 0) + earn;
+          p.wWins   = (p.wWins   || 0) + 1; p.wdWins = (p.wdWins || 0) + 1;
         }
       });
       loser.forEach(name => {
         const p = players.find(pl => pl.name === name);
         if (p) {
-          p.dLosses = (p.dLosses || 0) + 1;
-          p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss);
-          p.weekly = (p.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss);
-          p.wdScore = (p.wdScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss);
-          p.wLosses = (p.wLosses || 0) + 1; p.wdLosses = (p.wdLosses || 0) + 1;
+          const earn = TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss;
+          p.score    = (p.score    || 0) + earn;
+          p.losses   = (p.losses   || 0) + 1;
+          p.dLosses  = (p.dLosses  || 0) + 1;
+          p.dScore   = (p.dScore   || 0) + earn;
+          p.weekly   = (p.weekly   || 0) + earn;
+          p.wdScore  = (p.wdScore  || 0) + earn;
+          p.wLosses  = (p.wLosses  || 0) + 1; p.wdLosses = (p.wdLosses || 0) + 1;
         }
       });
     }

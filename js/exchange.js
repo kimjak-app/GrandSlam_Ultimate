@@ -396,7 +396,15 @@ function switchExchangeTab(tab) {
     if (view) view.style.display = t === tab ? 'block' : 'none';
   });
 
-  if (tab === 'ranking') renderExchangeRanking();
+  if (tab === 'ranking') {
+    // 클럽 서브탭 기본 활성화 보장
+    const clubBtn = $('ex-rank-tab-club');
+    const playerBtn = $('ex-rank-tab-player');
+    if (clubBtn && !clubBtn.classList.contains('active') && !(playerBtn && playerBtn.classList.contains('active'))) {
+      clubBtn.classList.add('active');
+    }
+    renderExchangeRanking();
+  }
   if (tab === 'stats') renderExchangeStatsView();
   if (tab === 'history') renderExchangeHistory();
 }
@@ -530,7 +538,10 @@ function renderExchangeRanking() {
   const el = $('ex-ranking-content');
   if (!el) return;
 
-  const currentTab = document.getElementById('ex-rank-tab-club')?.classList.contains('active') ? 'club' : 'player';
+  // 현재 활성 탭 확인 (기본값 'club')
+  const clubBtn = document.getElementById('ex-rank-tab-club');
+  const currentTab = (clubBtn && clubBtn.classList.contains('active')) ? 'club' : 'player';
+
   if (currentTab === 'club') {
     renderExClubRanking(el);
   } else {
@@ -543,7 +554,10 @@ function switchExRankingTab(tab) {
     const btn = $(`ex-rank-tab-${t}`);
     if (btn) btn.classList.toggle('active', t === tab);
   });
-  renderExchangeRanking();
+  const el = $('ex-ranking-content');
+  if (!el) return;
+  if (tab === 'club') renderExClubRanking(el);
+  else renderExPlayerRanking(el);
 }
 
 function renderExClubRanking(el) {

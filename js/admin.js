@@ -92,6 +92,7 @@ async function _verifyMasterPin(entered) {
             gsAlert('❌ 총괄관리자 비밀번호가 틀렸습니다.');
             return;
         }
+        MASTER_PIN = String(masterPin); // 세션 캐싱 — 총무모드 등 재사용
         _openAdminTab('master');
     } catch (e) {
         console.error('[admin] _verifyMasterPin error:', e);

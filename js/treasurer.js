@@ -56,7 +56,7 @@ function resetTreasurerView() {
 
 function verifyTreasurerPin() {
   const pin = $('treasurerPinInput').value;
-  if (pin === MASTER_PIN || pin === ADMIN_PIN) {
+  if (pin && (pin === ADMIN_PIN || (MASTER_PIN && pin === MASTER_PIN))) {
     treasurerUnlocked = true;
     showTreasurerMenu();
   } else {

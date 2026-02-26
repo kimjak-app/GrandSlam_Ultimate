@@ -17,6 +17,7 @@ var clubList = [];
 var masterUnlocked = false;
 
 var ADMIN_PIN = "";
+var MASTER_PIN = ""; // 마스터 PIN 인증 성공 시 세션 캐싱
 
 var _masterPinCallback = null;
 var _gsAlertCallback = null;
