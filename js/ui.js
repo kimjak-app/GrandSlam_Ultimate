@@ -50,6 +50,7 @@ function checkClubPin(callback) {
 function confirmClubPin() {
   const input = $('clubPinInput').value;
   const modal = $('clubPinModal');
+  const masterPin = (typeof MASTER_PIN !== 'undefined') ? MASTER_PIN : '0707';
   const isMasterMode = modal.dataset.mode === 'master';
   modal.style.display = 'none';
   modal.dataset.mode = '';
@@ -61,12 +62,12 @@ function confirmClubPin() {
 
   if (isMasterMode) {
     // 마스터 PIN 확인
-    if (input === MASTER_PIN) { masterUnlocked = true; if (_masterPinCallback) _masterPinCallback(true); }
+    if (input === masterPin) { masterUnlocked = true; if (_masterPinCallback) _masterPinCallback(true); }
     else { if (input !== '') gsAlert('비밀번호가 틀렸습니다!'); if (_masterPinCallback) _masterPinCallback(false); }
     _masterPinCallback = null;
   } else {
     // 클럽 관리자 PIN 확인
-    if (input === MASTER_PIN) { masterUnlocked = true; if (_clubPinCallback) _clubPinCallback(true); }
+    if (input === masterPin) { masterUnlocked = true; if (_clubPinCallback) _clubPinCallback(true); }
     else if (input === ADMIN_PIN) { if (_clubPinCallback) _clubPinCallback(true); }
     else { if (input !== '') gsAlert('비밀번호가 틀렸습니다!'); if (_clubPinCallback) _clubPinCallback(false); }
     _clubPinCallback = null;
@@ -191,4 +192,3 @@ function applyAutofit(scopeEl) {
 function applyAutofitAllTables() {
   document.querySelectorAll('.tennis-table').forEach(t => applyAutofit(t));
 }
-
