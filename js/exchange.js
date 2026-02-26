@@ -663,6 +663,11 @@ function renderExchangeStatsView() {
 }
 
 function viewExchangeStats(name) {
+  // 다른 체크박스 모두 해제 (1명만 선택)
+  document.querySelectorAll('#ex-stats-player-list .p-chk').forEach(chk => {
+    chk.checked = chk.value === name;
+  });
+
   const reportEl = $('ex-stats-report');
   if (!reportEl) return;
 
@@ -829,15 +834,16 @@ function selectExchangeClubB(clubId, clubName) {
 // ========================================
 
 function openExchangeGuestModal(side) {
-  // side: 'A' | 'B'
   const modal = $('ex-guest-modal');
   if (modal) {
     modal.dataset.side = side;
+    modal.dataset.gender = 'M';
     modal.style.display = 'flex';
     if ($('ex-guest-name')) $('ex-guest-name').value = '';
-    // 성별 초기화
-    const mRadio = document.querySelector('input[name="ex-guest-gender"][value="M"]');
-    if (mRadio) mRadio.checked = true;
+    // 성별 버튼 초기화 (남성 active)
+    document.querySelectorAll('.ex-gender-btn').forEach(b => b.classList.remove('active'));
+    const mBtn = document.querySelector('.ex-gender-btn.male');
+    if (mBtn) mBtn.classList.add('active');
   }
 }
 
@@ -851,8 +857,7 @@ function confirmExchangeGuest() {
   if (!modal) return;
   const side = modal.dataset.side;
   const name = ($('ex-guest-name') || {}).value?.trim();
-  const genderRadio = document.querySelector('input[name="ex-guest-gender"]:checked');
-  const gender = genderRadio ? genderRadio.value : 'M';
+  const gender = modal.dataset.gender || 'M';
 
   if (!name) { gsAlert('이름을 입력해주세요.'); return; }
   addExchangeGuest(side, name, gender);
