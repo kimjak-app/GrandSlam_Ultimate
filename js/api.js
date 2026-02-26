@@ -213,9 +213,7 @@ async function sync() {
     const rawLog = await _fsGetMatchLog(clubId);
     matchLog = normalizeMatchLog(rawLog);
 
-    // ✅ v3.816: '1대2용' → '1대2대결용' 마이그레이션
-    migrate1v2Names();
-
+    // migrate1v2 제거 (데이터 0 상태로 불필요)
     // 기존 흐름 유지 (통계/사다리/토너먼트 등)
     updateSeason();
     updateWeekly();
@@ -287,33 +285,6 @@ async function loadMoreMatchLog() {
   } catch (e) {
     console.error(e);
     setStatus(`<div style="color:#d33; font-weight:bold;">❌ 더보기 실패: ${e.message}</div>`);
-  }
-}
-
-// ✅ v3.816: '1대2용' → '1대2대결용' 마이그레이션 함수
-function migrate1v2Names() {
-  let changed = false;
-  players.forEach(p => {
-    if (p.name === '1대2용') {
-      p.name = '1대2대결용';
-      changed = true;
-    }
-  });
-  if (matchLog && matchLog.length > 0) {
-    matchLog.forEach(log => {
-      ['home', 'away', 'winner', 'loser'].forEach(key => {
-        if (Array.isArray(log[key])) {
-          log[key] = log[key].map(n => n === '1대2용' ? '1대2대결용' : n);
-        } else if (log[key] === '1대2용') {
-          log[key] = '1대2대결용';
-          changed = true;
-        }
-      });
-    });
-  }
-  if (changed) {
-    console.log('[v3.816] 1대2용 → 1대2대결용 마이그레이션 완료, 서버 저장 중...');
-    pushPayload({ action: "save", data: players, matchLogAppend: [] }).catch(e => console.warn('migrate push error:', e));
   }
 }
 
@@ -449,17 +420,17 @@ async function fetchAnnouncements() {
 // 코트공지 저장 (단건 — 하위호환용)
 async function saveCourtNotice(notice) {
   persistCourtNoticesLocal();
-  return await pushCourtNoticesToGAS();
+  return await pushCourtNotices();
 }
 
 // 공지사항 저장 (단건 — 하위호환용)
 async function saveAnnouncement(announcement) {
   persistAnnouncementsLocal();
-  return await pushAnnouncementsToGAS();
+  return await pushAnnouncements();
 }
 
 // ✅ v3.83: 공지사항 전체 배열 저장 (Firestore)
-async function pushAnnouncementsToGAS() {
+async function pushAnnouncements() {
   persistAnnouncementsLocal();
   if (!currentClub) return false;
   try {
@@ -469,13 +440,13 @@ async function pushAnnouncementsToGAS() {
     );
     return true;
   } catch (e) {
-    console.warn('pushAnnouncementsToGAS error:', e);
+    console.warn('pushAnnouncements error:', e);
     return false;
   }
 }
 
 // ✅ v3.83: 코트공지 전체 배열 저장 (Firestore)
-async function pushCourtNoticesToGAS() {
+async function pushCourtNotices() {
   persistCourtNoticesLocal();
   if (!currentClub) return false;
   try {
@@ -485,7 +456,7 @@ async function pushCourtNoticesToGAS() {
     );
     return true;
   } catch (e) {
-    console.warn('pushCourtNoticesToGAS error:', e);
+    console.warn('pushCourtNotices error:', e);
     return false;
   }
 }

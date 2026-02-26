@@ -172,6 +172,10 @@ function _renderMasterAdminTab() {
             <span class="material-symbols-outlined">folder_open</span> 선별 복원 (마스터 백업 파일)
           </button>
         </div>
+        <button class="btn-purple-main" onclick="resetExchangeData()"
+          style="display:flex; align-items:center; justify-content:center; gap:8px; background:#8E44AD;">
+          <span class="material-symbols-outlined">sync_problem</span> 교류전 기록 초기화
+        </button>
       </div>
     </div>`;
 }
@@ -426,4 +430,56 @@ async function importBackupWithGuard(file) {
     } catch (e) {
         gsAlert('❌ 파일 읽기 실패\n\nJSON 형식이 올바르지 않습니다.');
     }
+}
+
+// ========================================
+// 교류전 기록 초기화 (마스터 전용)
+// ========================================
+
+async function resetExchangeData() {
+  const clubId = (typeof getActiveClubId === 'function') ? getActiveClubId() : null;
+  if (!clubId) { gsAlert('활성 클럽이 없습니다.'); return; }
+
+  gsConfirm(
+    '⚠️ 교류전 기록 초기화\n\n현재 클럽의 모든 교류전 기록이 삭제됩니다.\n(exchanges 컬렉션 + 관련 matchLog 항목)\n\n선수 개인 통계(점수/승패)는 유지됩니다.\n계속하시겠습니까?',
+    async (ok) => {
+      if (!ok) return;
+      try {
+        const clubRef = _clubRef(clubId);
+
+        // 1. exchanges 컬렉션 전체 삭제
+        const exSnap = await clubRef.collection('exchanges').get();
+        if (!exSnap.empty) {
+          const chunkSize = 400;
+          for (let i = 0; i < exSnap.docs.length; i += chunkSize) {
+            const batch = _db.batch();
+            exSnap.docs.slice(i, i + chunkSize).forEach(d => batch.delete(d.ref));
+            await batch.commit();
+          }
+        }
+
+        // 2. matchLog 중 exchangeId 있는 항목만 삭제
+        const logSnap = await clubRef.collection('matchLog').get();
+        const exLogs = logSnap.docs.filter(d => d.data().exchangeId);
+        if (exLogs.length > 0) {
+          const chunkSize = 400;
+          for (let i = 0; i < exLogs.length; i += chunkSize) {
+            const batch = _db.batch();
+            exLogs.slice(i, i + chunkSize).forEach(d => batch.delete(d.ref));
+            await batch.commit();
+          }
+          // 로컬 matchLog에서도 제거
+          matchLog = matchLog.filter(m => !m.exchangeId);
+        }
+
+        // 3. 교류전 전역 상태 초기화
+        if (typeof activeExchange !== 'undefined') activeExchange = null;
+
+        gsAlert(`✅ 교류전 기록 초기화 완료!\n\n삭제된 교류전: ${exSnap.size}건\n삭제된 경기 기록: ${exLogs.length}건`);
+      } catch (e) {
+        console.error('[admin] resetExchangeData error:', e);
+        gsAlert('❌ 초기화 실패\n\n' + e.message);
+      }
+    }
+  );
 }

@@ -527,14 +527,176 @@ async function loadClubBPlayers(clubBId) {
 }
 
 function renderExchangeRanking() {
-  // TODO: 교류전 개인/클럽 랭킹 렌더링
-  // 기존 renderRankTable() 패턴 재사용
+  const el = $('ex-ranking-content');
+  if (!el) return;
+
+  const currentTab = document.getElementById('ex-rank-tab-club')?.classList.contains('active') ? 'club' : 'player';
+  if (currentTab === 'club') {
+    renderExClubRanking(el);
+  } else {
+    renderExPlayerRanking(el);
+  }
 }
 
-function renderExchangeStatsView() {
-  // TODO: 교류전 통계 화면 렌더링
-  // getExchangeStatsForPlayer() 호출
+function switchExRankingTab(tab) {
+  ['club', 'player'].forEach(t => {
+    const btn = $(`ex-rank-tab-${t}`);
+    if (btn) btn.classList.toggle('active', t === tab);
+  });
+  renderExchangeRanking();
 }
+
+function renderExClubRanking(el) {
+  // exchanges 히스토리 기반 클럽 대항전 승패 집계
+  const myClubName = currentClub ? (currentClub.clubName || '우리 클럽') : '우리 클럽';
+  const vsMap = {}; // { clubBName: { win, loss, draw } }
+
+  matchLog.filter(m => m.exchangeId).forEach(m => {
+    // exchange 객체는 activeExchange 또는 matchLog의 clubBId로 추적
+    const clubBName = m.clubBName || m.clubBId || '상대 클럽';
+    if (!vsMap[clubBName]) vsMap[clubBName] = { win: 0, loss: 0 };
+    const inHome = m.clubSideHome === 'A';
+    const homeWin = m.winner === 'home';
+    const weWon = (inHome && homeWin) || (!inHome && !homeWin);
+    if (m.resultType !== 'cancelled') {
+      weWon ? vsMap[clubBName].win++ : vsMap[clubBName].loss++;
+    }
+  });
+
+  const rows = Object.entries(vsMap);
+  if (!rows.length) {
+    el.innerHTML = '<p style="color:#8E8E93;text-align:center;padding:30px 0;">교류전 경기 기록이 없습니다.</p>';
+    return;
+  }
+
+  const sorted = rows.sort((a, b) => b[1].win - a[1].win);
+  el.innerHTML = `
+    <table class="tennis-table" style="width:100%;">
+      <thead><tr>
+        <th>상대 클럽</th><th>승</th><th>패</th><th>승률</th>
+      </tr></thead>
+      <tbody>
+        ${sorted.map(([name, s]) => {
+          const total = s.win + s.loss;
+          const rate = total > 0 ? Math.round((s.win / total) * 100) : 0;
+          return `<tr>
+            <td style="text-align:left;padding-left:10px;">${escapeHtml(name)}</td>
+            <td>${s.win}</td><td>${s.loss}</td>
+            <td><b>${rate}%</b></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderExPlayerRanking(el) {
+  const exPlayers = players.filter(p => !p.isGuest);
+  if (!exPlayers.length) {
+    el.innerHTML = '<p style="color:#8E8E93;text-align:center;padding:30px 0;">등록된 선수가 없습니다.</p>';
+    return;
+  }
+
+  // 교류전 경기만 집계
+  const stats = exPlayers.map(p => {
+    const s = getExchangeStatsForPlayer(p.name);
+    const total = s.singleWin + s.singleLoss + s.doubleWin + s.doubleLoss;
+    const wins = s.singleWin + s.doubleWin;
+    const rate = total > 0 ? Math.round((wins / total) * 100) : 0;
+    return { name: p.name, wins, losses: total - wins, rate, total };
+  }).filter(s => s.total > 0).sort((a, b) => b.wins - a.wins || b.rate - a.rate);
+
+  if (!stats.length) {
+    el.innerHTML = '<p style="color:#8E8E93;text-align:center;padding:30px 0;">교류전 경기 기록이 없습니다.</p>';
+    return;
+  }
+
+  el.innerHTML = `
+    <table class="tennis-table" style="width:100%;">
+      <thead><tr>
+        <th>순위</th><th style="text-align:left;padding-left:10px;">선수</th>
+        <th>승</th><th>패</th><th>승률</th>
+      </tr></thead>
+      <tbody>
+        ${stats.map((s, i) => `<tr>
+          <td>${i + 1}</td>
+          <td style="text-align:left;padding-left:10px;">${escapeHtml(s.name)}</td>
+          <td>${s.wins}</td><td>${s.losses}</td>
+          <td><b>${s.rate}%</b></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+function renderExchangeStatsView() {
+  const listEl = $('ex-stats-player-list');
+  if (!listEl) return;
+
+  const exPlayers = players.filter(p => !p.isGuest);
+  if (!exPlayers.length) {
+    listEl.innerHTML = '<p style="color:#8E8E93;text-align:center;padding:20px;">등록된 선수가 없습니다.</p>';
+    return;
+  }
+
+  listEl.innerHTML = exPlayers.map((p, i) => {
+    const chkId = `ex-stats-p-${i}`;
+    const gIcon = p.gender === 'F'
+      ? '<span style="font-size:12px;color:#E8437A;vertical-align:middle;">♀</span>'
+      : '<span style="font-size:12px;color:#3A7BD5;vertical-align:middle;">♂</span>';
+    return `<input type="checkbox" id="${chkId}" class="p-chk" value="${escapeHtml(p.name)}"
+      onclick="viewExchangeStats('${escapeHtml(p.name).replace(/'/g,'&#39;')}')">
+      <label for="${chkId}" class="p-label">${gIcon}${escapeHtml(p.name)}</label>`;
+  }).join('');
+}
+
+function viewExchangeStats(name) {
+  const reportEl = $('ex-stats-report');
+  if (!reportEl) return;
+
+  const s = getExchangeStatsForPlayer(name);
+  const totalWin = s.singleWin + s.doubleWin;
+  const totalLoss = s.singleLoss + s.doubleLoss;
+  const total = totalWin + totalLoss;
+  const rate = total > 0 ? Math.round((totalWin / total) * 100) : 0;
+
+  const vsRows = Object.entries(s.vsClubs).map(([clubId, v]) => {
+    const vTotal = v.win + v.loss;
+    const vRate = vTotal > 0 ? Math.round((v.win / vTotal) * 100) : 0;
+    return `<tr>
+      <td style="text-align:left;padding-left:8px;">${escapeHtml(clubId)}</td>
+      <td>${v.win}승 ${v.loss}패</td>
+      <td><b>${vRate}%</b></td>
+    </tr>`;
+  }).join('');
+
+  reportEl.style.display = 'block';
+  reportEl.innerHTML = `
+    <div style="background:#f8f8f8;border-radius:12px;padding:14px;margin-top:10px;">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px;">📊 ${escapeHtml(name)} — 교류전 통계</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+        <div style="background:white;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:11px;color:#8E8E93;margin-bottom:4px;">전체</div>
+          <div style="font-size:18px;font-weight:700;">${totalWin}승 ${totalLoss}패</div>
+          <div style="font-size:13px;color:var(--aussie-blue);">${rate}%</div>
+        </div>
+        <div style="background:white;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:11px;color:#8E8E93;margin-bottom:4px;">단식</div>
+          <div style="font-size:18px;font-weight:700;">${s.singleWin}승 ${s.singleLoss}패</div>
+        </div>
+        <div style="background:white;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:11px;color:#8E8E93;margin-bottom:4px;">복식</div>
+          <div style="font-size:18px;font-weight:700;">${s.doubleWin}승 ${s.doubleLoss}패</div>
+        </div>
+        <div style="background:white;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:11px;color:#8E8E93;margin-bottom:4px;">출전 경기</div>
+          <div style="font-size:18px;font-weight:700;">${total}경기</div>
+        </div>
+      </div>
+      ${vsRows ? `
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px;">상대 클럽별 전적</div>
+      <table class="tennis-table" style="width:100%;">
+        <thead><tr><th style="text-align:left;padding-left:8px;">클럽</th><th>전적</th><th>승률</th></tr></thead>
+        <tbody>${vsRows}</tbody>
+      </table>` : '<p style="color:#8E8E93;font-size:13px;">상대 클럽 전적 없음</p>'}
+    </div>`;
 
 async function renderExchangeHistory() {
   const clubId = getActiveClubId();

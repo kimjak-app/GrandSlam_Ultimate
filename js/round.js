@@ -185,10 +185,7 @@ function initRoundPlayerPool() {
   updateRoundCount();
 }
 
-function renderRoundPlayerList() {
-  // 기존 호출부 호환용
-  initRoundPlayerPool();
-}
+
 
 
 function updateRoundCount() {
@@ -244,7 +241,6 @@ function generateRoundSchedule() {
 
   // ✅ 라운드 생성 버튼 클릭 시 기존 매치 강제 초기화
   roundMatches = [];
-  roundResults = [];
 
   if (roundMode === 'single' && checked.length < 3) {
     gsAlert('단식은 최소 3명 이상 필요합니다.');
@@ -294,7 +290,6 @@ function generateRoundSchedule() {
 
   // 매치 생성 (Round Robin - Circle Method)
   roundMatches = generateRoundRobinMatches(roundParticipants);
-  roundResults = [];
 
   // UI 전환
   $('round-setup-area').style.display = 'none';
@@ -653,16 +648,44 @@ function saveRoundResults() {
       if (roundMode === 'single') {
         const wp = players.find(p => p.name === winner);
         const lp = players.find(p => p.name === loser);
-        if (wp) { wp.sWins = (wp.sWins || 0) + 1; wp.sScore = (wp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win); }
-        if (lp) { lp.sLosses = (lp.sLosses || 0) + 1; lp.sScore = (lp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss); }
+        if (wp) {
+          wp.sWins = (wp.sWins || 0) + 1;
+          wp.sScore = (wp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win);
+          wp.weekly = (wp.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win);
+          wp.wsScore = (wp.wsScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win);
+          wp.wWins = (wp.wWins || 0) + 1;
+          wp.wsWins = (wp.wsWins || 0) + 1;
+        }
+        if (lp) {
+          lp.sLosses = (lp.sLosses || 0) + 1;
+          lp.sScore = (lp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss);
+          lp.weekly = (lp.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss);
+          lp.wsScore = (lp.wsScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss);
+          lp.wLosses = (lp.wLosses || 0) + 1;
+          lp.wsLosses = (lp.wsLosses || 0) + 1;
+        }
       } else {
         winner.forEach(name => {
           const p = players.find(pl => pl.name === name);
-          if (p) { p.dWins = (p.dWins || 0) + 1; p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win); }
+          if (p) {
+            p.dWins = (p.dWins || 0) + 1;
+            p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win);
+            p.weekly = (p.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win);
+            p.wdScore = (p.wdScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win);
+            p.wWins = (p.wWins || 0) + 1;
+            p.wdWins = (p.wdWins || 0) + 1;
+          }
         });
         loser.forEach(name => {
           const p = players.find(pl => pl.name === name);
-          if (p) { p.dLosses = (p.dLosses || 0) + 1; p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss); }
+          if (p) {
+            p.dLosses = (p.dLosses || 0) + 1;
+            p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss);
+            p.weekly = (p.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss);
+            p.wdScore = (p.wdScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss);
+            p.wLosses = (p.wLosses || 0) + 1;
+            p.wdLosses = (p.wdLosses || 0) + 1;
+          }
         });
       }
     });
@@ -732,7 +755,6 @@ function resetRound() {
 
     roundParticipants = [];
     roundMatches = [];
-    roundResults = [];
     miniTournamentMatches = [];
     miniTournamentRound = 0;
 
@@ -749,7 +771,7 @@ function resetRound() {
     const cntSpan = $('round-cnt');
     if (cntSpan) cntSpan.textContent = '0';
 
-    renderRoundPlayerList();
+    initRoundPlayerPool();
   }); // gsConfirm end
 }
 
@@ -997,16 +1019,40 @@ async function saveRoundDataToLog(finishedMatches) {
     if (roundMode === 'single') {
       const wp = players.find(p => p.name === winner);
       const lp = players.find(p => p.name === loser);
-      if (wp) { wp.sWins = (wp.sWins || 0) + 1; wp.sScore = (wp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win); }
-      if (lp) { lp.sLosses = (lp.sLosses || 0) + 1; lp.sScore = (lp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss); }
+      if (wp) {
+        wp.sWins = (wp.sWins || 0) + 1;
+        wp.sScore = (wp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win);
+        wp.weekly = (wp.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win);
+        wp.wsScore = (wp.wsScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win);
+        wp.wWins = (wp.wWins || 0) + 1; wp.wsWins = (wp.wsWins || 0) + 1;
+      }
+      if (lp) {
+        lp.sLosses = (lp.sLosses || 0) + 1;
+        lp.sScore = (lp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss);
+        lp.weekly = (lp.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss);
+        lp.wsScore = (lp.wsScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss);
+        lp.wLosses = (lp.wLosses || 0) + 1; lp.wsLosses = (lp.wsLosses || 0) + 1;
+      }
     } else {
       winner.forEach(name => {
         const p = players.find(pl => pl.name === name);
-        if (p) { p.dWins = (p.dWins || 0) + 1; p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win); }
+        if (p) {
+          p.dWins = (p.dWins || 0) + 1;
+          p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win);
+          p.weekly = (p.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win);
+          p.wdScore = (p.wdScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win);
+          p.wWins = (p.wWins || 0) + 1; p.wdWins = (p.wdWins || 0) + 1;
+        }
       });
       loser.forEach(name => {
         const p = players.find(pl => pl.name === name);
-        if (p) { p.dLosses = (p.dLosses || 0) + 1; p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss); }
+        if (p) {
+          p.dLosses = (p.dLosses || 0) + 1;
+          p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss);
+          p.weekly = (p.weekly || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss);
+          p.wdScore = (p.wdScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss);
+          p.wLosses = (p.wLosses || 0) + 1; p.wdLosses = (p.wdLosses || 0) + 1;
+        }
       });
     }
   });

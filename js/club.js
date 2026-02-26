@@ -993,7 +993,7 @@ function deleteCourtNotice(id) {
     renderCourtNoticeList();
     loadCourtInfo();
     // ✅ v3.83: GAS에도 저장
-    pushCourtNoticesToGAS();
+    pushCourtNotices();
   });
 }
 
@@ -1068,7 +1068,7 @@ function deleteAnnouncement(id) {
     renderAnnouncementMgmtList();
     loadNotices();
     // ✅ v3.83: GAS에도 저장
-    pushAnnouncementsToGAS();
+    pushAnnouncements();
   });
 }
 
