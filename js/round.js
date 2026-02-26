@@ -716,6 +716,26 @@ function saveRoundResults() {
     // 재계산
     computeAll();
 
+    // 디버그 로그: 상태 객체 집계 컬렉션 길이 및 저장된 라운드 결과 샘플
+    const s = window?.state || window?.GSState || window?.AppState;
+    if (s) {
+      console.log(
+        '[round-save] matches:', s?.matches?.length ?? 0,
+        'results:', s?.results?.length ?? 0,
+        'games:', s?.games?.length ?? 0,
+        'matchLogs:', s?.matchLogs?.length ?? 0,
+        'matchHistory:', s?.matchHistory?.length ?? 0,
+        'records:', s?.records?.length ?? 0,
+        'roundResults:', s?.roundResults?.length ?? 0
+      );
+    }
+    const savedRoundResults = Array.isArray(s?.roundResults)
+      ? s.roundResults
+      : (Array.isArray(roundResults) ? roundResults : []);
+    if (savedRoundResults.length > 0) {
+      console.log('[round-save] round result sample:', savedRoundResults?.[0] ?? null);
+    }
+
     // 저장
     sync();
 
@@ -1223,5 +1243,3 @@ function setMiniTournamentWinner(matchId, side) {
 
   renderMiniTournament();
 }
-
-
