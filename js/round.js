@@ -573,9 +573,6 @@ function saveRoundResults() {
   gsConfirm(`${finishedMatches.length}경기의 결과를 저장하시겠습니까?`, ok => {
     if (!ok) return;
 
-    // ✅ v3.945: 이번 주 첫 게임 저장 시 주간 랭킹 리셋
-    if (typeof checkAndResetWeeklyOnSave === 'function') checkAndResetWeeklyOnSave();
-
     // 순위 계산
     const standings = {};
     roundParticipants.forEach(p => {
@@ -630,47 +627,42 @@ function saveRoundResults() {
       s.points = 1 + (s.wins * winPoint) + (s.losses * losePoint) + bonus;
     });
 
-    // MatchLog 및 점수 반영
+    // MatchLog 생성 및 점수 반영
+    const newLogEntries = [];
     finishedMatches.forEach(m => {
       const winner = m.winner === 'home' ? m.home : m.away;
       const loser = m.winner === 'home' ? m.away : m.home;
 
+      // ✅ v4.6-fix: nowISO로 고유 id 생성 (pushWithMatchLogAppend 포맷 통일)
+      const ts = Date.now();
+      const ds = new Date(ts - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
       const log = {
-        date: new Date().toISOString().split('T')[0],
+        id: `${ts}-${Math.floor(Math.random() * 100000)}`,
+        ts,
+        date: ds,
         type: roundMode,
-        winner: roundMode === 'single' ? [winner] : winner,
-        loser: roundMode === 'single' ? [loser] : loser
+        home: roundMode === 'single' ? [winner] : winner,
+        away: roundMode === 'single' ? [loser] : loser,
+        winner: 'home',
+        memo: 'round'
       };
 
-      matchLog.push(log);
+      newLogEntries.push(log);
 
-      // 점수 반영
+      // 점수 반영 (applyMatchToPlayers 대신 직접 — 라운드 전용 필드 처리)
       if (roundMode === 'single') {
         const wp = players.find(p => p.name === winner);
         const lp = players.find(p => p.name === loser);
-
-        if (wp) {
-          wp.sWins = (wp.sWins || 0) + 1;
-          wp.sScore = (wp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win); // 참여+승리
-        }
-        if (lp) {
-          lp.sLosses = (lp.sLosses || 0) + 1;
-          lp.sScore = (lp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss); // 참여+패배
-        }
+        if (wp) { wp.sWins = (wp.sWins || 0) + 1; wp.sScore = (wp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win); }
+        if (lp) { lp.sLosses = (lp.sLosses || 0) + 1; lp.sScore = (lp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss); }
       } else {
         winner.forEach(name => {
           const p = players.find(pl => pl.name === name);
-          if (p) {
-            p.dWins = (p.dWins || 0) + 1;
-            p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win); // 참여+승리
-          }
+          if (p) { p.dWins = (p.dWins || 0) + 1; p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win); }
         });
         loser.forEach(name => {
           const p = players.find(pl => pl.name === name);
-          if (p) {
-            p.dLosses = (p.dLosses || 0) + 1;
-            p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss); // 참여+패배
-          }
+          if (p) { p.dLosses = (p.dLosses || 0) + 1; p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss); }
         });
       }
     });
@@ -699,7 +691,6 @@ function saveRoundResults() {
     roundParticipants.forEach(participant => {
       const key = roundMode === 'single' ? participant : participant.join('&');
       const stat = standings[key];
-
       if (stat && stat.matches === 0) {
         if (roundMode === 'single') {
           const p = players.find(pl => pl.name === participant);
@@ -713,34 +704,25 @@ function saveRoundResults() {
       }
     });
 
-    // 재계산
+    // ✅ v4.6-fix: 재계산 (UI 갱신)
     computeAll();
 
-    // 디버그 로그: 상태 객체 집계 컬렉션 길이 및 저장된 라운드 결과 샘플
-    const s = window.state || window.GSState || window.AppState || null;
-    if (s) {
-      console.log(
-        '[round-save] matches:', s?.matches?.length ?? 0,
-        'results:', s?.results?.length ?? 0,
-        'games:', s?.games?.length ?? 0,
-        'matchLogs:', s?.matchLogs?.length ?? 0,
-        'matchHistory:', s?.matchHistory?.length ?? 0,
-        'records:', s?.records?.length ?? 0,
-        'roundResults:', s?.roundResults?.length ?? 0
-      );
-    }
-    const savedRoundResults = Array.isArray(s?.roundResults)
-      ? s.roundResults
-      : (Array.isArray(roundResults) ? roundResults : []);
-    if (savedRoundResults.length > 0) {
-      console.log('[round-save] round result sample:', savedRoundResults?.[0] ?? null);
-    }
+    // ✅ v4.6-fix: Firestore에 실제 저장 (players + matchLog 동시)
+    pushWithMatchLogAppend(newLogEntries).then(ok => {
+      if (ok) {
+        // ✅ v4.6-fix: 저장 성공 후 주간 리셋 (순서 보장)
+        if (typeof checkAndResetWeeklyOnSave === 'function') checkAndResetWeeklyOnSave();
+        gsAlert('라운드 결과가 저장되었습니다!');
+        showView('game');
+        sync();
+      } else {
+        gsAlert('❌ 저장 실패! 네트워크 상태를 확인하고 다시 시도해주세요.');
+      }
+    }).catch(e => {
+      console.error('[round] saveRoundResults error:', e);
+      gsAlert('❌ 저장 중 오류가 발생했습니다.');
+    });
 
-    // 저장
-    sync();
-
-    gsAlert('라운드 결과가 저장되었습니다!');
-    showView('game');
   }); // gsConfirm end
 }
 
@@ -771,7 +753,7 @@ function resetRound() {
   }); // gsConfirm end
 }
 
-function convertRoundToTournament() {
+async function convertRoundToTournament() {
   const finishedMatches = roundMatches.filter(m => m.winner !== null);
 
   if (finishedMatches.length === 0) {
@@ -779,9 +761,9 @@ function convertRoundToTournament() {
     return;
   }
 
-  // 현재까지의 경기 저장
+  // ✅ v4.6-fix: await로 저장 완료 후 토너먼트 진행
   if (isPracticeMode !== 'practice') {
-    saveRoundDataToLog(finishedMatches);
+    await saveRoundDataToLog(finishedMatches);
   }
 
   // 순위 계산
@@ -988,53 +970,50 @@ function startTournamentFromModal() {
 }
 
 // 라운드 데이터 저장 헬퍼 함수
-function saveRoundDataToLog(finishedMatches) {
+// ✅ v4.6-fix: async로 변경, pushWithMatchLogAppend로 실제 Firestore 저장
+async function saveRoundDataToLog(finishedMatches) {
+  const newLogEntries = [];
+
   finishedMatches.forEach(m => {
     const winner = m.winner === 'home' ? m.home : m.away;
     const loser = m.winner === 'home' ? m.away : m.home;
 
+    const ts = Date.now();
+    const ds = new Date(ts - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
     const log = {
-      date: new Date().toISOString().split('T')[0],
+      id: `${ts}-${Math.floor(Math.random() * 100000)}`,
+      ts,
+      date: ds,
       type: roundMode,
-      winner: roundMode === 'single' ? [winner] : winner,
-      loser: roundMode === 'single' ? [loser] : loser
+      home: roundMode === 'single' ? [winner] : winner,
+      away: roundMode === 'single' ? [loser] : loser,
+      winner: 'home',
+      memo: 'round'
     };
 
-    matchLog.push(log);
+    newLogEntries.push(log);
 
     // 점수 반영
     if (roundMode === 'single') {
       const wp = players.find(p => p.name === winner);
       const lp = players.find(p => p.name === loser);
-
-      if (wp) {
-        wp.sWins = (wp.sWins || 0) + 1;
-        wp.sScore = (wp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win);
-      }
-      if (lp) {
-        lp.sLosses = (lp.sLosses || 0) + 1;
-        lp.sScore = (lp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss);
-      }
+      if (wp) { wp.sWins = (wp.sWins || 0) + 1; wp.sScore = (wp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.win); }
+      if (lp) { lp.sLosses = (lp.sLosses || 0) + 1; lp.sScore = (lp.sScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.single.loss); }
     } else {
       winner.forEach(name => {
         const p = players.find(pl => pl.name === name);
-        if (p) {
-          p.dWins = (p.dWins || 0) + 1;
-          p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win);
-        }
+        if (p) { p.dWins = (p.dWins || 0) + 1; p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.win); }
       });
       loser.forEach(name => {
         const p = players.find(pl => pl.name === name);
-        if (p) {
-          p.dLosses = (p.dLosses || 0) + 1;
-          p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss);
-        }
+        if (p) { p.dLosses = (p.dLosses || 0) + 1; p.dScore = (p.dScore || 0) + (TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring.double.loss); }
       });
     }
   });
 
   computeAll();
-  sync();
+  // ✅ v4.6-fix: Firestore 실제 저장
+  await pushWithMatchLogAppend(newLogEntries);
 }
 
 // 미니 토너먼트 상태
@@ -1099,9 +1078,8 @@ function startRoundMiniTournament(rankedParticipants) {
             if (p) p.dScore = (p.dScore || 0) + 1;
           });
         }
-        // 즉시 저장 및 재계산
+        // ✅ v4.6-fix: 부전승 점수는 미니토너먼트 종료 시 일괄 저장하므로 여기서 sync 제거
         computeAll();
-        sync();
       }
     }
   }
@@ -1187,8 +1165,26 @@ function setMiniTournamentWinner(matchId, side) {
 
   match.winner = side;
   const winner = side === 'home' ? match.home : match.away;
+  const loser  = side === 'home' ? match.away : match.home;
 
-  // 이벤트성 점수 - 승리당 +1점만 (김작 가산점 룰)
+  // ✅ v4.6-fix: matchLog에 경기 기록 추가
+  if (isPracticeMode !== 'practice' && loser !== null) {
+    const ts = Date.now();
+    const ds = new Date(ts - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const logEntry = {
+      id: `${ts}-${Math.floor(Math.random() * 100000)}`,
+      ts,
+      date: ds,
+      type: roundMode,
+      home: roundMode === 'single' ? [winner] : winner,
+      away: roundMode === 'single' ? [loser]  : loser,
+      winner: 'home',
+      memo: 'mini-tournament'
+    };
+    match._logEntry = logEntry; // 나중에 우승 확정 시 일괄 저장용으로 보관
+  }
+
+  // 이벤트성 점수 - 승리당 +1점 (김작 가산점 룰)
   if (isPracticeMode !== 'practice') {
     if (roundMode === 'single') {
       const p = players.find(pl => pl.name === winner);
@@ -1201,15 +1197,14 @@ function setMiniTournamentWinner(matchId, side) {
     }
   }
 
-
-  // ✅ 점수 반영 즉시 상단 랭킹판 실시간 업데이트
+  // 상단 랭킹판 실시간 업데이트
   try { if (typeof updateRoundRanking === 'function') updateRoundRanking(); } catch (e) { console.warn('[round] updateRoundRanking failed:', e); }
+
   // 현재 라운드의 모든 매치가 끝났는지 확인
   const currentRound = miniTournamentMatches.filter(m => m.round === miniTournamentRound);
   const allFinished = currentRound.every(m => m.winner !== null);
 
   if (allFinished) {
-    // 승자들로 다음 라운드 생성
     const winners = currentRound.map(m => m.winner === 'home' ? m.home : m.away);
 
     if (winners.length === 1) {
@@ -1218,8 +1213,21 @@ function setMiniTournamentWinner(matchId, side) {
       const champDisplay = roundMode === 'single' ? displayName(champion) : `${displayName(champion[0])} & ${displayName(champion[1])}`;
 
       if (isPracticeMode !== 'practice') {
+        // ✅ v4.6-fix: 미니토너먼트 전체 경기 기록 일괄 저장
+        const allLogEntries = miniTournamentMatches
+          .filter(m => m._logEntry)
+          .map(m => m._logEntry);
+
         computeAll();
-        sync();
+
+        if (allLogEntries.length > 0) {
+          pushWithMatchLogAppend(allLogEntries).then(ok => {
+            if (!ok) console.warn('[round] mini-tournament log save failed');
+            else sync(); // 저장 완료 후 재동기화
+          });
+        } else {
+          pushDataOnly().then(() => sync());
+        }
       }
 
       gsAlert(`🏆 우승: ${champDisplay}!\n\n미니 토너먼트가 종료되었습니다.`);
@@ -1243,3 +1251,5 @@ function setMiniTournamentWinner(matchId, side) {
 
   renderMiniTournament();
 }
+
+

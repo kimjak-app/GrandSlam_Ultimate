@@ -172,10 +172,10 @@ async function _fsAppendMatchLog(clubId, entries) {
   const col = _clubRef(clubId).collection('matchLog');
   const batch = _db.batch();
   entries.forEach(m => {
-    // ✅ v4.036: 필수 필드 default 주입
+    // ✅ v4.036: 필수 필드 default 주입 / v4.6-fix: data로 저장 (오타 수정)
     const data = Object.assign({ sport: 'tennis' }, m);
     const ref = col.doc(_sanitizeDocId(data.id));
-    batch.set(ref, m);
+    batch.set(ref, data);
   });
   await batch.commit();
 }
@@ -340,6 +340,22 @@ async function pushPayload(payload) {
     if (Array.isArray(payload.data)) {
       await _fsSavePlayers(clubId, payload.data);
       players = payload.data.map(ensure);
+    }
+
+    // ✅ v4.6-fix: matchLogReset — Firestore matchLog 컬렉션 전체 삭제
+    if (payload.matchLogReset === true) {
+      const logCol = _clubRef(clubId).collection('matchLog');
+      const snap = await logCol.get();
+      if (!snap.empty) {
+        // Firestore batch는 500개 제한 — 청크 단위로 삭제
+        const chunkSize = 400;
+        for (let i = 0; i < snap.docs.length; i += chunkSize) {
+          const delBatch = _db.batch();
+          snap.docs.slice(i, i + chunkSize).forEach(d => delBatch.delete(d.ref));
+          await delBatch.commit();
+        }
+      }
+      matchLog = [];
     }
 
     // 경기 기록 추가

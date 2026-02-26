@@ -23,9 +23,6 @@ async function save() {
   });
   // ✅ v3.8206: 당일 게스트는 players에 추가하지 않음 — matchLog에만 기록
 
-  // ✅ v3.945: 이번 주 첫 게임 저장 시 주간 랭킹 리셋
-  if (typeof checkAndResetWeeklyOnSave === 'function') checkAndResetWeeklyOnSave();
-
   snapshotLastRanks();
 
   const homeScore = parseInt(hs, 10);
@@ -45,18 +42,33 @@ async function save() {
     winner: homeWin ? "home" : "away"
   };
 
-  applyMatchToPlayers(mType, [...hT], [...aT], logEntry.winner);
+  // ✅ v4.6-fix: 저장 전에 메모리 스냅샷 저장 (실패 시 롤백용)
+  const prevPlayers = players.map(p => Object.assign({}, p));
+  const prevMatchLogLength = matchLog.length;
 
+  applyMatchToPlayers(mType, [...hT], [...aT], logEntry.winner);
   matchLog.unshift(logEntry);
+
   const ok = await pushWithMatchLogAppend(logEntry);
-  if (ok) gsAlert("저장!");
+
+  if (ok) {
+    // ✅ v4.6-fix: 저장 성공 후 주간 리셋 (순서 보장)
+    if (typeof checkAndResetWeeklyOnSave === 'function') checkAndResetWeeklyOnSave();
+    gsAlert("저장!");
+  } else {
+    // ✅ v4.6-fix: 저장 실패 시 메모리 롤백
+    players.forEach((p, i) => { if (prevPlayers[i]) Object.assign(p, prevPlayers[i]); });
+    matchLog = matchLog.slice(prevMatchLogLength > 0 ? 0 : 1);
+    gsAlert("❌ 저장 실패! 다시 시도해주세요.");
+    return;
+  }
 
   $('hS').value = '';
   $('aS').value = '';
   hT = []; aT = [];
   $('hN').innerText = '';
   $('aN').innerText = '';
-  renderPool(); // ✅ v3.811: 선수 선택 버튼 리셋
+  renderPool();
   tab(1);
   renderStatsPlayerList();
 

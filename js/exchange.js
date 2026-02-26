@@ -750,6 +750,9 @@ function setExMatchCategory(category) {
 // ========================================
 
 async function saveExchangeResult() {
+  // ✅ v4.6-fix: 인증 체크
+  if (!currentUserAuth || !currentLoggedPlayer) { requireAuth(() => saveExchangeResult()); return; }
+
   const hs = ($('ex-score-home') || {}).value;
   const as = ($('ex-score-away') || {}).value;
   if (!hs || !as || hs == as) { gsAlert('점수를 확인해주세요!'); return; }
@@ -789,6 +792,8 @@ async function saveExchangeResult() {
   } else {
     const ok = await saveExchangeGame(logEntry, exMatchCategory, resultType, 'A');
     if (!ok) return;
+    // ✅ v4.6-fix: matchLog 저장 후 players 점수도 Firestore에 반영
+    await pushDataOnly();
     gsAlert('저장!');
   }
   exPickedHome = [];
