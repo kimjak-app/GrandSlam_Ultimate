@@ -317,7 +317,7 @@ async function restoreMasterSelective(file) {
         <div style="font-size:12px;color:#8E8E93;margin-bottom:14px;">백업 날짜: ${masterData.exportedAt ? masterData.exportedAt.slice(0, 10) : '알 수 없음'}</div>
         <div id="master-restore-club-list" style="margin-bottom:16px;">${clubListHtml}</div>
         <div style="display:flex;gap:10px;">
-          <button onclick="_confirmMasterSelectiveRestore(${JSON.stringify(masterData.exportedAt)}, window._masterRestoreData)"
+          <button onclick="_confirmMasterSelectiveRestore(window._masterRestoreData.exportedAt, window._masterRestoreData)"
             style="flex:1;padding:13px;background:var(--roland-clay);color:white;border:none;border-radius:12px;font-size:14px;font-weight:400;cursor:pointer;">선택 복원</button>
           <button onclick="document.getElementById('master-restore-modal').remove()"
             style="flex:1;padding:13px;background:#8E8E93;color:white;border:none;border-radius:12px;font-size:14px;font-weight:400;cursor:pointer;">취소</button>
