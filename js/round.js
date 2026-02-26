@@ -717,7 +717,7 @@ function saveRoundResults() {
     computeAll();
 
     // 디버그 로그: 상태 객체 집계 컬렉션 길이 및 저장된 라운드 결과 샘플
-    const s = window?.state || window?.GSState || window?.AppState;
+    const s = window.state || window.GSState || window.AppState || null;
     if (s) {
       console.log(
         '[round-save] matches:', s?.matches?.length ?? 0,
