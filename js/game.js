@@ -377,7 +377,7 @@ function resetWeeklyOnly() {
 async function adminResetAll() {
   checkClubPin(async ok => {
     if (!ok) return;
-    gsConfirm("정말로 모든 데이터(선수 포함)를 삭제하시겠습니까?", async ok2 => {
+    gsConfirm("정말로 모든 데이터를 삭제하시겠습니까?\n\n• 선수 정보 및 경기 기록\n• 회원 가입/탈퇴 이력\n• 휴면 회원 정보\n\n⚠️ 이 작업은 되돌릴 수 없습니다.", async ok2 => {
       if (!ok2) return;
       players = [];
       matchLog = [];

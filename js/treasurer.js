@@ -848,7 +848,8 @@ function _buildExchangeSection(ym) {
     else                        { m.winner === 'away' ? groups[eid].winsA++ : groups[eid].winsB++; }
   });
 
-  const clubName = (currentClub && currentClub.name) ? currentClub.name : '우리 클럽';
+  // ✅ v4.83: clubName 필드명 수정
+  const clubName = (currentClub && currentClub.clubName) ? currentClub.clubName : '우리 클럽';
   let txt = `🤝 교류전 결과 (${parseInt(month)}월)\n━━━━━━━━━━\n`;
   Object.values(groups).forEach(g => {
     const result = g.winsA > g.winsB ? '🏆 승' : g.winsA < g.winsB ? '😢 패' : '🤝 무';
@@ -863,7 +864,8 @@ function generateMonthlyReport() {
   saveReportSettings();
   const ym = _getReportMonth();
   const [year, month] = ym.split('-');
-  const clubName = (currentClub && currentClub.name) ? currentClub.name : '클럽';
+  // ✅ v4.83: clubName 필드명 수정
+  const clubName = (currentClub && currentClub.clubName) ? currentClub.clubName : '클럽';
 
   const sections = [];
   sections.push(`📋 ${clubName} ${year}년 ${parseInt(month)}월 운영 리포트\n${'═'.repeat(20)}`);
@@ -1001,8 +1003,9 @@ function editJoinDate(name) {
   const modal = document.createElement('div');
   modal.id = 'joinDateModal';
   modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; display:flex; align-items:center; justify-content:center;';
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); }; // ✅ v4.83: 배경 클릭 시 닫기
   modal.innerHTML = `
-    <div style="background:#fff; border-radius:20px; padding:24px; width:300px; box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+    <div style="background:#fff; border-radius:20px; padding:24px; width:300px; box-shadow:0 8px 32px rgba(0,0,0,0.18);" onclick="event.stopPropagation()">
       <div style="font-size:16px; font-weight:700; margin-bottom:6px;">📅 가입일 설정</div>
       <div style="font-size:13px; color:var(--text-gray); margin-bottom:16px;">${escapeHtml(displayName(name))}</div>
       <input type="date" id="joinDateInput" value="${current}"
