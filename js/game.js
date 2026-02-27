@@ -284,7 +284,8 @@ function setM(t) {
 function autoMixedDouble() {
   if (mType !== 'double') { gsAlert('복식 모드에서만 사용 가능해요!'); return; }
 
-  const pool = players.filter(p => !p.isGuest);
+  // ✅ v4.80: 탈퇴/휴면 회원 혼복 자동배치 풀에서 제외
+  const pool = players.filter(p => !p.isGuest && (!p.status || p.status === 'active'));
   const males = pool.filter(p => p.gender !== 'F').sort((a, b) => (b.score || 0) - (a.score || 0));
   const females = pool.filter(p => p.gender === 'F').sort((a, b) => (b.score || 0) - (a.score || 0));
 

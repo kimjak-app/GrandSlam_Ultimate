@@ -125,7 +125,8 @@ function renderFeeTable() {
   const year = $('feeYear').value;
   const curMonth = new Date().getMonth() + 1;
   const curYear = new Date().getFullYear();
-  const members = players.filter(p => !p.isGuest).sort((a, b) => a.name.localeCompare(b.name));
+  // ✅ v4.79: 탈퇴 회원 회비 테이블 제외
+  const members = players.filter(p => !p.isGuest && (!p.status || p.status === 'active' || p.status === 'dormant')).sort((a, b) => a.name.localeCompare(b.name));
 
   // ✅ v3.949: 납부율 요약 — 총무 제외한 현재 월 납부 현황
   const summaryEl = $('feeSummary');
@@ -215,7 +216,8 @@ function feeSetAll(value, scope) {
   const curMonth = new Date().getMonth() + 1;
   // ✅ v3.949: 총무 제외
   // ✅ v4.032: 회비 면제 회원도 제외
-  const members = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt);
+  // ✅ v4.81: 탈퇴 회원 제외
+  const members = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt && (!p.status || p.status === 'active' || p.status === 'dormant'));
 
   if (scope === 'year') {
     // 1~12월 전체
@@ -285,7 +287,8 @@ function copyFeeStatus() {
   const key = `${year}-${String(curMonth).padStart(2, '0')}`;
   // ✅ v3.949: 총무 제외
   // ✅ v4.032: 회비 면제 회원도 제외
-  const members = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt).sort((a, b) => a.name.localeCompare(b.name));
+  // ✅ v4.81: 탈퇴 회원 제외
+  const members = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt && (!p.status || p.status === 'active' || p.status === 'dormant')).sort((a, b) => a.name.localeCompare(b.name));
 
   const paid = [];
   const unpaid = [];
@@ -662,7 +665,8 @@ function _buildFeeSection(ym) {
   const [year, month] = ym.split('-');
   const key = `${year}-${month}`;
   const yearlyKey = `${year}-yearly`;
-  const members = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt)
+  // ✅ v4.81: 탈퇴 회원 제외
+  const members = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt && (!p.status || p.status === 'active' || p.status === 'dormant'))
     .sort((a, b) => a.name.localeCompare(b.name));
   const paid = [], unpaid = [];
   members.forEach(p => {
@@ -724,7 +728,8 @@ function _buildAttendanceSection(ym) {
   const [, month] = ym.split('-');
   const sorted = Object.entries(countMap)
     .map(([name, days]) => ({ name, days: days.size }))
-    .filter(x => players.find(p => p.name === x.name && !p.isGuest))
+    // ✅ v4.81: 탈퇴 회원 제외
+    .filter(x => players.find(p => p.name === x.name && !p.isGuest && (!p.status || p.status === 'active')))
     .sort((a, b) => b.days - a.days);
 
   let txt = `🏃 출석 순위 (${parseInt(month)}월)\n━━━━━━━━━━\n`;
@@ -750,7 +755,8 @@ function _buildRiskSection(ym) {
       [...(m.home||[]), ...(m.away||[])].forEach(n => activeNames.add(n));
     }
   });
-  const inactive = players.filter(p => !p.isGuest && !activeNames.has(p.name));
+  // ✅ v4.79: 탈퇴/휴면 회원 미출석 경고 제외
+  const inactive = players.filter(p => !p.isGuest && (!p.status || p.status === 'active') && !activeNames.has(p.name));
   if (inactive.length > 0) warnings.push(`😴 3개월 이상 미출석: ${inactive.map(p => displayName(p.name)).join(', ')}`);
 
   // 2개월 이상 미납
@@ -761,7 +767,9 @@ function _buildRiskSection(ym) {
     checkMonths.push(`${y}-${String(m).padStart(2,'0')}`);
   }
   const longUnpaid = players.filter(p => {
+    // ✅ v4.79: 탈퇴/휴면 회원 미납 경고 제외
     if (p.isGuest || p.isTreasurer || p.isFeeExempt) return false;
+    if (p.status === 'inactive' || p.status === 'dormant') return false;
     const pf = feeData[p.name] || {};
     const yearlyKey = `${year}-yearly`;
     if (pf[yearlyKey] === 'Y') return false;
@@ -807,7 +815,8 @@ function _buildWinrateSection(ym) {
   });
   const ranked = Object.entries(statMap)
     .map(([name, s]) => ({ name, w: s.w, l: s.l, rate: (s.w + s.l) > 0 ? s.w / (s.w + s.l) : 0 }))
-    .filter(x => players.find(p => p.name === x.name && !p.isGuest) && (x.w + x.l) >= 3)
+    // ✅ v4.81: 탈퇴 회원 제외
+    .filter(x => players.find(p => p.name === x.name && !p.isGuest && (!p.status || p.status === 'active')) && (x.w + x.l) >= 3)
     .sort((a, b) => b.rate - a.rate || b.w - a.w)
     .slice(0, 3);
 
@@ -1073,10 +1082,12 @@ function permanentDelete(name) {
   if (!p) return;
   gsConfirm(`⚠️ 영구삭제 확인\n\n${displayName(name)}님의 모든 데이터를 삭제합니다.\n• 회원 정보 삭제\n• 경기 기록에서 이름 제거\n\n이 작업은 되돌릴 수 없습니다.\n계속하시겠습니까?`, ok => {
     if (!ok) return;
-    // 총무 PIN 재확인
-    verifyTreasurerPin && gsEditName('', pin => {
+    // ✅ v4.79: PIN 확인 로직 안전하게 수정
+    gsEditName('', pin => {
       pin = (pin || '').trim();
-      if (!pin || (pin !== ADMIN_PIN && !(typeof MASTER_PIN !== 'undefined' && pin === MASTER_PIN))) {
+      const masterOk = (typeof MASTER_PIN !== 'undefined' && MASTER_PIN && pin === MASTER_PIN);
+      const adminOk  = (typeof ADMIN_PIN  !== 'undefined' && ADMIN_PIN  && pin === ADMIN_PIN);
+      if (!pin || (!masterOk && !adminOk)) {
         gsAlert('비밀번호가 틀렸습니다.'); return;
       }
       _doPermanentDelete(name);
@@ -1085,14 +1096,41 @@ function permanentDelete(name) {
 }
 
 async function _doPermanentDelete(name) {
+  const clubId = getActiveClubId();
+
   // players에서 제거
   players = players.filter(p => p.name !== name);
-  // matchLog에서 해당 이름 제거 (경기 자체는 남기고 이름만 '[탈퇴]'로 대체)
-  matchLog = matchLog.map(m => ({
-    ...m,
-    home: (m.home || []).map(n => n === name ? '[탈퇴]' : n),
-    away: (m.away || []).map(n => n === name ? '[탈퇴]' : n),
-  }));
+
+  // matchLog 메모리 업데이트 + Firestore 반영
+  // ✅ v4.79: 이름만 [탈퇴]로 대체 후 변경된 문서만 Firestore에 업데이트
+  const affected = [];
+  matchLog = matchLog.map(m => {
+    const newHome = (m.home || []).map(n => n === name ? '[탈퇴]' : n);
+    const newAway = (m.away || []).map(n => n === name ? '[탈퇴]' : n);
+    const changed = JSON.stringify(newHome) !== JSON.stringify(m.home) ||
+                    JSON.stringify(newAway) !== JSON.stringify(m.away);
+    const updated = { ...m, home: newHome, away: newAway };
+    if (changed) affected.push(updated);
+    return updated;
+  });
+
+  // 변경된 matchLog 문서만 Firestore 배치 업데이트
+  if (affected.length > 0) {
+    try {
+      const col = _clubRef(clubId).collection('matchLog');
+      const chunkSize = 400;
+      for (let i = 0; i < affected.length; i += chunkSize) {
+        const batch = _db.batch();
+        affected.slice(i, i + chunkSize).forEach(m => {
+          batch.set(col.doc(_sanitizeDocId(m.id)), m);
+        });
+        await batch.commit();
+      }
+    } catch(e) {
+      console.warn('permanentDelete matchLog Firestore 업데이트 오류:', e);
+    }
+  }
+
   // feeData에서 제거
   if (feeData[name]) delete feeData[name];
 

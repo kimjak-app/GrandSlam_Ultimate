@@ -127,6 +127,9 @@ function gsEditName(defaultVal, cb, options) {
   const inputEl = $('gsEditNameInput');
   inputEl.value = defaultVal || '';
   if (options && options.placeholder) inputEl.placeholder = options.placeholder;
+  // ✅ v4.80: title 옵션 지원
+  const titleEl = document.getElementById('gsEditNameTitle');
+  if (titleEl) titleEl.textContent = (options && options.title) ? options.title : '실명 대조';
   $('gsEditNameModal').style.display = 'flex';
   _gsEditNameCallback = cb || null;
 

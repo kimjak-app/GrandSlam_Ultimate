@@ -129,7 +129,7 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
 
     const baseList = (() => {
       if (filterMode === 'guest') {
-        const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name));
+        const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name) && (!p.status || p.status === 'active'));
         const names = guests.map(p=>p.name);
         const agg = aggregateSeasonForNamesFromLog(names);
         return guests.map(p => Object.assign({}, p, agg[p.name] || {}));
@@ -137,9 +137,9 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
       let list;
       if (filterMode === 'all') list = [...players];
       // ✅ v3.92: 성별 필터
-      else if (filterMode === 'male') list = players.filter(p => !p.isGuest && p.gender !== 'F');
-      else if (filterMode === 'female') list = players.filter(p => !p.isGuest && p.gender === 'F');
-      else list = players.filter(p => !p.isGuest);
+      else if (filterMode === 'male') list = players.filter(p => !p.isGuest && (!p.status || p.status === 'active') && p.gender !== 'F');
+      else if (filterMode === 'female') list = players.filter(p => !p.isGuest && (!p.status || p.status === 'active') && p.gender === 'F');
+      else list = players.filter(p => !p.isGuest && (!p.status || p.status === 'active'));
       // ✅ v4.0: 급수 필터 (게스트 제외 탭에만 적용)
       if (levelFilter !== 'all' && filterMode !== 'guest') {
         list = list.filter(p => (p.level || 'A') === levelFilter);
@@ -353,7 +353,7 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
     if (!table) return;
 
     // 혼복 경기 있는 선수만, 성별 필터 적용
-    let list = players.filter(p => !p.isGuest && (p.mWins > 0 || p.mLosses > 0));
+    let list = players.filter(p => !p.isGuest && (!p.status || p.status === 'active') && (p.mWins > 0 || p.mLosses > 0));
     if (genderFilter === 'male')   list = list.filter(p => p.gender !== 'F');
     if (genderFilter === 'female') list = list.filter(p => p.gender === 'F');
 
@@ -598,8 +598,10 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
 
     // ✅ v3.948: 성별 탭에 따라 members 필터
     const genderTab = window.genderRankTab || 'all';
+    // ✅ v4.80: 탈퇴/휴면 회원 차트에서 제외
     const members = players.filter(p => {
       if (p.isGuest) return false;
+      if (p.status === 'inactive' || p.status === 'dormant') return false;
       if (genderTab === 'male')   return p.gender !== 'F';
       if (genderTab === 'female') return p.gender === 'F';
       return true;
@@ -777,9 +779,9 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
   // ========================================
   
   function renderStatsPlayerList() {
-    const members = players.filter(p => !p.isGuest).sort((a,b)=>(b.score||0)-(a.score||0));
+    const members = players.filter(p => !p.isGuest && (!p.status || p.status === 'active')).sort((a,b)=>(b.score||0)-(a.score||0));
     // ✅ v3.816: HIDDEN_PLAYERS 제외
-    const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name));
+    const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name) && (!p.status || p.status === 'active'));
 
     let html = '<div style="border: 2px solid #E5E5EA; border-radius: 15px; padding: 15px; background: white; margin-bottom: 30px;">';
 
