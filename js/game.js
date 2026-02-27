@@ -124,38 +124,8 @@ function addP() {
 }
 
 function delP(n) {
-  // ✅ v4.22: 삭제 권한 가드 (로그인 + 클럽 연동 확인)
-  if (typeof requireAuth === 'function') {
-    requireAuth(() => {
-      checkClubPin(ok => {
-        if (!ok) return;
-        gsConfirm(n + ' 삭제?', ok2 => {
-          if (!ok2) return;
-          players = players.filter(p => p.name != n);
-          pushDataOnly();
-          updatePlayerList();
-          renderLadderPlayerPool();
-          initTournament();
-          renderStatsPlayerList();
-          setTimeout(applyAutofitAllTables, 0);
-        });
-      });
-    });
-  } else {
-    checkClubPin(ok => {
-      if (!ok) return;
-      gsConfirm(n + ' 삭제?', ok2 => {
-        if (!ok2) return;
-        players = players.filter(p => p.name != n);
-        pushDataOnly();
-        updatePlayerList();
-        renderLadderPlayerPool();
-        initTournament();
-        renderStatsPlayerList();
-        setTimeout(applyAutofitAllTables, 0);
-      });
-    });
-  }
+  // ✅ v4.77: 회원 삭제는 총무 메뉴 > 회원 이력 관리에서 처리
+  gsAlert('회원 탈퇴/삭제는\n총무 메뉴 > 회원 이력 관리에서\n처리해 주세요.');
 }
 
 function toggleGuest(n) {
@@ -196,7 +166,8 @@ async function toggleGender(n) {
 }
 
 function renderPool() {
-  const members = players.filter(p => !p.isGuest).sort((a, b) => (b.score || 0) - (a.score || 0));
+  // ✅ v4.77: 탈퇴/휴면 회원 경기 풀에서 제외
+  const members = players.filter(p => !p.isGuest && (!p.status || p.status === 'active')).sort((a, b) => (b.score || 0) - (a.score || 0));
   // ✅ v3.816: HIDDEN_PLAYERS 제외 (일반 게스트만), 1대2대결용은 별도 처리
   const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name));
 
@@ -339,8 +310,9 @@ function autoMixedDouble() {
 }
 
 function updatePlayerList() {
-  const members = players.filter(p => !p.isGuest).sort((a, b) => a.name.localeCompare(b.name));
-  const guests = players.filter(p => p.isGuest).sort((a, b) => a.name.localeCompare(b.name));
+  // ✅ v4.77: 탈퇴/휴면 회원 숨김
+  const members = players.filter(p => !p.isGuest && (!p.status || p.status === 'active')).sort((a, b) => a.name.localeCompare(b.name));
+  const guests = players.filter(p => p.isGuest && (!p.status || p.status === 'active')).sort((a, b) => a.name.localeCompare(b.name));
   const all = [...members, ...guests];
 
   let rows = all.map(p => {

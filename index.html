@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.76</title>
+  <title>GrandSlam Ultimate v4.77</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -375,7 +375,7 @@
     </div>
 
     <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">
-      v4.76</div>
+      v4.77</div>
   </div>
 
   <div id="view-tennis" class="app-screen">
@@ -1343,6 +1343,7 @@
           <div>- ✅ <b>v4.74</b>: 교류전 게스트 여성 선택 안 됨 수정 (radio→dataset.gender 방식), 선수통계 중복 선택 수정 (1명만 선택 유지)</div>
           <div>- ✅ <b>v4.75</b>: 재정 데이터 Firestore 저장/불러오기 구현 (앱 재시작 후에도 데이터 유지), 백업에 재정(financeData)·교류전(exchanges) 추가, 재정 데이터 초기화 버튼 추가</div>
           <div>- ✅ <b>v4.76</b>: 월간 운영 리포트 — 회계/운영/경기 3개 카테고리, 항목별 체크박스 선택, 카톡 복붙용 텍스트 자동 생성, 선택 상태 저장</div>
+          <div>- ✅ <b>v4.77</b>: 회원 이력 관리 — 가입일 등록, 휴면/탈퇴 처리, 재가입/복귀, 영구삭제(PIN 인증), 탈퇴·휴면 회원 랭킹·경기 풀 자동 제외, 휴면 시 회비 자동 면제</div>
 
         </div>
       </div>
@@ -1432,6 +1433,11 @@
             <button class="btn-purple-main" onclick="showTreasurerSection('report')"
               style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--roland-clay);">
               <span class="material-symbols-outlined">summarize</span> 월간 운영 리포트
+            </button>
+            <!-- ✅ v4.77: 회원 이력 관리 -->
+            <button class="btn-purple-main" onclick="showTreasurerSection('member-history')"
+              style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--aussie-blue);">
+              <span class="material-symbols-outlined">manage_accounts</span> 회원 이력 관리
             </button>
           </div>
         </div>
@@ -1630,6 +1636,31 @@
           <!-- 미리보기 -->
           <div id="reportPreview"
             style="display:none; margin-top:14px; padding:14px; background:#F2F2F7; border-radius:12px; font-size:12px; white-space:pre-wrap; line-height:1.7; color:var(--text-dark); word-break:break-all;"></div>
+
+          <button class="btn-sub royal" onclick="showTreasurerMenu()" style="width:100%; margin-top:12px;">← 총무 메뉴</button>
+        </div>
+      </div>
+
+
+      <!-- ✅ v4.77: 회원 이력 관리 -->
+      <div id="treasurer-member-history" style="display:none;">
+        <div class="section-card active" style="display:block;">
+          <div class="sub-rank-title"><span class="material-symbols-outlined">manage_accounts</span>회원 이력 관리</div>
+
+          <!-- 탭 -->
+          <div style="display:flex; gap:8px; margin-bottom:16px;">
+            <button id="mh-tab-active" onclick="renderMemberHistoryTabs('active')"
+              style="flex:1; padding:10px; border:none; border-radius:10px; font-size:14px; font-weight:600; background:var(--wimbledon-sage); color:#fff; cursor:pointer;">
+              🟢 정회원 / 휴면
+            </button>
+            <button id="mh-tab-inactive" onclick="renderMemberHistoryTabs('inactive')"
+              style="flex:1; padding:10px; border:none; border-radius:10px; font-size:14px; font-weight:600; background:#E5E5EA; color:var(--text-dark); cursor:pointer;">
+              🔴 탈퇴 회원
+            </button>
+          </div>
+
+          <!-- 목록 -->
+          <div id="mh-list"></div>
 
           <button class="btn-sub royal" onclick="showTreasurerMenu()" style="width:100%; margin-top:12px;">← 총무 메뉴</button>
         </div>

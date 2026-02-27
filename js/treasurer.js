@@ -75,7 +75,7 @@ function showTreasurerMenu() {
 }
 
 function hideTreasurerSections() {
-  ['treasurer-fee', 'treasurer-finance', 'treasurer-court-mgmt', 'treasurer-notice-mgmt', 'treasurer-report'].forEach(id => {
+  ['treasurer-fee', 'treasurer-finance', 'treasurer-court-mgmt', 'treasurer-notice-mgmt', 'treasurer-report', 'treasurer-member-history'].forEach(id => {
     const el = $(id);
     if (el) el.style.display = 'none';
   });
@@ -605,6 +605,10 @@ window.showTreasurerSection = function(section) {
     const el = document.getElementById('reportMonth');
     if (el && !el.value) el.value = new Date().toISOString().slice(0, 7);
     initReportSettings();
+  } else if (section === 'member-history') {
+    _origShowTreasurerSection(section);
+    window._memberHistoryTab = 'active';
+    renderMemberHistoryTabs('active');
   } else {
     _origShowTreasurerSection(section);
   }
@@ -871,4 +875,204 @@ function generateMonthlyReport() {
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(() => gsAlert('📋 리포트가 클립보드에 복사됐어요!\n카톡에 붙여넣기 하세요.'));
   } else { fallbackCopy(text); }
+}
+
+// ========================================
+// ✅ v4.77: 회원 이력 관리
+// ========================================
+
+function showMemberHistory() {
+  showTreasurerSection('member-history');
+}
+
+function renderMemberHistoryTabs(tab) {
+  window._memberHistoryTab = tab || 'active';
+  const activeBtn = document.getElementById('mh-tab-active');
+  const inactiveBtn = document.getElementById('mh-tab-inactive');
+  if (activeBtn) activeBtn.style.background = tab === 'active' ? 'var(--wimbledon-sage)' : '#E5E5EA';
+  if (activeBtn) activeBtn.style.color = tab === 'active' ? '#fff' : 'var(--text-dark)';
+  if (inactiveBtn) inactiveBtn.style.background = tab === 'inactive' ? 'var(--roland-clay)' : '#E5E5EA';
+  if (inactiveBtn) inactiveBtn.style.color = tab === 'inactive' ? '#fff' : 'var(--text-dark)';
+  tab === 'active' ? renderActiveMemberList() : renderInactiveMemberList();
+}
+
+// 정회원 + 휴면 탭
+function renderActiveMemberList() {
+  const el = document.getElementById('mh-list');
+  if (!el) return;
+  const actives  = players.filter(p => !p.isGuest && (!p.status || p.status === 'active'));
+  const dormants = players.filter(p => !p.isGuest && p.status === 'dormant');
+  let html = '';
+
+  if (actives.length > 0) {
+    html += `<div style="font-size:12px; font-weight:700; color:var(--text-gray); margin:8px 0 6px;">🟢 정회원 (${actives.length}명)</div>`;
+    actives.sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
+      const joined = p.joinedAt ? `가입: ${p.joinedAt}` : '가입일 미등록';
+      const safe = escapeHtml(p.name).replace(/'/g, "&#39;");
+      html += `
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#F9F9F9; border-radius:12px; margin-bottom:6px;">
+          <div>
+            <div style="font-size:14px; font-weight:600;">${escapeHtml(displayName(p.name))}</div>
+            <div style="font-size:11px; color:var(--text-gray); margin-top:2px;">${joined}</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button onclick="editJoinDate('${safe}')" style="padding:5px 9px; background:#E5E5EA; border:none; border-radius:8px; font-size:11px; cursor:pointer;">📅 가입일</button>
+            <button onclick="setDormant('${safe}')" style="padding:5px 9px; background:#FF9500; color:#fff; border:none; border-radius:8px; font-size:11px; cursor:pointer;">😴 휴면</button>
+            <button onclick="setInactive('${safe}')" style="padding:5px 9px; background:var(--roland-clay); color:#fff; border:none; border-radius:8px; font-size:11px; cursor:pointer;">탈퇴</button>
+          </div>
+        </div>`;
+    });
+  }
+
+  if (dormants.length > 0) {
+    html += `<div style="font-size:12px; font-weight:700; color:#FF9500; margin:12px 0 6px;">🟡 휴면 (${dormants.length}명)</div>`;
+    dormants.sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
+      const since = p.dormantAt ? `휴면 시작: ${p.dormantAt}` : '휴면 처리됨';
+      const safe = escapeHtml(p.name).replace(/'/g, "&#39;");
+      html += `
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#FFF8EE; border-radius:12px; margin-bottom:6px;">
+          <div>
+            <div style="font-size:14px; font-weight:600;">${escapeHtml(displayName(p.name))}</div>
+            <div style="font-size:11px; color:#FF9500; margin-top:2px;">${since}</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button onclick="restoreActive('${safe}')" style="padding:5px 9px; background:var(--wimbledon-sage); color:#fff; border:none; border-radius:8px; font-size:11px; cursor:pointer;">✅ 복귀</button>
+            <button onclick="setInactive('${safe}')" style="padding:5px 9px; background:var(--roland-clay); color:#fff; border:none; border-radius:8px; font-size:11px; cursor:pointer;">탈퇴</button>
+          </div>
+        </div>`;
+    });
+  }
+
+  if (actives.length === 0 && dormants.length === 0) html = '<div style="text-align:center; padding:20px; color:var(--text-gray);">회원이 없습니다.</div>';
+  el.innerHTML = html;
+}
+
+// 탈퇴 회원 탭
+function renderInactiveMemberList() {
+  const el = document.getElementById('mh-list');
+  if (!el) return;
+  const inactives = players.filter(p => !p.isGuest && p.status === 'inactive');
+  if (inactives.length === 0) {
+    el.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-gray);">탈퇴 회원이 없습니다.</div>';
+    return;
+  }
+  let html = `<div style="font-size:12px; font-weight:700; color:var(--roland-clay); margin:8px 0 6px;">🔴 탈퇴 회원 (${inactives.length}명)</div>`;
+  inactives.sort((a,b) => (b.leftAt||'').localeCompare(a.leftAt||'')).forEach(p => {
+    const left = p.leftAt ? `탈퇴: ${p.leftAt}` : '탈퇴일 미등록';
+    const reason = p.leftReason ? ` · ${p.leftReason}` : '';
+    const safe = escapeHtml(p.name).replace(/'/g, "&#39;");
+    html += `
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#FFF2F2; border-radius:12px; margin-bottom:6px;">
+        <div>
+          <div style="font-size:14px; font-weight:600; color:#888;">${escapeHtml(displayName(p.name))}</div>
+          <div style="font-size:11px; color:var(--roland-clay); margin-top:2px;">${left}${reason}</div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button onclick="restoreActive('${safe}')" style="padding:5px 9px; background:var(--wimbledon-sage); color:#fff; border:none; border-radius:8px; font-size:11px; cursor:pointer;">🔄 재가입</button>
+          <button onclick="permanentDelete('${safe}')" style="padding:5px 9px; background:#333; color:#fff; border:none; border-radius:8px; font-size:11px; cursor:pointer;">🗑 영구삭제</button>
+        </div>
+      </div>`;
+  });
+  el.innerHTML = html;
+}
+
+// 가입일 수정
+function editJoinDate(name) {
+  const p = players.find(x => x.name === name);
+  if (!p) return;
+  const current = p.joinedAt || '';
+  gsEditName(current || '예) 2024-03-01', val => {
+    val = (val || '').trim();
+    if (!val) return;
+    p.joinedAt = val;
+    pushDataOnly();
+    renderActiveMemberList();
+  }, { title: `${displayName(name)} 가입일 입력`, placeholder: 'YYYY-MM-DD' });
+}
+
+// 휴면 처리
+function setDormant(name) {
+  const p = players.find(x => x.name === name);
+  if (!p) return;
+  gsConfirm(`${displayName(name)}님을 휴면 처리할까요?\n\n• 랭킹에서 제외됩니다\n• 회비가 자동 면제됩니다`, ok => {
+    if (!ok) return;
+    p.status = 'dormant';
+    p.dormantAt = new Date().toISOString().slice(0, 10);
+    p.isFeeExempt = true;
+    pushDataOnly();
+    renderActiveMemberList();
+    renderFeeTable();
+    gsAlert(`${displayName(name)}님이 휴면 처리됐습니다.`);
+  });
+}
+
+// 탈퇴 처리
+function setInactive(name) {
+  const p = players.find(x => x.name === name);
+  if (!p) return;
+  gsEditName('', reason => {
+    p.status = 'inactive';
+    p.leftAt = new Date().toISOString().slice(0, 10);
+    p.leftReason = (reason || '').trim() || '';
+    p.isFeeExempt = true;
+    pushDataOnly();
+    renderMemberHistoryTabs(window._memberHistoryTab || 'active');
+    gsAlert(`${displayName(name)}님이 탈퇴 처리됐습니다.`);
+  }, { title: `${displayName(name)} 탈퇴 처리`, placeholder: '탈퇴 사유 (선택 입력)' });
+}
+
+// 정회원 복귀 (휴면→활성, 탈퇴→재가입)
+function restoreActive(name) {
+  const p = players.find(x => x.name === name);
+  if (!p) return;
+  const label = p.status === 'inactive' ? '재가입' : '복귀';
+  gsConfirm(`${displayName(name)}님을 ${label} 처리할까요?\n\n• 정회원으로 복귀됩니다\n• 회비 면제가 해제됩니다`, ok => {
+    if (!ok) return;
+    p.status = 'active';
+    p.isFeeExempt = false;
+    p.dormantAt = null;
+    pushDataOnly();
+    renderMemberHistoryTabs(window._memberHistoryTab || 'active');
+    renderFeeTable();
+    gsAlert(`${displayName(name)}님이 ${label} 처리됐습니다.`);
+  });
+}
+
+// 영구삭제 — 총무 PIN 재확인 후 기존 경기 기록까지 완전 삭제
+function permanentDelete(name) {
+  const p = players.find(x => x.name === name);
+  if (!p) return;
+  gsConfirm(`⚠️ 영구삭제 확인\n\n${displayName(name)}님의 모든 데이터를 삭제합니다.\n• 회원 정보 삭제\n• 경기 기록에서 이름 제거\n\n이 작업은 되돌릴 수 없습니다.\n계속하시겠습니까?`, ok => {
+    if (!ok) return;
+    // 총무 PIN 재확인
+    verifyTreasurerPin && gsEditName('', pin => {
+      pin = (pin || '').trim();
+      if (!pin || (pin !== ADMIN_PIN && !(typeof MASTER_PIN !== 'undefined' && pin === MASTER_PIN))) {
+        gsAlert('비밀번호가 틀렸습니다.'); return;
+      }
+      _doPermanentDelete(name);
+    }, { title: '총무 PIN 확인', placeholder: 'PIN 입력' });
+  });
+}
+
+async function _doPermanentDelete(name) {
+  // players에서 제거
+  players = players.filter(p => p.name !== name);
+  // matchLog에서 해당 이름 제거 (경기 자체는 남기고 이름만 '[탈퇴]'로 대체)
+  matchLog = matchLog.map(m => ({
+    ...m,
+    home: (m.home || []).map(n => n === name ? '[탈퇴]' : n),
+    away: (m.away || []).map(n => n === name ? '[탈퇴]' : n),
+  }));
+  // feeData에서 제거
+  if (feeData[name]) delete feeData[name];
+
+  await pushDataOnly();
+  await pushFeeData();
+
+  renderMemberHistoryTabs('inactive');
+  updatePlayerList();
+  renderLadderPlayerPool();
+  renderStatsPlayerList();
+  gsAlert(`✅ ${name}님의 데이터가 영구삭제됐습니다.`);
 }
