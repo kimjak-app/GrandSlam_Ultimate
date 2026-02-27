@@ -978,16 +978,45 @@ function renderInactiveMemberList() {
 
 // 가입일 수정
 function editJoinDate(name) {
+  // ✅ v4.78: 달력 팝업 방식으로 변경
   const p = players.find(x => x.name === name);
   if (!p) return;
-  const current = p.joinedAt || '';
-  gsEditName(current || '예) 2024-03-01', val => {
-    val = (val || '').trim();
-    if (!val) return;
-    p.joinedAt = val;
-    pushDataOnly();
-    renderActiveMemberList();
-  }, { title: `${displayName(name)} 가입일 입력`, placeholder: 'YYYY-MM-DD' });
+  const today = new Date().toISOString().slice(0, 10);
+  const current = p.joinedAt || today; // 미등록이면 오늘, 기존값 있으면 그대로
+
+  // 기존 모달 있으면 제거
+  const existing = document.getElementById('joinDateModal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'joinDateModal';
+  modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; display:flex; align-items:center; justify-content:center;';
+  modal.innerHTML = `
+    <div style="background:#fff; border-radius:20px; padding:24px; width:300px; box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+      <div style="font-size:16px; font-weight:700; margin-bottom:6px;">📅 가입일 설정</div>
+      <div style="font-size:13px; color:var(--text-gray); margin-bottom:16px;">${escapeHtml(displayName(name))}</div>
+      <input type="date" id="joinDateInput" value="${current}"
+        style="width:100%; padding:12px; border:2px solid #E5E5EA; border-radius:12px; font-size:16px; box-sizing:border-box; margin-bottom:16px;" />
+      <div style="display:flex; gap:8px;">
+        <button onclick="document.getElementById('joinDateModal').remove()"
+          style="flex:1; padding:12px; border:2px solid #E5E5EA; background:#fff; border-radius:12px; font-size:14px; cursor:pointer;">취소</button>
+        <button onclick="_confirmJoinDate('${escapeHtml(name).replace(/'/g,"&#39;")}')"
+          style="flex:1; padding:12px; background:var(--wimbledon-sage); color:#fff; border:none; border-radius:12px; font-size:14px; font-weight:600; cursor:pointer;">저장</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+function _confirmJoinDate(name) {
+  const val = document.getElementById('joinDateInput')?.value;
+  const modal = document.getElementById('joinDateModal');
+  if (modal) modal.remove();
+  if (!val) return;
+  const p = players.find(x => x.name === name);
+  if (!p) return;
+  p.joinedAt = val;
+  pushDataOnly();
+  renderActiveMemberList();
 }
 
 // 휴면 처리
