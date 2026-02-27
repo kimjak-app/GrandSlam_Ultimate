@@ -238,11 +238,14 @@ async function masterBackup() {
                 const clubId = clubDoc.id;
                 const clubMeta = clubDoc.data();
 
-                const [playerSnap, logSnap, noticeDoc, feeDoc] = await Promise.all([
+                const [playerSnap, logSnap, noticeDoc, feeDoc, financeDoc, exchangeSnap] = await Promise.all([
                     _clubRef(clubId).collection('players').get(),
                     _clubRef(clubId).collection('matchLog').orderBy('ts', 'desc').limit(500).get(),
                     _clubRef(clubId).collection('settings').doc('notices').get(),
                     _clubRef(clubId).collection('settings').doc('feeData').get(),
+                    // ✅ v4.47: 재정 + 교류전 추가
+                    _clubRef(clubId).collection('settings').doc('financeData').get(),
+                    _clubRef(clubId).collection('exchanges').get(),
                 ]);
 
                 masterData.clubs.push({
@@ -254,6 +257,9 @@ async function masterBackup() {
                     announcements: noticeDoc.exists ? (noticeDoc.data().announcements || []) : [],
                     feeData: feeDoc.exists ? (feeDoc.data().feeData || {}) : {},
                     monthlyFeeAmount: feeDoc.exists ? (feeDoc.data().monthlyFeeAmount || 0) : 0,
+                    // ✅ v4.47: 신규
+                    financeData: financeDoc.exists ? (financeDoc.data().financeData || []) : [],
+                    exchanges: exchangeSnap.docs.map(d => ({ id: d.id, ...d.data() })),
                 });
             }
 
@@ -382,6 +388,22 @@ async function _confirmMasterSelectiveRestore(exportedAt, masterData) {
                         feeData: clubData.feeData || {},
                         monthlyFeeAmount: clubData.monthlyFeeAmount || 0,
                     });
+
+                    // ✅ v4.47: financeData 복원 (없으면 스킵 — 하위 호환)
+                    const manualFinance = (clubData.financeData || []).filter(f => !f.auto);
+                    await _clubRef(clubId).collection('settings').doc('financeData').set({
+                        financeData: manualFinance,
+                    });
+
+                    // ✅ v4.47: exchanges 복원 (없으면 스킵 — 하위 호환)
+                    if (Array.isArray(clubData.exchanges) && clubData.exchanges.length > 0) {
+                        const exBatch = _db.batch();
+                        clubData.exchanges.forEach(ex => {
+                            const ref = _clubRef(clubId).collection('exchanges').doc(ex.id);
+                            exBatch.set(ref, ex);
+                        });
+                        await exBatch.commit();
+                    }
                 }
 
                 gsAlert(`✅ 선별 복원 완료!\n\n복원 클럽: ${selectedClubs.length}개\n${selectedClubs.map(c => `• ${c.clubName || c.clubId}: 선수 ${c.players.length}명 / 경기 ${c.matchLog.length}건`).join('\n')}`);

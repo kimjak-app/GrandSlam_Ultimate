@@ -517,15 +517,18 @@ async function exportBackup() {
     const clubName = (currentClub && currentClub.name) ? currentClub.name : clubId;
 
     // Firestore에서 최신 데이터 직접 읽기
-    const [playerSnap, logSnap, noticeDoc, feeDoc] = await Promise.all([
+    const [playerSnap, logSnap, noticeDoc, feeDoc, financeDoc, exchangeSnap] = await Promise.all([
       _clubRef(clubId).collection('players').get(),
       _clubRef(clubId).collection('matchLog').orderBy('ts', 'desc').limit(500).get(),
       _clubRef(clubId).collection('settings').doc('notices').get(),
       _clubRef(clubId).collection('settings').doc('feeData').get(),
+      // ✅ v4.47: 재정 데이터 + 교류전 추가
+      _clubRef(clubId).collection('settings').doc('financeData').get(),
+      _clubRef(clubId).collection('exchanges').get(),
     ]);
 
     const backupData = {
-      version: 'v4.1',
+      version: 'v4.47',
       exportedAt: new Date().toISOString(),
       clubId,
       clubName,
@@ -535,6 +538,9 @@ async function exportBackup() {
       announcements: noticeDoc.exists ? (noticeDoc.data().announcements || []) : [],
       feeData: feeDoc.exists ? (feeDoc.data().feeData || {}) : {},
       monthlyFeeAmount: feeDoc.exists ? (feeDoc.data().monthlyFeeAmount || 0) : 0,
+      // ✅ v4.47: 신규 백업 항목
+      financeData: financeDoc.exists ? (financeDoc.data().financeData || []) : [],
+      exchanges: exchangeSnap.docs.map(d => ({ id: d.id, ...d.data() })),
     };
 
     const json = JSON.stringify(backupData, null, 2);
@@ -617,6 +623,23 @@ async function importBackup(file, { skipPinCheck = false } = {}) {
             });
             feeData = data.feeData || {};
             monthlyFeeAmount = data.monthlyFeeAmount || 0;
+
+            // ✅ v4.47: financeData 복원 (없으면 빈 배열 — 하위 호환)
+            const manualFinance = (data.financeData || []).filter(f => !f.auto);
+            await _clubRef(clubId).collection('settings').doc('financeData').set({
+              financeData: manualFinance,
+            });
+            financeData = manualFinance;
+
+            // ✅ v4.47: exchanges 복원 (없으면 스킵 — 하위 호환)
+            if (Array.isArray(data.exchanges) && data.exchanges.length > 0) {
+              const exBatch = _db.batch();
+              data.exchanges.forEach(ex => {
+                const ref = _clubRef(clubId).collection('exchanges').doc(ex.id);
+                exBatch.set(ref, ex);
+              });
+              await exBatch.commit();
+            }
 
             // UI 갱신
             updateSeason();
@@ -805,5 +828,66 @@ async function requireAuth(onSuccess) {
   } catch (e) {
     console.error("Auth Guard error: ", e);
     gsAlert('권한 확인 중 오류가 발생했습니다.');
+  }
+}
+
+// ========================================
+// ✅ v4.47: 재정 데이터 Firestore 저장/불러오기
+// clubs/{clubId}/settings/financeData
+// 기존 코드 무수정 — 순수 추가
+// ========================================
+
+async function fetchFinanceData() {
+  if (!currentClub) return;
+  const cid = getActiveClubId();
+  try {
+    const doc = await _clubRef(cid).collection('settings').doc('financeData').get();
+    if (doc.exists) {
+      const data = doc.data();
+      // auto 항목은 syncFeeToFinance()가 재생성하므로 수동 항목만 복원
+      const manual = (data.financeData || []).filter(f => !f.auto);
+      financeData = manual;
+      return;
+    }
+  } catch (e) {
+    console.warn('fetchFinanceData Firestore error:', e);
+  }
+  // Firestore 실패 시 localStorage fallback
+  try {
+    const saved = localStorage.getItem('grandslam_finance_data_' + cid);
+    financeData = saved ? JSON.parse(saved).filter(f => !f.auto) : [];
+  } catch (e) {
+    financeData = [];
+  }
+}
+
+async function pushFinanceData() {
+  const cid = getActiveClubId();
+  // 수동 항목만 저장 (auto 항목은 syncFeeToFinance가 매번 재생성)
+  const manual = financeData.filter(f => !f.auto);
+  if (cid) {
+    try { localStorage.setItem('grandslam_finance_data_' + cid, JSON.stringify(manual)); } catch (e) {}
+  }
+  if (!currentClub) return false;
+  try {
+    await _clubRef(cid).collection('settings').doc('financeData').set({ financeData: manual });
+    return true;
+  } catch (e) {
+    console.warn('pushFinanceData error:', e);
+    return false;
+  }
+}
+
+async function clearFinanceData() {
+  const cid = getActiveClubId();
+  financeData = [];
+  if (cid) {
+    try { localStorage.removeItem('grandslam_finance_data_' + cid); } catch (e) {}
+  }
+  if (!currentClub) return;
+  try {
+    await _clubRef(cid).collection('settings').doc('financeData').delete();
+  } catch (e) {
+    console.warn('clearFinanceData error:', e);
   }
 }

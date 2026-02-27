@@ -558,3 +558,48 @@ function copyFinanceStatus() {
   } else { fallbackCopy(text); }
 }
 
+
+// ========================================
+// ✅ v4.47: 재정 데이터 자동 저장 트리거
+// addFinanceItem / deleteFinanceItem 이후 호출
+// 기존 함수 무수정 — 오버라이드 방식
+// ========================================
+
+// 기존 addFinanceItem을 감싸는 래퍼
+const _origAddFinanceItem = addFinanceItem;
+window.addFinanceItem = function() {
+  _origAddFinanceItem();
+  // 저장은 비동기지만 UI 블로킹 없이 백그라운드로
+  setTimeout(() => pushFinanceData(), 0);
+};
+
+// 기존 deleteFinanceItem을 감싸는 래퍼
+const _origDeleteFinanceItem = deleteFinanceItem;
+window.deleteFinanceItem = function(id) {
+  _origDeleteFinanceItem(id);
+  setTimeout(() => pushFinanceData(), 300); // confirm 콜백 이후 저장
+};
+
+// ✅ 재정 데이터 전체 초기화
+function confirmClearFinanceData() {
+  gsConfirm('⚠️ 재정 데이터를 전체 삭제할까요?\n\n수입/지출 내역이 모두 사라집니다.\n이 작업은 되돌릴 수 없습니다.', async (ok) => {
+    if (!ok) return;
+    await clearFinanceData();
+    syncFeeToFinance();
+    renderFinanceList();
+    gsAlert('✅ 재정 데이터가 초기화되었습니다.');
+  });
+}
+
+// ✅ v4.47: showTreasurerSection 'finance' 진입 시 fetchFinanceData 선행 호출
+// initFinance 내부 수정 없이, showTreasurerSection 오버라이드로 처리
+const _origShowTreasurerSection = showTreasurerSection;
+window.showTreasurerSection = function(section) {
+  if (section === 'finance') {
+    fetchFinanceData().then(() => {
+      _origShowTreasurerSection(section);
+    });
+  } else {
+    _origShowTreasurerSection(section);
+  }
+};
