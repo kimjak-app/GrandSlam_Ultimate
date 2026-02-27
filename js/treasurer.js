@@ -261,7 +261,8 @@ function syncFeeToFinance() {
     let paidCount = 0;
     // ✅ v3.949: 총무 제외하여 납부 인원 계산
     // ✅ v4.032: 회비 면제 회원도 제외
-    const nonTreasurerNames = new Set(players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt).map(p => p.name));
+    // ✅ v4.82: 탈퇴 회원 자동 재정 집계 제외
+    const nonTreasurerNames = new Set(players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt && (!p.status || p.status === 'active' || p.status === 'dormant')).map(p => p.name));
     Object.entries(feeData).forEach(([name, pf]) => {
       if (!nonTreasurerNames.has(name)) return;
       // ✅ v3.9491: 연납자(yearly='Y')도 납부로 집계

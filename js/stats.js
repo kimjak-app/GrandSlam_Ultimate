@@ -135,7 +135,8 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
         return guests.map(p => Object.assign({}, p, agg[p.name] || {}));
       }
       let list;
-      if (filterMode === 'all') list = [...players];
+      // ✅ v4.82: filterMode 없거나 'all'일 때도 탈퇴/휴면 제외
+      if (filterMode === 'all') list = players.filter(p => !p.status || p.status === 'active');
       // ✅ v3.92: 성별 필터
       else if (filterMode === 'male') list = players.filter(p => !p.isGuest && (!p.status || p.status === 'active') && p.gender !== 'F');
       else if (filterMode === 'female') list = players.filter(p => !p.isGuest && (!p.status || p.status === 'active') && p.gender === 'F');
