@@ -50,7 +50,8 @@ function checkClubPin(callback) {
 function confirmClubPin() {
   const input = $('clubPinInput').value;
   const modal = $('clubPinModal');
-  const masterPin = (typeof MASTER_PIN !== 'undefined') ? MASTER_PIN : '0707';
+  // ✅ v4.86: MASTER_PIN 빈 문자열일 때 기본값 0707 사용
+  const masterPin = (typeof MASTER_PIN !== 'undefined' && MASTER_PIN !== '') ? MASTER_PIN : '0707';
   const isMasterMode = modal.dataset.mode === 'master';
   modal.style.display = 'none';
   modal.dataset.mode = '';

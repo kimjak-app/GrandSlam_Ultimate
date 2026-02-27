@@ -46,7 +46,8 @@ function normalizeMatchLog(arr) {
         id = `${ts}-${type}-${hKey}__${aKey}-${hs}-${as}-${winner}`;
       }
 
-      return {
+      // ✅ v4.84: 교류전 필드 보존 (normalizeMatchLog에서 날아가던 버그 수정)
+      const entry = {
         id,
         ts,
         date: x.date || x.ds || "",
@@ -58,6 +59,17 @@ function normalizeMatchLog(arr) {
         winner,
         memo: x.memo || ""
       };
+      // 교류전 관련 필드 — 있을 때만 포함
+      if (x.exchangeId)    entry.exchangeId    = x.exchangeId;
+      if (x.matchCategory) entry.matchCategory = x.matchCategory;
+      if (x.resultType)    entry.resultType    = x.resultType;
+      if (x.clubSideHome)  entry.clubSideHome  = x.clubSideHome;
+      if (x.clubAId)       entry.clubAId       = x.clubAId;
+      if (x.clubBId)       entry.clubBId       = x.clubBId;
+      if (x.clubBName)     entry.clubBName     = x.clubBName;
+      if (x.pointsHome)    entry.pointsHome    = x.pointsHome;
+      if (x.pointsAway)    entry.pointsAway    = x.pointsAway;
+      return entry;
     });
 
   // ✅ Dedupe by id (keep the most recent ts)

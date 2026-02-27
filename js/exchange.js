@@ -286,6 +286,8 @@ async function saveExchangeGame(baseLogEntry, matchCategory, resultType, clubSid
     clubSideHome,
     clubAId: activeExchange.clubAId,
     clubBId: activeExchange.clubBId,
+    // ✅ v4.84: 클럽 랭킹 표시용 clubBName 저장
+    clubBName: activeExchange.clubBName || '',
   };
 
   const points = calcExchangePoints(logEntry, activeExchange);
@@ -359,11 +361,11 @@ function getExchangeStatsForPlayer(playerName) {
     if (isSingles) { isWin ? singleWin++ : singleLoss++; }
     else { isWin ? doubleWin++ : doubleLoss++; }
 
-    // 상대 클럽 전적
-    const opponentClubId = inHome ? g.clubBId : g.clubAId;
-    if (opponentClubId) {
-      if (!vsClubs[opponentClubId]) vsClubs[opponentClubId] = { win: 0, loss: 0 };
-      isWin ? vsClubs[opponentClubId].win++ : vsClubs[opponentClubId].loss++;
+    // ✅ v4.85: 상대 클럽 전적 - ID 대신 클럽명으로 표시
+    const opponentName = inHome ? (g.clubBName || g.clubBId || '상대 클럽') : (g.clubBName || g.clubAId || '상대 클럽');
+    if (opponentName) {
+      if (!vsClubs[opponentName]) vsClubs[opponentName] = { win: 0, loss: 0 };
+      isWin ? vsClubs[opponentName].win++ : vsClubs[opponentName].loss++;
     }
   });
 
@@ -604,7 +606,7 @@ function renderExClubRanking(el) {
 }
 
 function renderExPlayerRanking(el) {
-  const exPlayers = players.filter(p => !p.isGuest);
+  const exPlayers = players.filter(p => !p.isGuest && (!p.status || p.status === 'active'));
   if (!exPlayers.length) {
     el.innerHTML = '<p style="color:#8E8E93;text-align:center;padding:30px 0;">등록된 선수가 없습니다.</p>';
     return;
@@ -645,7 +647,7 @@ function renderExchangeStatsView() {
   const listEl = $('ex-stats-player-list');
   if (!listEl) return;
 
-  const exPlayers = players.filter(p => !p.isGuest);
+  const exPlayers = players.filter(p => !p.isGuest && (!p.status || p.status === 'active'));
   if (!exPlayers.length) {
     listEl.innerHTML = '<p style="color:#8E8E93;text-align:center;padding:20px;">등록된 선수가 없습니다.</p>';
     return;
@@ -734,7 +736,7 @@ async function renderExchangeHistory() {
     <div class="ex-history-item">
       <div class="ex-history-date">${ex.date}</div>
       <div class="ex-history-teams">
-        <strong>${currentClub ? currentClub.name : '홈'}</strong>
+        <strong>${currentClub ? (currentClub.clubName || '홈') : '홈'}</strong>
         vs ${ex.clubBName}
       </div>
       <div class="ex-history-score">
