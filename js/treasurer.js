@@ -75,7 +75,7 @@ function showTreasurerMenu() {
 }
 
 function hideTreasurerSections() {
-  ['treasurer-fee', 'treasurer-finance', 'treasurer-court-mgmt', 'treasurer-notice-mgmt'].forEach(id => {
+  ['treasurer-fee', 'treasurer-finance', 'treasurer-court-mgmt', 'treasurer-notice-mgmt', 'treasurer-report'].forEach(id => {
     const el = $(id);
     if (el) el.style.display = 'none';
   });
@@ -599,7 +599,276 @@ window.showTreasurerSection = function(section) {
     fetchFinanceData().then(() => {
       _origShowTreasurerSection(section);
     });
+  } else if (section === 'report') {
+    _origShowTreasurerSection(section);
+    // 이번 달로 기본 설정
+    const el = document.getElementById('reportMonth');
+    if (el && !el.value) el.value = new Date().toISOString().slice(0, 7);
+    initReportSettings();
   } else {
     _origShowTreasurerSection(section);
   }
 };
+
+// ========================================
+// ✅ v4.76: 월간 운영 리포트
+// ========================================
+
+// 리포트 체크박스 설정 저장/불러오기
+function saveReportSettings() {
+  const settings = {
+    fee:        !!document.getElementById('rpt-fee')?.checked,
+    finance:    !!document.getElementById('rpt-finance')?.checked,
+    attendance: !!document.getElementById('rpt-attendance')?.checked,
+    risk:       !!document.getElementById('rpt-risk')?.checked,
+    games:      !!document.getElementById('rpt-games')?.checked,
+    winrate:    !!document.getElementById('rpt-winrate')?.checked,
+    exchange:   !!document.getElementById('rpt-exchange')?.checked,
+  };
+  try { localStorage.setItem('grandslam_report_settings_' + getActiveClubId(), JSON.stringify(settings)); } catch(e) {}
+}
+
+function loadReportSettings() {
+  try {
+    const saved = localStorage.getItem('grandslam_report_settings_' + getActiveClubId());
+    return saved ? JSON.parse(saved) : null;
+  } catch(e) { return null; }
+}
+
+function initReportSettings() {
+  const saved = loadReportSettings();
+  // 저장값 없으면 기본값: 전부 체크
+  const defaults = { fee: true, finance: true, attendance: true, risk: true, games: true, winrate: true, exchange: true };
+  const cfg = saved || defaults;
+  ['fee','finance','attendance','risk','games','winrate','exchange'].forEach(key => {
+    const el = document.getElementById('rpt-' + key);
+    if (el) el.checked = !!cfg[key];
+  });
+}
+
+// ── 리포트 데이터 계산 함수들 ──────────────────
+
+function _getReportMonth() {
+  const sel = document.getElementById('reportMonth');
+  return sel ? sel.value : new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+}
+
+// 💰 회비 납부 현황
+function _buildFeeSection(ym) {
+  const [year, month] = ym.split('-');
+  const key = `${year}-${month}`;
+  const yearlyKey = `${year}-yearly`;
+  const members = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const paid = [], unpaid = [];
+  members.forEach(p => {
+    const pf = feeData[p.name] || {};
+    (pf[key] === 'Y' || pf[yearlyKey] === 'Y') ? paid.push(displayName(p.name)) : unpaid.push(displayName(p.name));
+  });
+  const total = members.length;
+  const rate = total > 0 ? Math.round(paid.length / total * 100) : 0;
+  let txt = `💰 회비 납부 현황 (${parseInt(month)}월)\n`;
+  txt += `━━━━━━━━━━\n`;
+  txt += `납부율: ${paid.length}/${total}명 (${rate}%)\n`;
+  txt += `✅ 납부 (${paid.length}명): ${paid.join(', ') || '없음'}\n`;
+  txt += `❌ 미납 (${unpaid.length}명): ${unpaid.join(', ') || '없음'}`;
+  if (monthlyFeeAmount) txt += `\n💵 납부액: ${(paid.length * monthlyFeeAmount).toLocaleString()}원`;
+  return txt;
+}
+
+// 💰 수입/지출 내역
+function _buildFinanceSection(ym) {
+  const prefix = ym + '-'; // 'YYYY-MM-'
+  const monthIncomes  = financeData.filter(f => f.type === 'income'  && (f.date || '').startsWith(prefix));
+  const monthExpenses = financeData.filter(f => f.type === 'expense' && (f.date || '').startsWith(prefix));
+  const totalIncome   = financeData.filter(f => f.type === 'income' ).reduce((s,f) => s + f.amount, 0);
+  const totalExpense  = financeData.filter(f => f.type === 'expense').reduce((s,f) => s + f.amount, 0);
+  const mIncome  = monthIncomes .reduce((s,f) => s + f.amount, 0);
+  const mExpense = monthExpenses.reduce((s,f) => s + f.amount, 0);
+  const [, month] = ym.split('-');
+
+  let txt = `💳 수입/지출 내역 (${parseInt(month)}월)\n━━━━━━━━━━\n`;
+  txt += `📥 수입 내역\n`;
+  if (monthIncomes.length === 0) { txt += `  (내역 없음)\n`; }
+  else { monthIncomes.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(f => { txt += `  • ${(f.date||'').slice(5).replace('-','/')} ${f.desc} ${f.amount.toLocaleString()}원\n`; }); }
+  txt += `소계: ${mIncome.toLocaleString()}원\n\n`;
+  txt += `📤 지출 내역\n`;
+  if (monthExpenses.length === 0) { txt += `  (내역 없음)\n`; }
+  else { monthExpenses.sort((a,b)=>(a.date||'').localeCompare(b.date||'')).forEach(f => { const cat = f.category ? ` [${f.category}]` : ''; txt += `  • ${(f.date||'').slice(5).replace('-','/')} ${f.desc}${cat} ${f.amount.toLocaleString()}원\n`; }); }
+  txt += `소계: ${mExpense.toLocaleString()}원\n`;
+  txt += `💵 ${parseInt(month)}월 잔액: ${(mIncome - mExpense) >= 0 ? '+' : ''}${(mIncome - mExpense).toLocaleString()}원\n`;
+  txt += `━━━━━━━━━━\n`;
+  txt += `📊 누계 (전체)\n`;
+  txt += `  총 수입: ${totalIncome.toLocaleString()}원\n`;
+  txt += `  총 지출: ${totalExpense.toLocaleString()}원\n`;
+  txt += `  총 잔액: ${(totalIncome - totalExpense) >= 0 ? '+' : ''}${(totalIncome - totalExpense).toLocaleString()}원`;
+  return txt;
+}
+
+// 🏢 출석 순위
+function _buildAttendanceSection(ym) {
+  const prefix = ym + '-';
+  const countMap = {};
+  (matchLog || []).forEach(m => {
+    if (!(m.date || '').startsWith(prefix)) return;
+    const allNames = [...(m.home || []), ...(m.away || [])];
+    allNames.forEach(name => {
+      if (!countMap[name]) countMap[name] = new Set();
+      countMap[name].add(m.date); // 날짜 기준 중복 제거
+    });
+  });
+  const [, month] = ym.split('-');
+  const sorted = Object.entries(countMap)
+    .map(([name, days]) => ({ name, days: days.size }))
+    .filter(x => players.find(p => p.name === x.name && !p.isGuest))
+    .sort((a, b) => b.days - a.days);
+
+  let txt = `🏃 출석 순위 (${parseInt(month)}월)\n━━━━━━━━━━\n`;
+  if (sorted.length === 0) { txt += `(경기 기록 없음)`; return txt; }
+  sorted.forEach((x, i) => {
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`;
+    txt += `${medal} ${displayName(x.name)} ${x.days}회\n`;
+  });
+  return txt.trimEnd();
+}
+
+// ⚠️ 운영 위험 감지
+function _buildRiskSection(ym) {
+  const [year, month] = ym.split('-').map(Number);
+  const warnings = [];
+
+  // 최근 3개월 경기 0회 회원
+  const threeMonthsAgo = new Date(year, month - 4, 1); // 3개월 전 시작
+  const activeNames = new Set();
+  (matchLog || []).forEach(m => {
+    const d = new Date(m.date || '');
+    if (d >= threeMonthsAgo) {
+      [...(m.home||[]), ...(m.away||[])].forEach(n => activeNames.add(n));
+    }
+  });
+  const inactive = players.filter(p => !p.isGuest && !activeNames.has(p.name));
+  if (inactive.length > 0) warnings.push(`😴 3개월 이상 미출석: ${inactive.map(p => displayName(p.name)).join(', ')}`);
+
+  // 2개월 이상 미납
+  const checkMonths = [];
+  for (let i = 0; i < 2; i++) {
+    let m = month - 1 - i, y = year;
+    if (m <= 0) { m += 12; y--; }
+    checkMonths.push(`${y}-${String(m).padStart(2,'0')}`);
+  }
+  const longUnpaid = players.filter(p => {
+    if (p.isGuest || p.isTreasurer || p.isFeeExempt) return false;
+    const pf = feeData[p.name] || {};
+    const yearlyKey = `${year}-yearly`;
+    if (pf[yearlyKey] === 'Y') return false;
+    return checkMonths.every(k => pf[k] !== 'Y');
+  });
+  if (longUnpaid.length > 0) warnings.push(`💸 2개월 이상 미납: ${longUnpaid.map(p => displayName(p.name)).join(', ')}`);
+
+  let txt = `⚠️ 운영 위험 감지\n━━━━━━━━━━\n`;
+  txt += warnings.length === 0 ? `✅ 이상 없음` : warnings.join('\n');
+  return txt;
+}
+
+// 🎾 이달 총 경기 수
+function _buildGamesSection(ym) {
+  const prefix = ym + '-';
+  const [, month] = ym.split('-');
+  const monthGames = (matchLog || []).filter(m => (m.date || '').startsWith(prefix));
+  const doubles = monthGames.filter(m => (m.type || 'double') === 'double').length;
+  const singles = monthGames.filter(m => m.type === 'single').length;
+  const mixed   = monthGames.filter(m => m.type === 'mixed').length;
+  let txt = `🎾 경기 현황 (${parseInt(month)}월)\n━━━━━━━━━━\n`;
+  txt += `총 경기: ${monthGames.length}게임\n`;
+  if (doubles > 0) txt += `  복식: ${doubles}게임\n`;
+  if (singles > 0) txt += `  단식: ${singles}게임\n`;
+  if (mixed   > 0) txt += `  혼복: ${mixed}게임`;
+  return txt.trimEnd();
+}
+
+// 🏆 승률 TOP 3
+function _buildWinrateSection(ym) {
+  const prefix = ym + '-';
+  const [, month] = ym.split('-');
+  const statMap = {};
+  (matchLog || []).forEach(m => {
+    if (!(m.date || '').startsWith(prefix)) return;
+    const homeWin = m.winner === 'home';
+    const process = (names, isWin) => (names || []).forEach(name => {
+      if (!statMap[name]) statMap[name] = { w: 0, l: 0 };
+      isWin ? statMap[name].w++ : statMap[name].l++;
+    });
+    process(m.home, homeWin);
+    process(m.away, !homeWin);
+  });
+  const ranked = Object.entries(statMap)
+    .map(([name, s]) => ({ name, w: s.w, l: s.l, rate: (s.w + s.l) > 0 ? s.w / (s.w + s.l) : 0 }))
+    .filter(x => players.find(p => p.name === x.name && !p.isGuest) && (x.w + x.l) >= 3)
+    .sort((a, b) => b.rate - a.rate || b.w - a.w)
+    .slice(0, 3);
+
+  let txt = `🏆 승률 TOP 3 (${parseInt(month)}월)\n━━━━━━━━━━\n`;
+  if (ranked.length === 0) { txt += `(3경기 이상 참여 선수 없음)`; return txt; }
+  ranked.forEach((x, i) => {
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
+    const pct = Math.round(x.rate * 100);
+    txt += `${medal} ${displayName(x.name)} ${pct}% (${x.w}승 ${x.l}패)\n`;
+  });
+  return txt.trimEnd();
+}
+
+// 🤝 교류전 결과
+function _buildExchangeSection(ym) {
+  const prefix = ym + '-';
+  const [, month] = ym.split('-');
+  // exchanges는 백업/Firestore에서 로드된 전역 변수가 없으므로 matchLog 기반으로 교류전 경기만 필터
+  const exGames = (matchLog || []).filter(m => (m.date || '').startsWith(prefix) && m.exchangeId);
+  if (exGames.length === 0) return `🤝 교류전 결과 (${parseInt(month)}월)\n━━━━━━━━━━\n(교류전 없음)`;
+
+  // exchangeId 기준으로 그룹핑
+  const groups = {};
+  exGames.forEach(m => {
+    const eid = m.exchangeId;
+    if (!groups[eid]) groups[eid] = { clubBName: m.clubBName || '상대 클럽', winsA: 0, winsB: 0, date: m.date };
+    if (m.clubSideHome === 'A') { m.winner === 'home' ? groups[eid].winsA++ : groups[eid].winsB++; }
+    else                        { m.winner === 'away' ? groups[eid].winsA++ : groups[eid].winsB++; }
+  });
+
+  const clubName = (currentClub && currentClub.name) ? currentClub.name : '우리 클럽';
+  let txt = `🤝 교류전 결과 (${parseInt(month)}월)\n━━━━━━━━━━\n`;
+  Object.values(groups).forEach(g => {
+    const result = g.winsA > g.winsB ? '🏆 승' : g.winsA < g.winsB ? '😢 패' : '🤝 무';
+    txt += `vs ${g.clubBName} ${result}\n${clubName} ${g.winsA}승 : ${g.winsB}승 ${g.clubBName}\n`;
+  });
+  return txt.trimEnd();
+}
+
+// ── 리포트 생성 & 복사 ──────────────────
+
+function generateMonthlyReport() {
+  saveReportSettings();
+  const ym = _getReportMonth();
+  const [year, month] = ym.split('-');
+  const clubName = (currentClub && currentClub.name) ? currentClub.name : '클럽';
+
+  const sections = [];
+  sections.push(`📋 ${clubName} ${year}년 ${parseInt(month)}월 운영 리포트\n${'═'.repeat(20)}`);
+
+  if (document.getElementById('rpt-fee')?.checked)        sections.push(_buildFeeSection(ym));
+  if (document.getElementById('rpt-finance')?.checked)    sections.push(_buildFinanceSection(ym));
+  if (document.getElementById('rpt-attendance')?.checked) sections.push(_buildAttendanceSection(ym));
+  if (document.getElementById('rpt-risk')?.checked)       sections.push(_buildRiskSection(ym));
+  if (document.getElementById('rpt-games')?.checked)      sections.push(_buildGamesSection(ym));
+  if (document.getElementById('rpt-winrate')?.checked)    sections.push(_buildWinrateSection(ym));
+  if (document.getElementById('rpt-exchange')?.checked)   sections.push(_buildExchangeSection(ym));
+
+  if (sections.length === 1) { gsAlert('항목을 하나 이상 선택하세요.'); return; }
+
+  const text = sections.join('\n\n');
+  const previewEl = document.getElementById('reportPreview');
+  if (previewEl) { previewEl.style.display = 'block'; previewEl.textContent = text; }
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => gsAlert('📋 리포트가 클립보드에 복사됐어요!\n카톡에 붙여넣기 하세요.'));
+  } else { fallbackCopy(text); }
+}

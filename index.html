@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.74</title>
+  <title>GrandSlam Ultimate v4.76</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -375,7 +375,7 @@
     </div>
 
     <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">
-      v4.74</div>
+      v4.76</div>
   </div>
 
   <div id="view-tennis" class="app-screen">
@@ -1341,6 +1341,8 @@
           <div>- ✅ <b>v4.72</b>: 총무모드 마스터 PIN 인증 복구 (MASTER_PIN 전역 선언 + 마스터 인증 성공 시 세션 캐싱)</div>
           <div>- ✅ <b>v4.73</b>: 교류전 진입 불가 수정 (exchange.js 중괄호 누락 SyntaxError 2건 수정)</div>
           <div>- ✅ <b>v4.74</b>: 교류전 게스트 여성 선택 안 됨 수정 (radio→dataset.gender 방식), 선수통계 중복 선택 수정 (1명만 선택 유지)</div>
+          <div>- ✅ <b>v4.75</b>: 재정 데이터 Firestore 저장/불러오기 구현 (앱 재시작 후에도 데이터 유지), 백업에 재정(financeData)·교류전(exchanges) 추가, 재정 데이터 초기화 버튼 추가</div>
+          <div>- ✅ <b>v4.76</b>: 월간 운영 리포트 — 회계/운영/경기 3개 카테고리, 항목별 체크박스 선택, 카톡 복붙용 텍스트 자동 생성, 선택 상태 저장</div>
 
         </div>
       </div>
@@ -1425,6 +1427,11 @@
             <button class="btn-purple-main" onclick="showTreasurerSection('notice-mgmt')"
               style="display:flex; align-items:center; justify-content:center; gap:8px;">
               <span class="material-symbols-outlined">campaign</span> 공지사항 관리
+            </button>
+            <!-- ✅ v4.76: 월간 운영 리포트 -->
+            <button class="btn-purple-main" onclick="showTreasurerSection('report')"
+              style="display:flex; align-items:center; justify-content:center; gap:8px; background:var(--roland-clay);">
+              <span class="material-symbols-outlined">summarize</span> 월간 운영 리포트
             </button>
           </div>
         </div>
@@ -1554,6 +1561,77 @@
           </button>
           <button class="btn-sub royal" onclick="showTreasurerMenu()" style="width:100%; margin-top:8px;">← 총무
             메뉴</button>
+        </div>
+      </div>
+
+
+      <!-- ✅ v4.76: 월간 운영 리포트 -->
+      <div id="treasurer-report" style="display:none;">
+        <div class="section-card active" style="display:block;">
+          <div class="sub-rank-title"><span class="material-symbols-outlined">summarize</span>월간 운영 리포트</div>
+
+          <!-- 월 선택 -->
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+            <span style="font-size:13px; color:var(--text-gray); white-space:nowrap;">대상 월</span>
+            <input type="month" id="reportMonth"
+              style="flex:1; padding:9px 12px; border:2px solid #E5E5EA; border-radius:10px; font-size:14px;"
+              onchange="saveReportSettings()" />
+          </div>
+
+          <!-- 💰 회계 관련 -->
+          <div style="font-size:12px; font-weight:700; color:var(--text-gray); margin-bottom:8px; letter-spacing:0.5px;">💰 회계 관련</div>
+          <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;">
+            <label style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:#F9F9F9; border-radius:12px; cursor:pointer;">
+              <input type="checkbox" id="rpt-fee" style="width:18px; height:18px; accent-color:var(--wimbledon-sage);" onchange="saveReportSettings()">
+              <span style="font-size:14px;">회비 납부 현황 (납부자 + 미납자)</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:#F9F9F9; border-radius:12px; cursor:pointer;">
+              <input type="checkbox" id="rpt-finance" style="width:18px; height:18px; accent-color:var(--wimbledon-sage);" onchange="saveReportSettings()">
+              <span style="font-size:14px;">수입/지출 내역 + 누계</span>
+            </label>
+          </div>
+
+          <!-- 🏢 운영 관련 -->
+          <div style="font-size:12px; font-weight:700; color:var(--text-gray); margin-bottom:8px; letter-spacing:0.5px;">🏢 운영 관련</div>
+          <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;">
+            <label style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:#F9F9F9; border-radius:12px; cursor:pointer;">
+              <input type="checkbox" id="rpt-attendance" style="width:18px; height:18px; accent-color:var(--wimbledon-sage);" onchange="saveReportSettings()">
+              <span style="font-size:14px;">출석 순위 (경기 참여 기준)</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:#F9F9F9; border-radius:12px; cursor:pointer;">
+              <input type="checkbox" id="rpt-risk" style="width:18px; height:18px; accent-color:var(--wimbledon-sage);" onchange="saveReportSettings()">
+              <span style="font-size:14px;">운영 위험 감지 (미출석·미납)</span>
+            </label>
+          </div>
+
+          <!-- 🎾 경기 관련 -->
+          <div style="font-size:12px; font-weight:700; color:var(--text-gray); margin-bottom:8px; letter-spacing:0.5px;">🎾 경기 관련</div>
+          <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
+            <label style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:#F9F9F9; border-radius:12px; cursor:pointer;">
+              <input type="checkbox" id="rpt-games" style="width:18px; height:18px; accent-color:var(--wimbledon-sage);" onchange="saveReportSettings()">
+              <span style="font-size:14px;">이달 총 경기 수</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:#F9F9F9; border-radius:12px; cursor:pointer;">
+              <input type="checkbox" id="rpt-winrate" style="width:18px; height:18px; accent-color:var(--wimbledon-sage);" onchange="saveReportSettings()">
+              <span style="font-size:14px;">승률 TOP 3 (3경기 이상)</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:#F9F9F9; border-radius:12px; cursor:pointer;">
+              <input type="checkbox" id="rpt-exchange" style="width:18px; height:18px; accent-color:var(--wimbledon-sage);" onchange="saveReportSettings()">
+              <span style="font-size:14px;">교류전 결과</span>
+            </label>
+          </div>
+
+          <!-- 생성 버튼 -->
+          <button class="btn-sub sky" onclick="generateMonthlyReport()"
+            style="width:100%; display:flex; align-items:center; justify-content:center; gap:8px; font-size:15px; padding:14px;">
+            <span class="material-symbols-outlined" style="font-size:20px;">content_copy</span>리포트 생성 + 복사
+          </button>
+
+          <!-- 미리보기 -->
+          <div id="reportPreview"
+            style="display:none; margin-top:14px; padding:14px; background:#F2F2F7; border-radius:12px; font-size:12px; white-space:pre-wrap; line-height:1.7; color:var(--text-dark); word-break:break-all;"></div>
+
+          <button class="btn-sub royal" onclick="showTreasurerMenu()" style="width:100%; margin-top:12px;">← 총무 메뉴</button>
         </div>
       </div>
 
