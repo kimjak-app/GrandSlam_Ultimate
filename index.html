@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.86</title>
+  <title>GrandSlam Ultimate v4.87</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -375,7 +375,7 @@
     </div>
 
     <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">
-      v4.86</div>
+      v4.87</div>
   </div>
 
   <div id="view-tennis" class="app-screen">
@@ -1353,6 +1353,7 @@
           <div>- ✅ <b>v4.84</b>: 버그 수정 — 교류전 랭킹(클럽/개인) 데이터 정상 저장/표시 (normalizeMatchLog 교류전 필드 보존)</div>
           <div>- ✅ <b>v4.85</b>: 버그 수정 — 교류전 히스토리 클럽명 정상 표시, 개인통계 상대 클럽 전적 클럽명으로 표시</div>
           <div>- ✅ <b>v4.86</b>: 버그 수정 — 새 클럽 추가 PIN 인증 정상 작동, 클럽 드롭다운이 PIN 모달 위에 겹치는 문제 해결</div>
+          <div>- ✅ <b>v4.87</b>: 실명인증 앱 재시작 후 자동 복원, 코트 시간대+코트번호 두 줄 레이아웃으로 개선</div>
 
         </div>
       </div>
@@ -1697,14 +1698,15 @@
               style="width:100%; padding:10px; margin-bottom:8px; box-sizing:border-box;" />
             <!-- ✅ v3.811: 시간대+코트번호 최대 3줄 -->
             <div id="courtSlotRows">
-              <div class="court-slot-row"
-                style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; align-items:center;">
-                <input type="time" class="w-input court-slot-time-start"
-                  style="flex:1; min-width:100px; padding:10px;" />
-                <span style="font-size:14px; color:#999; flex-shrink:0;">~</span>
-                <input type="time" class="w-input court-slot-time-end" style="flex:1; min-width:100px; padding:10px;" />
+              <!-- ✅ v4.87: 시간대+코트 두 줄 레이아웃 -->
+              <div class="court-slot-row" style="display:flex; flex-direction:column; gap:6px; margin-bottom:8px;">
+                <div style="display:flex; gap:6px; align-items:center;">
+                  <input type="time" class="w-input court-slot-time-start" style="flex:1; padding:10px;" />
+                  <span style="font-size:14px; color:#999; flex-shrink:0;">~</span>
+                  <input type="time" class="w-input court-slot-time-end" style="flex:1; padding:10px;" />
+                </div>
                 <input type="text" class="w-input court-slot-court" placeholder="코트번호 (예: 11,12번)"
-                  style="flex:1; min-width:100px; padding:10px;" />
+                  style="width:100%; padding:10px; box-sizing:border-box;" />
               </div>
             </div>
             <button type="button" id="btnAddSlot" onclick="addCourtSlotRow()"

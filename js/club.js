@@ -920,9 +920,10 @@ function applyCourtPreset() {
   slots.forEach(s => {
     const row = document.createElement('div');
     row.className = 'court-slot-row';
-    row.style.cssText = 'display:flex; gap:8px; margin-bottom:6px;';
+    // ✅ v4.87: 시간대+코트를 두 줄로 분리해 삐져나오는 문제 해결
+    row.style.cssText = 'display:flex; flex-direction:column; gap:6px; margin-bottom:8px;';
     const [tStart, tEnd] = (s.time || '').split('-');
-    row.innerHTML = '<input type="time" class="w-input court-slot-time-start" value="' + escapeHtml((tStart || '').trim()) + '" style="flex:1; min-width:100px; padding:10px;" /><span style="font-size:14px; color:#999; flex-shrink:0; align-self:center;">~</span><input type="time" class="w-input court-slot-time-end" value="' + escapeHtml((tEnd || '').trim()) + '" style="flex:1; min-width:100px; padding:10px;" /><input type="text" class="w-input court-slot-court" placeholder="코트번호 (예: 11,12번)" value="' + escapeHtml(s.court || '') + '" style="flex:1; min-width:100px; padding:10px;" />';
+    row.innerHTML = '<div style="display:flex; gap:6px; align-items:center;"><input type="time" class="w-input court-slot-time-start" value="' + escapeHtml((tStart || '').trim()) + '" style="flex:1; padding:10px;" /><span style="font-size:14px; color:#999; flex-shrink:0;">~</span><input type="time" class="w-input court-slot-time-end" value="' + escapeHtml((tEnd || '').trim()) + '" style="flex:1; padding:10px;" /></div><input type="text" class="w-input court-slot-court" placeholder="코트번호 (예: 11,12번)" value="' + escapeHtml(s.court || '') + '" style="width:100%; padding:10px; box-sizing:border-box;" />';
     container.appendChild(row);
   });
   updateAddSlotBtn();
@@ -934,8 +935,9 @@ function addCourtSlotRow() {
   if (rows.length >= 5) return;
   const row = document.createElement('div');
   row.className = 'court-slot-row';
-  row.style.cssText = 'display:flex; gap:8px; margin-bottom:6px;';
-  row.innerHTML = '<input type="time" class="w-input court-slot-time-start" style="flex:1; min-width:100px; padding:10px;" /><span style="font-size:14px; color:#999; flex-shrink:0; align-self:center;">~</span><input type="time" class="w-input court-slot-time-end" style="flex:1; min-width:100px; padding:10px;" /><input type="text" class="w-input court-slot-court" placeholder="코트번호 (예: 11,12번)" style="flex:1; min-width:100px; padding:10px;" />';
+  // ✅ v4.87: 시간대+코트 두 줄 레이아웃
+  row.style.cssText = 'display:flex; flex-direction:column; gap:6px; margin-bottom:8px;';
+  row.innerHTML = '<div style="display:flex; gap:6px; align-items:center;"><input type="time" class="w-input court-slot-time-start" style="flex:1; padding:10px;" /><span style="font-size:14px; color:#999; flex-shrink:0;">~</span><input type="time" class="w-input court-slot-time-end" style="flex:1; padding:10px;" /></div><input type="text" class="w-input court-slot-court" placeholder="코트번호 (예: 11,12번)" style="width:100%; padding:10px; box-sizing:border-box;" />';
   container.appendChild(row);
   updateAddSlotBtn();
 }

@@ -708,6 +708,25 @@ firebase.auth().onAuthStateChanged((user) => {
       loginStatusText.style.cursor = 'pointer';
       loginStatusText.onclick = () => gsConfirm('로그아웃하시겠습니까?', ok => { if (ok) handleLogout(); });
     }
+    // ✅ v4.87: 앱 재시작 시 이전 실명 인증 자동 복원
+    const _tryRestoreLoggedPlayer = async () => {
+      if (currentLoggedPlayer) return; // 이미 복원됨
+      const clubId = typeof getActiveClubId === 'function' ? getActiveClubId() : null;
+      if (!clubId) return;
+      try {
+        const playersRef = _clubRef(clubId).collection('players');
+        // 1) uid로 연동된 선수 확인
+        const snap = await playersRef.where('uid', '==', user.uid).get();
+        if (!snap.empty) { currentLoggedPlayer = snap.docs[0].data(); return; }
+        // 2) localStorage에 저장된 이름으로 복원
+        const savedName = localStorage.getItem(`auth_name_${clubId}_${user.uid}`);
+        if (savedName) {
+          const doc = await playersRef.doc(savedName).get();
+          if (doc.exists) { currentLoggedPlayer = doc.data(); }
+        }
+      } catch (e) { console.warn('auto restore logged player error:', e); }
+    };
+    setTimeout(_tryRestoreLoggedPlayer, 1500); // 클럽 로드 후 실행
   } else {
     currentUserAuth = null;
     currentLoggedPlayer = null;
