@@ -243,8 +243,6 @@ async function sync() {
     setTimeout(applyAutofitAllTables, 0);
 
     // ✅ v4.928: 데이터 완전 로드 후 → 해당 클럽에서 로그인 유저 복원 → renderHome()
-    // onAuthStateChanged의 _tryRestoreLoggedPlayer는 최초 1회만 실행되므로
-    // 클럽 전환 시에도 이 시점에서 직접 복원해야 타이밍 보장됨
     await _syncRestoreLoggedPlayer(clubId);
 
     // ✅ v4.928: restore 완료 후 이벤트 발행 (main.js type=data → renderHome 순서 보장)
@@ -729,7 +727,7 @@ firebase.auth().onAuthStateChanged((user) => {
       loginStatusText.textContent = '👤 로그인됨';
       loginStatusText.style.color = '#4CAF50';
       loginStatusText.style.cursor = 'pointer';
-      loginStatusText.onclick = () => gsConfirm('로그아웃하시겠습니까?', ok => { if (ok) handleLogout(); });
+      loginStatusText.onclick = () => handleLogout(); // ✅ v4.929: handleLogout 내부에서 gsConfirm 처리하므로 중복 제거
     }
     // ✅ v4.87: 앱 재시작 시 이전 실명 인증 자동 복원
     const _tryRestoreLoggedPlayer = async () => {
@@ -756,7 +754,7 @@ firebase.auth().onAuthStateChanged((user) => {
         }
       } catch (e) { console.warn('auto restore logged player error:', e); }
     };
-    setTimeout(_tryRestoreLoggedPlayer, 1500); // 클럽 로드 후 실행
+    // ✅ v4.929: 복원은 sync() 완료 후 _syncRestoreLoggedPlayer에서 처리
   } else {
 
     currentUserAuth = null;
@@ -772,9 +770,7 @@ firebase.auth().onAuthStateChanged((user) => {
   }
 });
 
-// ✅ v4.928: 클럽 전환 시 sync() 완료 후 해당 클럽의 로그인 유저 복원
-// onAuthStateChanged._tryRestoreLoggedPlayer는 앱 최초 1회만 실행되므로
-// 클럽 전환마다 이 함수를 sync() 끝에서 직접 호출해 타이밍을 보장함
+// ✅ v4.928: sync() 완료 후 해당 클럽의 로그인 유저 복원 후 renderHome() 호출
 async function _syncRestoreLoggedPlayer(clubId) {
   if (!currentUserAuth || !clubId) {
     // 로그인 안 된 상태 → renderHome만 호출
