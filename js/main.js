@@ -154,3 +154,205 @@ window.addEventListener('beforeunload', () => {
     pushDataOnly().catch(e => console.warn('beforeunload 자동저장 오류:', e));
   }
 });
+
+// ✅ v4.922: 라커룸 홈화면 렌더링
+function renderHome() {
+  try {
+    _renderLockerRoom();
+    _renderClubStatus();
+  } catch(e) {
+    console.warn('[renderHome] error:', e);
+  }
+}
+
+function _renderLockerRoom() {
+  const me = typeof currentLoggedPlayer !== 'undefined' ? currentLoggedPlayer : null;
+  const myName = me ? me.name : null;
+
+  // 헤더 타이틀
+  const titleEl = document.getElementById('lockerRoomTitleText');
+  if (titleEl) titleEl.textContent = myName ? `${typeof displayName === 'function' ? displayName(myName) : myName}님의 라커룸` : '라커룸';
+
+  if (!myName || !Array.isArray(players) || !Array.isArray(matchLog)) return;
+
+  // ── 순위 계산 ──
+  const activePlayers = players.filter(p => !p.isGuest && (!p.status || p.status === 'active'));
+  const sorted = [...activePlayers].sort((a,b) => (b.score||0) - (a.score||0));
+  const sortedD = [...activePlayers].sort((a,b) => (b.dScore||0) - (a.dScore||0));
+  const sortedS = [...activePlayers].sort((a,b) => (b.sScore||0) - (a.sScore||0));
+
+  const getRank = (arr, name) => { const i = arr.findIndex(p => p.name === name); return i >= 0 ? i + 1 : null; };
+  const myRank  = getRank(sorted, myName);
+  const myRankD = getRank(sortedD, myName);
+  const myRankS = getRank(sortedS, myName);
+
+  const myPlayer = players.find(p => p.name === myName);
+
+  // 순위 표시
+  const setRank = (id, deltaId, rank, delta) => {
+    const el = document.getElementById(id);
+    const dEl = document.getElementById(deltaId);
+    if (el) el.textContent = rank ? `${rank}` : '–';
+    if (dEl && delta !== null && delta !== undefined) {
+      const up = delta > 0;
+      const down = delta < 0;
+      if (up || down) {
+        dEl.textContent = up ? `▲${delta}` : `▼${Math.abs(delta)}`;
+        dEl.style.color = up ? '#5D9C76' : '#FF3B30';
+        dEl.style.display = 'inline';
+      }
+    }
+  };
+
+  const lastRank  = myPlayer ? (myPlayer.last  || 0) : 0;
+  const lastRankD = myPlayer ? (myPlayer.lastD || 0) : 0;
+  const lastRankS = myPlayer ? (myPlayer.lastS || 0) : 0;
+
+  setRank('myRankTotal',  'myRankTotalDelta',  myRank,  lastRank  && myRank  ? lastRank  - myRank  : null);
+  setRank('myRankDouble', 'myRankDoubleDelta', myRankD, lastRankD && myRankD ? lastRankD - myRankD : null);
+  setRank('myRankSingle', 'myRankSingleDelta', myRankS, lastRankS && myRankS ? lastRankS - myRankS : null);
+
+  // ── 전적 계산 ──
+  const now = new Date();
+  const thisYear = now.getFullYear();
+  const thisMonth = now.getMonth() + 1;
+  const monthStr = `${thisYear}-${String(thisMonth).padStart(2,'0')}`;
+
+  // 이번주 월요일
+  const day = now.getDay();
+  const diffToMon = (day === 0 ? -6 : 1 - day);
+  const monday = new Date(now); monday.setDate(now.getDate() + diffToMon); monday.setHours(0,0,0,0);
+  const lastMonday = new Date(monday); lastMonday.setDate(monday.getDate() - 7);
+
+  const toStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const mondayStr = toStr(monday);
+  const lastMondayStr = toStr(lastMonday);
+  const lastSundayStr = toStr(new Date(monday.getTime() - 86400000));
+
+  const calcRecord = (logs) => {
+    let w = 0, l = 0;
+    logs.forEach(m => {
+      const inHome = (m.home||[]).includes(myName);
+      const inAway = (m.away||[]).includes(myName);
+      if (!inHome && !inAway) return;
+      const win = (inHome && m.winner === 'home') || (inAway && m.winner === 'away');
+      win ? w++ : l++;
+    });
+    const rate = (w + l) > 0 ? Math.round(w / (w + l) * 100) : 0;
+    return { w, l, rate };
+  };
+
+  const thisWeekLogs  = matchLog.filter(m => m.date >= mondayStr);
+  const lastWeekLogs  = matchLog.filter(m => m.date >= lastMondayStr && m.date <= lastSundayStr);
+  const thisMonthLogs = matchLog.filter(m => (m.date||'').startsWith(monthStr));
+
+  const fmt = (r, highlight) => {
+    if (r.w === 0 && r.l === 0) return '– 승 – 패 &nbsp;–%';
+    return `${r.w}승 ${r.l}패 &nbsp;${r.rate}%`;
+  };
+
+  const rTW = calcRecord(thisWeekLogs);
+  const rLW = calcRecord(lastWeekLogs);
+  const rTM = calcRecord(thisMonthLogs);
+
+  const el = id => document.getElementById(id);
+  if (el('myRecordThisWeek'))  el('myRecordThisWeek').innerHTML  = fmt(rTW, true);
+  if (el('myRecordLastWeek'))  el('myRecordLastWeek').innerHTML  = fmt(rLW, false);
+  if (el('myRecordThisMonth')) el('myRecordThisMonth').innerHTML = fmt(rTM, false);
+
+  // 이번주 🔥 강조
+  if (el('myRecordThisWeek') && rTW.rate >= 70 && (rTW.w + rTW.l) >= 2) {
+    el('myRecordThisWeek').innerHTML += ' 🔥';
+  }
+
+  // ── 최근 경기 3게임 ──
+  const recentEl = el('myRecentGames');
+  if (recentEl) {
+    const myGames = matchLog
+      .filter(m => (m.home||[]).includes(myName) || (m.away||[]).includes(myName))
+      .sort((a,b) => (b.date||'').localeCompare(a.date||''))
+      .slice(0, 3);
+
+    if (myGames.length === 0) {
+      recentEl.innerHTML = '<div style="font-size:12px; color:#bbb; text-align:center; padding:8px 0;">최근 경기 기록이 없습니다</div>';
+    } else {
+      recentEl.innerHTML = myGames.map(m => {
+        const inHome = (m.home||[]).includes(myName);
+        const win = (inHome && m.winner === 'home') || (!inHome && m.winner === 'away');
+        const opponents = inHome ? (m.away||[]) : (m.home||[]);
+        const oppNames = opponents.map(n => typeof displayName === 'function' ? displayName(n) : n).join('·');
+        const dateStr = (m.date||'').slice(5).replace('-','/');
+        return `<div style="display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid #f5f5f5;">
+          <span style="font-size:15px;">${win ? '✅' : '❌'}</span>
+          <span style="font-size:13px; font-weight:700; color:${win ? '#5D9C76' : '#FF3B30'};">${win ? '승' : '패'}</span>
+          <span style="font-size:13px; color:#444; flex:1;">vs ${oppNames}</span>
+          <span style="font-size:11px; color:#bbb;">${dateStr}</span>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+function _renderClubStatus() {
+  const el = id => document.getElementById(id);
+  if (!Array.isArray(matchLog) || !Array.isArray(players)) return;
+
+  // 클럽명
+  const clubName = currentClub ? (currentClub.clubName || '우리 클럽') : '우리 클럽';
+  if (el('clubStatusName')) el('clubStatusName').innerHTML = `🏆 ${clubName} 이번달`;
+
+  // 이번주/지난주 기준
+  const now = new Date();
+  const day = now.getDay();
+  const diffToMon = (day === 0 ? -6 : 1 - day);
+  const monday = new Date(now); monday.setDate(now.getDate() + diffToMon); monday.setHours(0,0,0,0);
+  const lastMonday = new Date(monday); lastMonday.setDate(monday.getDate() - 7);
+  const toStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const mondayStr = toStr(monday);
+  const lastMondayStr = toStr(lastMonday);
+  const lastSundayStr = toStr(new Date(monday.getTime() - 86400000));
+
+  const thisWeekGames = matchLog.filter(m => m.date >= mondayStr).length;
+  const lastWeekGames = matchLog.filter(m => m.date >= lastMondayStr && m.date <= lastSundayStr).length;
+
+  // 출석: 이번주 경기에 참여한 고유 선수 수
+  const thisWeekNames = new Set();
+  matchLog.filter(m => m.date >= mondayStr).forEach(m => {
+    [...(m.home||[]), ...(m.away||[])].forEach(n => thisWeekNames.add(n));
+  });
+  const lastWeekNames = new Set();
+  matchLog.filter(m => m.date >= lastMondayStr && m.date <= lastSundayStr).forEach(m => {
+    [...(m.home||[]), ...(m.away||[])].forEach(n => lastWeekNames.add(n));
+  });
+
+  const totalMembers = players.filter(p => !p.isGuest && (!p.status || p.status === 'active')).length;
+
+  if (el('clubThisWeekGames'))  el('clubThisWeekGames').textContent  = thisWeekGames || '0';
+  if (el('clubThisWeekAttend')) el('clubThisWeekAttend').textContent = `${thisWeekNames.size}/${totalMembers}`;
+  if (el('clubLastWeekGames'))  el('clubLastWeekGames').textContent  = lastWeekGames || '0';
+  if (el('clubLastWeekAttend')) el('clubLastWeekAttend').textContent = `${lastWeekNames.size}/${totalMembers}`;
+
+  // 이달의 1위
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const monthGames = matchLog.filter(m => (m.date||'').startsWith(thisMonth));
+  if (monthGames.length > 0) {
+    const scoreMap = {};
+    monthGames.forEach(m => {
+      const homeWin = m.winner === 'home';
+      const apply = (names, isWin) => names.forEach(n => {
+        if (!scoreMap[n]) scoreMap[n] = { w: 0, l: 0 };
+        isWin ? scoreMap[n].w++ : scoreMap[n].l++;
+      });
+      apply(m.home||[], homeWin);
+      apply(m.away||[], !homeWin);
+    });
+    const top = Object.entries(scoreMap)
+      .filter(([n]) => players.find(p => p.name === n && !p.isGuest && (!p.status || p.status === 'active')))
+      .sort(([,a],[,b]) => b.w - a.w || (a.l - b.l))[0];
+    if (top && el('clubTopPlayer') && el('clubTopPlayerRow')) {
+      const dname = typeof displayName === 'function' ? displayName(top[0]) : top[0];
+      el('clubTopPlayer').textContent = `👑 ${dname}`;
+      el('clubTopPlayerRow').style.display = 'block';
+    }
+  }
+}
