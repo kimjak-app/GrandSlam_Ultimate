@@ -180,6 +180,13 @@ function _renderLockerRoom() {
   const titleEl = document.getElementById('lockerRoomTitleText');
   if (titleEl) titleEl.textContent = myName ? `${typeof displayName === 'function' ? displayName(myName) : myName}님의 라커룸` : '라커룸';
 
+  // ✅ v4.930: 로그인은 됐지만 이 클럽에 실명연결 안 된 경우 → 연결하기 버튼 표시
+  const linkBtn = document.getElementById('lockerLinkBtn');
+  if (linkBtn) {
+    const loggedIn = typeof currentUserAuth !== 'undefined' && currentUserAuth;
+    linkBtn.style.display = (loggedIn && !myName) ? 'block' : 'none';
+  }
+
   if (!myName || !Array.isArray(players) || !Array.isArray(matchLog)) return;
 
   // ── 순위 계산 ──

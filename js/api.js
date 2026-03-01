@@ -831,6 +831,13 @@ async function handleEmailLogin() {
   }
 }
 
+// ✅ v4.930: 라커룸 연결하기 버튼 핸들러
+function doLockerLink() {
+  requireAuth(() => {
+    if (typeof renderHome === 'function') renderHome();
+  });
+}
+
 function handleLogout() {
   if (typeof gsConfirm === 'function') {
     gsConfirm('로그아웃 하시겠습니까?', (res) => {

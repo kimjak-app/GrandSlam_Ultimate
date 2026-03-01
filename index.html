@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.929</title>
+  <title>GrandSlam Ultimate v4.930</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -358,6 +358,10 @@
           <div style="font-size:12px; color:#bbb; text-align:center; padding:8px 0;">실명인증 후 확인 가능합니다</div>
         </div>
       </div>
+      <!-- ✅ v4.930: 라커룸 미연결 시 연결하기 버튼 -->
+      <div id="lockerLinkBtn" style="display:none; padding:4px 16px 16px;">
+        <button onclick="doLockerLink()" style="width:100%; padding:12px; background:#669DB3; color:#fff; border:none; border-radius:12px; font-size:15px; font-weight:700; cursor:pointer;">🔗 내 라커룸 연결하기</button>
+      </div>
     </div>
 
     <!-- ✅ v4.922: 클럽 현황 카드 -->
@@ -513,7 +517,7 @@
     </div>
 
     <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">
-      v4.929</div>
+      v4.930</div>
   </div>
 
   <div id="view-tennis" class="app-screen">
