@@ -907,6 +907,7 @@ function _buildExchangeSection(ym) {
 
 function generateMonthlyReport() {
   saveReportSettings();
+  syncFeeToFinance(); // ✅ v4.92: 리포트 생성 전 회비→재정 동기화
   const ym = _getReportMonth();
   const [year, month] = ym.split('-');
   // ✅ v4.83: clubName 필드명 수정
