@@ -792,36 +792,46 @@ function _buildRiskSection(ym) {
   const [year, month] = ym.split('-').map(Number);
   const warnings = [];
 
-  // 최근 3개월 경기 0회 회원
-  const threeMonthsAgo = new Date(year, month - 4, 1); // 3개월 전 시작
-  const activeNames = new Set();
-  (matchLog || []).forEach(m => {
-    const d = new Date(m.date || '');
-    if (d >= threeMonthsAgo) {
-      [...(m.home||[]), ...(m.away||[])].forEach(n => activeNames.add(n));
-    }
-  });
-  // ✅ v4.79: 탈퇴/휴면 회원 미출석 경고 제외
-  const inactive = players.filter(p => !p.isGuest && (!p.status || p.status === 'active') && !activeNames.has(p.name));
-  if (inactive.length > 0) warnings.push(`😴 3개월 이상 미출석: ${inactive.map(p => displayName(p.name)).join(', ')}`);
+  // ✅ v4.92: 실제 데이터가 있는 달만 체크 (클럽 창설 전 달 제외)
 
-  // 2개월 이상 미납
+  // 미출석: matchLog에 기록 있는 달만 유효한 달로 간주
+  const threeMonthsAgo = new Date(year, month - 4, 1);
+  const activeNames = new Set();
+  const hasMatchInRange = (matchLog || []).some(m => new Date(m.date || '') >= threeMonthsAgo);
+  if (hasMatchInRange) {
+    (matchLog || []).forEach(m => {
+      const d = new Date(m.date || '');
+      if (d >= threeMonthsAgo) {
+        [...(m.home||[]), ...(m.away||[])].forEach(n => activeNames.add(n));
+      }
+    });
+    // ✅ v4.79: 탈퇴/휴면 회원 미출석 경고 제외
+    const inactive = players.filter(p => !p.isGuest && (!p.status || p.status === 'active') && !activeNames.has(p.name));
+    if (inactive.length > 0) warnings.push(`😴 3개월 이상 미출석: ${inactive.map(p => displayName(p.name)).join(', ')}`);
+  }
+
+  // 미납: feeData에 누군가 납부 기록이 있는 달만 유효한 달로 간주
+  const allFeeMonths = new Set();
+  Object.values(feeData).forEach(pf => Object.keys(pf).forEach(k => { if (/^\d{4}-\d{2}$/.test(k)) allFeeMonths.add(k); }));
   const checkMonths = [];
   for (let i = 0; i < 2; i++) {
     let m = month - 1 - i, y = year;
     if (m <= 0) { m += 12; y--; }
-    checkMonths.push(`${y}-${String(m).padStart(2,'0')}`);
+    const k = `${y}-${String(m).padStart(2,'0')}`;
+    if (allFeeMonths.has(k)) checkMonths.push(k); // 실제 데이터 있는 달만 추가
   }
-  const longUnpaid = players.filter(p => {
-    // ✅ v4.79: 탈퇴/휴면 회원 미납 경고 제외
-    if (p.isGuest || p.isTreasurer || p.isFeeExempt) return false;
-    if (p.status === 'inactive' || p.status === 'dormant') return false;
-    const pf = feeData[p.name] || {};
-    const yearlyKey = `${year}-yearly`;
-    if (pf[yearlyKey] === 'Y') return false;
-    return checkMonths.every(k => pf[k] !== 'Y');
-  });
-  if (longUnpaid.length > 0) warnings.push(`💸 2개월 이상 미납: ${longUnpaid.map(p => displayName(p.name)).join(', ')}`);
+  if (checkMonths.length > 0) {
+    const longUnpaid = players.filter(p => {
+      // ✅ v4.79: 탈퇴/휴면 회원 미납 경고 제외
+      if (p.isGuest || p.isTreasurer || p.isFeeExempt) return false;
+      if (p.status === 'inactive' || p.status === 'dormant') return false;
+      const pf = feeData[p.name] || {};
+      const yearlyKey = `${year}-yearly`;
+      if (pf[yearlyKey] === 'Y') return false;
+      return checkMonths.every(k => pf[k] !== 'Y');
+    });
+    if (longUnpaid.length > 0) warnings.push(`💸 2개월 이상 미납: ${longUnpaid.map(p => displayName(p.name)).join(', ')}`);
+  }
 
   let txt = `⚠️ 운영 위험 감지\n━━━━━━━━━━\n`;
   txt += warnings.length === 0 ? `✅ 이상 없음` : warnings.join('\n');
