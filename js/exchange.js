@@ -323,6 +323,7 @@ function getExchangePlayerHint(playerName) {
 
 function addExchangeGuest(side, name, gender) {
   // side: 'A' | 'B'
+  // ✅ v4.91: 교류전은 클럽간 대결 — 항상 isGuest:true로 처리 (정식 랭킹 미반영)
   const guest = { name: name.trim(), gender, isGuest: true };
   if (side === 'A') {
     if (!exchangeGuestsA.find(g => g.name === guest.name)) exchangeGuestsA.push(guest);

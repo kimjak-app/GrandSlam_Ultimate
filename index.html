@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.89</title>
+  <title>GrandSlam Ultimate v4.91</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -375,7 +375,7 @@
     </div>
 
     <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">
-      v4.89</div>
+      v4.91</div>
   </div>
 
   <div id="view-tennis" class="app-screen">
@@ -1309,18 +1309,9 @@
           <div>- ✅ <b>v3.0</b>: 사다리게임·라운드 모드·다중 클럽·클라우드·성별/혼복 시스템</div>
           <div>- ✅ <b>v4.0</b>: 다종목 구조·급수·Firestore 마이그레이션·백업/복원·지역 필터</div>
           <div>- ✅ <b>v4.5</b>: Firebase Auth 로그인·교류전 MVP·총괄/클럽 관리자 권한 분리</div>
-          <div>- ✅ <b>v4.6</b>: PIN 루프 버그 수정, clubId 누락 시 현재 클럽 강제 연결, 이중 PIN 확인 제거</div>
-          <div>- ✅ <b>v4.7</b>: 라운드/미니토너먼트 저장 버그 수정 (sync→Firestore 실제 저장), 주간랭킹 라운드 미반영 수정, 단일게임 저장 실패 롤백 처리, 교류전 개인/클럽 랭킹·통계 탭 완성, 교류전 기록 초기화 기능 (마스터 어드민), 점수초기화 시 matchLog Firestore 실제 삭제, 코드 정리 (GAS 잔재 제거·죽은 변수 제거)</div>
-          <div>- ✅ <b>v4.71</b>: 라운드 저장 시 종합순위 미반영 수정 (score/wins/losses 누락), 교류전 랭킹 탭 버튼 초기화 수정, 총무모드 PIN 인증 오류 수정 (MASTER_PIN 미선언 변수 제거)</div>
-          <div>- ✅ <b>v4.72</b>: 총무모드 마스터 PIN 인증 복구 (MASTER_PIN 전역 선언 + 마스터 인증 성공 시 세션 캐싱)</div>
-          <div>- ✅ <b>v4.73</b>: 교류전 진입 불가 수정 (exchange.js 중괄호 누락 SyntaxError 2건 수정)</div>
-          <div>- ✅ <b>v4.74</b>: 교류전 게스트 여성 선택 안 됨 수정 (radio→dataset.gender 방식), 선수통계 중복 선택 수정 (1명만 선택 유지)</div>
-          <div>- ✅ <b>v4.75</b>: 재정 데이터 Firestore 저장/불러오기 구현 (앱 재시작 후에도 데이터 유지), 백업에 재정(financeData)·교류전(exchanges) 추가, 재정 데이터 초기화 버튼 추가</div>
-          <div>- ✅ <b>v4.76</b>: 월간 운영 리포트 — 회계/운영/경기 3개 카테고리, 항목별 체크박스 선택, 카톡 복붙용 텍스트 자동 생성, 선택 상태 저장</div>
-          <div>- ✅ <b>v4.77</b>: 회원 이력 관리 — 가입일 등록, 휴면/탈퇴 처리, 재가입/복귀, 영구삭제(PIN 인증), 탈퇴·휴면 회원 랭킹·경기 풀 자동 제외, 휴면 시 회비 자동 면제</div>
-          <div>- ✅ <b>v4.78</b>: 가입일 입력 달력 방식으로 개선 (오늘 날짜 기본값, 기존 날짜 유지)</div>
-          <div>- ✅ <b>v4.79</b>: 버그 수정 — 영구삭제 matchLog Firestore 반영, PIN 확인 로직 안전화, 탈퇴/휴면 회원 랭킹·통계·경기풀·운영감지·회비 전체 제외</div>
-          <div>- ✅ <b>v4.80</b>: 버그 수정 — 탈퇴처리/PIN 모달 타이틀 정상 표시, 혼복 자동배치·차트에서 탈퇴/휴면 회원 제외</div>
+          <div>- ✅ <b>v4.6</b>: PIN 인증 버그 수정, clubId 누락 처리, 교류전 랭킹/통계 탭 완성, Firestore 실제 저장 버그 수정</div>
+          <div>- ✅ <b>v4.7</b>: 라운드/토너먼트 저장 버그 수정, 교류전 기록 초기화, 점수초기화 Firestore 반영, 코드 정리</div>
+          <div>- ✅ <b>v4.8</b>: 재정 데이터 Firestore 저장, 월간 운영 리포트, 회원 이력 관리(휴면/탈퇴/복귀), 각종 버그 수정</div>
           <div>- ✅ <b>v4.81</b>: 버그 수정 — 회비 완납/해제·카톡복사·월간리포트(출석순위·승률·회비)에서 탈퇴 회원 완전 제외</div>
           <div>- ✅ <b>v4.82</b>: 버그 수정 — 종합랭킹 탈퇴/휴면 회원 제외, 자동 재정 집계에서 탈퇴 회원 제외</div>
           <div>- ✅ <b>v4.83</b>: 버그 수정 — 월간리포트 클럽명 정상 표시, 전체초기화 경고 문구 보강, 가입일 달력 중복 방지</div>
@@ -1330,6 +1321,8 @@
           <div>- ✅ <b>v4.87</b>: 실명인증 앱 재시작 후 자동 복원, 코트 시간대+코트번호 두 줄 레이아웃으로 개선</div>
           <div>- ✅ <b>v4.88</b>: 클럽 승인 시스템 도입 — 신규 클럽 총 20경기 무료 체험, 총무 기능 승인 후 사용, 총괄관리자 승인 관리 + 문의 이메일 설정</div>
           <div>- ✅ <b>v4.89</b>: 클럽 승인 목록 검색/미승인 필터, 이메일 입력 UI 개선, 브리핑 정리</div>
+          <div>- ✅ <b>v4.90</b>: 휴면 회원 당일 참여 허용 — 경기 기록 정식 반영, 브리핑 정리</div>
+          <div>- ✅ <b>v4.91</b>: 탈퇴 회원 게스트 참여 허용(B안 — 게스트 기록만 반영), 교류전 게스트 처리 정상화</div>
 
         </div>
       </div>

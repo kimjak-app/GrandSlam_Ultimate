@@ -12,16 +12,48 @@ function makeOneTimePlayerObj(name) {
 }
 
 function addOneTimePlayer() {
+  // ✅ v4.91: 휴면 회원 추천 포함, 탈퇴 회원 게스트 허용
+  const suggestions = players
+    .filter(p => !p.isGuest && p.status !== 'inactive')
+    .map(p => p.name);
+
   gsEditName('', name => {
     name = (name || '').trim();
     if (!name) return;
-    if (players.find(p => p.name === name) || oneTimePlayers.includes(name)) {
-      gsAlert('이미 있는 이름이에요!'); return;
+    if (oneTimePlayers.includes(name)) { gsAlert('이미 있는 이름이에요!'); return; }
+
+    const existing = players.find(p => p.name === name);
+    if (existing) {
+      if (!existing.status || existing.status === 'active') {
+        gsAlert('이미 정식 회원이에요! 풀에서 직접 선택해주세요.'); return;
+      }
+      if (existing.status === 'dormant') {
+        // ✅ v4.91: 휴면 회원 — 정식 회원 객체로 처리, 기록 정식 반영
+        oneTimePlayers.push(name);
+        renderPool(); initTournament(); renderLadderPlayerPool();
+        try { initRoundPlayerPool(); } catch (e) { }
+        gsAlert(`💤 ${name} (휴면) 회원을 당일 참여자로 추가했어요.\n경기 기록은 정식 회원 기록에 반영됩니다.`);
+        return;
+      }
+      if (existing.status === 'inactive') {
+        // ✅ v4.91: 탈퇴 회원 — 게스트로 참여 허용 (B안: 게스트 참여 기록만 반영)
+        // oneTimePlayers에 추가하되 isGuest:true 임시 객체를 players에 주입
+        if (!players.find(p => p.name === name && p.isGuest)) {
+          players.push({ name, isGuest: true, gender: existing.gender || 'M', score: 0, wins: 0, losses: 0, _exMember: true });
+        }
+        oneTimePlayers.push(name);
+        renderPool(); initTournament(); renderLadderPlayerPool();
+        try { initRoundPlayerPool(); } catch (e) { }
+        gsAlert(`🚪 ${name} (탈퇴) 회원을 당일 게스트로 추가했어요.\n게스트 참여 기록만 반영됩니다.`);
+        return;
+      }
     }
+
+    // 순수 외부 게스트
     oneTimePlayers.push(name);
     renderPool(); initTournament(); renderLadderPlayerPool();
     try { initRoundPlayerPool(); } catch (e) { }
-  });
+  }, { title: '당일 참여자 추가', placeholder: '이름을 입력하세요', suggestions });
 }
 function removeOneTimePlayer(name) {
   oneTimePlayers = oneTimePlayers.filter(n => n !== name);
