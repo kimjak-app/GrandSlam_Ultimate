@@ -120,7 +120,7 @@ function showTreasurerMenu() {
 }
 
 function hideTreasurerSections() {
-  ['treasurer-fee', 'treasurer-finance', 'treasurer-court-mgmt', 'treasurer-notice-mgmt', 'treasurer-report', 'treasurer-member-history'].forEach(id => {
+  ['treasurer-fee', 'treasurer-finance', 'treasurer-court-mgmt', 'treasurer-notice-mgmt', 'treasurer-report', 'treasurer-member-history', 'treasurer-record-reset'].forEach(id => { // ✅ v4.921
     const el = $(id);
     if (el) el.style.display = 'none';
   });
@@ -812,7 +812,7 @@ function _buildRiskSection(ym) {
 
   // 미납: feeData에 누군가 납부 기록이 있는 달만 유효한 달로 간주
   const allFeeMonths = new Set();
-  Object.values(feeData).forEach(pf => Object.keys(pf).forEach(k => { if (/^\d{4}-\d{2}$/.test(k)) allFeeMonths.add(k); }));
+  Object.values(feeData).forEach(pf => Object.keys(pf).forEach(k => { if (/^\d{4}-\d{2}$/.test(k) && pf[k] === 'Y') allFeeMonths.add(k); }));
   const checkMonths = [];
   for (let i = 0; i < 2; i++) {
     let m = month - 1 - i, y = year;

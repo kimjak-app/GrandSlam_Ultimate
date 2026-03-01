@@ -551,6 +551,94 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
       if(btn) btn.className = (t === lvl) ? 'gender-tab-btn active' : 'gender-tab-btn';
     });
     updateSeason();
+    // ✅ v4.921: A/B/C 탭 선택 시 순수 조별 랭킹 표시
+    renderPureGroupRankTable(lvl);
+  }
+
+  // ✅ v4.921: 조별 순수 랭킹 — 양 팀 전원이 같은 조인 경기만 집계
+  function renderPureGroupRankTable(lvl) {
+    const sec = $('sec-pure-group-rank');
+    const table = $('pureGroupRankTable');
+    const titleEl = $('pureGroupRankTitle');
+    if (!sec || !table) return;
+
+    // 전체 탭이면 섹션 숨김
+    if (lvl === 'all') { sec.style.display = 'none'; return; }
+
+    sec.style.display = 'block';
+    if (titleEl) titleEl.textContent = lvl + '조 순수 랭킹';
+
+    // 해당 조 선수 이름 Set
+    const groupNames = new Set(
+      players.filter(p => !p.isGuest && (!p.status || p.status === 'active') && (p.level || 'A') === lvl)
+             .map(p => p.name)
+    );
+
+    // 양 팀 전원이 같은 조인 경기만 필터
+    const pureLog = (matchLog || []).filter(m => {
+      const home = Array.isArray(m.home) ? m.home : [];
+      const away = Array.isArray(m.away) ? m.away : [];
+      return [...home, ...away].every(n => groupNames.has(n));
+    });
+
+    if (pureLog.length === 0) {
+      table.innerHTML = '<tbody><tr><td colspan="5" style="text-align:center; color:#999; font-size:12px; padding:12px;">' + lvl + '조 순수 경기 기록 없음</td></tr></tbody>';
+      return;
+    }
+
+    // 집계
+    const stats = {};
+    groupNames.forEach(n => { stats[n] = { wins: 0, losses: 0, score: 0 }; });
+    pureLog.forEach(m => {
+      const home = Array.isArray(m.home) ? m.home : [];
+      const away = Array.isArray(m.away) ? m.away : [];
+      const homeWin = m.winner === 'home';
+      const apply = (names, isWin) => names.forEach(n => {
+        if (!stats[n]) return;
+        const d = calcDeltas(m.type || 'double', isWin);
+        stats[n].score += d.total;
+        stats[n].wins  += isWin ? 1 : 0;
+        stats[n].losses += isWin ? 0 : 1;
+      });
+      apply(home, homeWin);
+      apply(away, !homeWin);
+    });
+
+    // 정렬 (점수 → 승률)
+    const calcRate = (s) => (s.wins + s.losses) > 0 ? s.wins / (s.wins + s.losses) : 0;
+    const sorted = Object.entries(stats)
+      .filter(([, s]) => s.wins + s.losses > 0)
+      .sort(([, a], [, b]) => b.score - a.score || calcRate(b) - calcRate(a));
+
+    if (sorted.length === 0) {
+      table.innerHTML = '<tbody><tr><td colspan="5" style="text-align:center; color:#999; font-size:12px; padding:12px;">' + lvl + '조 순수 경기 기록 없음</td></tr></tbody>';
+      return;
+    }
+
+    table.style.minWidth = '340px';
+    table.innerHTML = `<thead><tr>
+      <th style="width:40px; min-width:40px;">순위</th>
+      <th style="min-width:110px; text-align:left; padding-left:10px;">이름</th>
+      <th style="width:90px; min-width:90px;">승률</th>
+      <th style="width:55px; min-width:55px;">승/패</th>
+      <th style="width:60px; min-width:60px;">총점</th>
+    </tr></thead><tbody></tbody>`;
+
+    let rank = 1;
+    table.querySelector('tbody').innerHTML = sorted.map(([name, s], i) => {
+      if (i > 0 && s.score !== sorted[i-1][1].score) rank = i + 1;
+      const rate = Math.round(calcRate(s) * 100);
+      const p = players.find(x => x.name === name);
+      const dname = (typeof displayName === 'function') ? displayName(name) : name;
+      const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
+      return `<tr>
+        <td style="text-align:center;">${medal}</td>
+        <td style="text-align:left; padding-left:10px; font-weight:600;">${dname}</td>
+        <td style="text-align:center;">${rate}%</td>
+        <td style="text-align:center;">${s.wins}승 ${s.losses}패</td>
+        <td style="text-align:center;">${s.score}</td>
+      </tr>`;
+    }).join('');
   }
 
   function updateWeekly() {

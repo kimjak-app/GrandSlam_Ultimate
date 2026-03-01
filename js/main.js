@@ -1,4 +1,4 @@
-// ✅ v4.038: Splash 안전 종료 — 1초 홀드 후 페이드아웃, 홈 화면 스무스 등장
+// ✅ v4.921: Splash 안전 종료 — 딜레이 제거, 페이드아웃 후 홈 화면 등장
 function hideSplashSafe() {
   const sp = $('splash');
   if (!sp) return;
@@ -11,14 +11,12 @@ function hideSplashSafe() {
     homeEl.style.transition = 'opacity 0.5s ease';
   }
 
-  // 1초 홀드 후 원본 방식 그대로 hide
+  // ✅ v4.921: 1초 홀드 제거 — 즉시 페이드아웃
+  sp.classList.add('hide');
   setTimeout(() => {
-    sp.classList.add('hide');
-    setTimeout(() => {
-      sp.style.display = 'none';
-      if (homeEl) homeEl.style.opacity = '1';
-    }, 700);
-  }, 1000);
+    sp.style.display = 'none';
+    if (homeEl) homeEl.style.opacity = '1';
+  }, 700);
 }
 
 // ✅ v3.817: DOMContentLoaded로 변경 + 병렬 fetch로 스플래시 딜레이 최소화
