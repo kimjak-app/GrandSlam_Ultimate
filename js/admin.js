@@ -185,6 +185,14 @@ function _renderMasterAdminTab() {
         <span class="material-symbols-outlined" style="vertical-align:middle; font-size:20px; margin-right:5px;">approval</span>
         클럽 승인 관리
       </div>
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <input id="club-search-input" type="text" class="w-input" placeholder="클럽명 검색"
+          style="flex:1; padding:8px 12px; font-size:13px;" oninput="_filterClubApprovalList()">
+        <button id="btn-unapproved-only" onclick="_toggleUnapprovedFilter()"
+          style="padding:8px 12px; border-radius:20px; border:2px solid #FF9500; background:white; color:#FF9500; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;">
+          미승인만
+        </button>
+      </div>
       <div id="club-approval-list" style="font-size:13px; color:#888;">불러오는 중...</div>
       <div style="display:flex; gap:8px; margin-top:10px;">
         <button class="btn-purple-main" onclick="_loadClubApprovalList()"
@@ -197,19 +205,19 @@ function _renderMasterAdminTab() {
         </button>
       </div>
     </div>
-    <!-- ✅ v4.88: 문의 이메일 설정 -->
+    <!-- ✅ v4.89: 문의 이메일 설정 UI 개선 -->
     <div class="section-card active" style="display:block; margin-top:14px;">
       <div class="sub-rank-title" style="margin-bottom:14px;">
         <span class="material-symbols-outlined" style="vertical-align:middle; font-size:20px; margin-right:5px;">mail</span>
         문의 이메일 설정
       </div>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <input id="contact-email-input" type="email" class="w-input" placeholder="문의 이메일 주소"
-          style="flex:1; padding:10px;">
-        <button class="btn-purple-main" onclick="_saveContactEmail()"
-          style="padding:10px 16px; white-space:nowrap;">저장</button>
-      </div>
-      <div id="contact-email-current" style="font-size:12px; color:#888; margin-top:6px;"></div>
+      <input id="contact-email-input" type="email" class="w-input" placeholder="예: oropa@kakao.com"
+        style="width:100%; padding:12px; font-size:15px; box-sizing:border-box; margin-bottom:8px;">
+      <button class="btn-purple-main" onclick="_saveContactEmail()"
+        style="width:100%; padding:12px; display:flex; align-items:center; justify-content:center; gap:6px;">
+        <span class="material-symbols-outlined">save</span> 저장
+      </button>
+      <div id="contact-email-current" style="font-size:12px; color:#3A7BD5; margin-top:8px; text-align:center;"></div>
     </div>`;
     _loadClubApprovalList();
     _loadContactEmail();
@@ -643,4 +651,67 @@ async function approveAllExistingClubs() {
             gsAlert('일괄 승인 실패: ' + e.message);
         }
     });
+}
+
+// ========================================
+// ✅ v4.89: 클럽 승인 목록 검색/필터
+// ========================================
+let _allClubsCache = [];
+let _showUnapprovedOnly = false;
+
+async function _loadClubApprovalList() {
+    const el = document.getElementById('club-approval-list');
+    if (!el) return;
+    el.innerHTML = '<div style="color:#888; text-align:center; padding:10px;">불러오는 중...</div>';
+    try {
+        const snap = await _db.collection('clubs').get();
+        _allClubsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        _renderClubApprovalList();
+    } catch (e) {
+        el.innerHTML = '<p style="color:#FF3B30;">불러오기 실패</p>';
+    }
+}
+
+function _renderClubApprovalList() {
+    const el = document.getElementById('club-approval-list');
+    if (!el) return;
+    const searchVal = (document.getElementById('club-search-input')?.value || '').trim().toLowerCase();
+    let list = _allClubsCache;
+    if (_showUnapprovedOnly) list = list.filter(c => c.approved !== true);
+    if (searchVal) list = list.filter(c => (c.clubName || c.name || c.id).toLowerCase().includes(searchVal));
+
+    if (!list.length) {
+        el.innerHTML = '<p style="color:#888; text-align:center; padding:10px;">해당 클럽 없음</p>';
+        return;
+    }
+    el.innerHTML = list.map(c => {
+        const approved = c.approved === true;
+        const gameCount = c.gameCount || 0;
+        const name = c.clubName || c.name || c.id;
+        return `<div style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid #f0f0f0;">
+          <div>
+            <div style="font-weight:600; font-size:14px;">${name}</div>
+            <div style="font-size:11px; color:#888;">총 경기: ${gameCount}회 ${approved ? '· ✅ 승인됨' : '· ⏳ 미승인'}</div>
+          </div>
+          <button onclick="_toggleClubApproval('${c.id}', ${approved})"
+            style="padding:7px 14px; border-radius:20px; border:none; cursor:pointer; font-size:12px; font-weight:600;
+            background:${approved ? '#FF3B30' : '#34C759'}; color:white;">
+            ${approved ? '승인 취소' : '승인'}
+          </button>
+        </div>`;
+    }).join('');
+}
+
+function _filterClubApprovalList() {
+    _renderClubApprovalList();
+}
+
+function _toggleUnapprovedFilter() {
+    _showUnapprovedOnly = !_showUnapprovedOnly;
+    const btn = document.getElementById('btn-unapproved-only');
+    if (btn) {
+        btn.style.background = _showUnapprovedOnly ? '#FF9500' : 'white';
+        btn.style.color = _showUnapprovedOnly ? 'white' : '#FF9500';
+    }
+    _renderClubApprovalList();
 }

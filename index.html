@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.88</title>
+  <title>GrandSlam Ultimate v4.89</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -375,7 +375,7 @@
     </div>
 
     <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">
-      v4.88</div>
+      v4.89</div>
   </div>
 
   <div id="view-tennis" class="app-screen">
@@ -1180,7 +1180,7 @@
           </button>
           <button class="btn-purple-main" onclick="showView('backup')"
             style="display:flex; align-items:center; justify-content:center; gap:8px;">
-            <span class="material-symbols-outlined">cloud_sync</span> 데이터 백업
+            <span class="material-symbols-outlined">cloud_sync</span> 앱 관리 & 백업/복원
           </button>
           <div id="logout-btn-wrap" style="display:none; margin-top:20px;">
             <button class="btn-purple-main" onclick="handleLogout()"
@@ -1304,37 +1304,11 @@
           <div style="color:#999; margin-bottom:4px;">- 개인통계(파트너/천적/최근폼)는 <b>MatchLog 기반</b>으로 계산</div>
           <div style="color:#999; margin-bottom:10px;">- 토너먼트 <b>실전 모드</b>: 진행 중 버퍼 → 우승 확정 순간에만 커밋</div>
           <div style="border-top:1px dashed #eee; margin-bottom:8px;"></div>
-          <div>- ✅ <b>v1.0</b>: 광명 날씨 앱</div>
-          <div>- ✅ <b>v2.0</b>: 단일게임(단/복식) 로직 완성, 랭킹 로직 완성</div>
-          <div>- ✅ <b>v2.5</b>: 토너먼트 모드 도입</div>
-          <div>- ✅ <b>v3.0</b>: 사다리게임 추가</div>
-          <div>- ✅ <b>v3.4~v3.61</b>: 버그픽스, 레이아웃/CSS 통일</div>
-          <div>- ✅ <b>v3.71~v3.792</b>: 라운드 모드, 다중 클럽 시스템</div>
-          <div>- ✅ <b>v3.82~v3.90</b>: 버그수정, 당일 게스트, 클라우드 도입</div>
-          <div>- ✅ <b>v3.92~v3.949</b>: 성별 시스템, 혼복, 랭킹 강화</div>
-          <div>- ✅ <b>v4.0~v4.036</b>: 다종목 구조, 급수, Firestore 마이그레이션</div>
-          <div>- ✅ <b>v4.037</b>: 인트로 개선, 점수기준 UI 통일, 사다리 버튼 통일</div>
-          <div>- ✅ <b>v4.038</b>: nav 버그 수정, 라운드 구조 복구, 사다리 성별 아이콘</div>
-          <div>- ✅ <b>v4.1</b>: 데이터 백업/복원 — JSON export/import (선수·경기·회비·공지·코트)</div>
-          <div>- ✅ <b>v4.12</b>: 모바일 첫 로딩 체감 개선 (players 먼저), matchLog 페이지네이션 (500개씩 더보기)</div>
-          <div>- ✅ <b>v4.132</b>: 지역(시/도·시/군/구) 기반 클럽 필터 및 생성 — regions.js 추가</div>
-          <div>- ✅ <b>v4.2</b>: Firebase Auth 로그인 시스템 도입 (구글 로그인 연동 및 클럽 회원 권한 관리)</div>
-          <div>- ✅ <b>v4.21</b>: 로그인 상태 유지 기능 개선 (새로고침 시에도 이름 연동 유지)</div>
-          <div>- ✅ <b>v4.22</b>: Firebase SDK 최적화 및 안정성 강화, 로그인 상태 표시 UI 도입, 데이터 삭제 권한 가드 적용</div>
-          <div>- ✅ <b>v4.23</b>: 회원 실명 조회 시 실시간 이름 추천 및 선택 기능 도입 (동명이인 및 오타 방지)</div>
-          <div>- ✅ <b>v4.24</b>: 코트 공지 시간 선택 UI(Time Picker) 도입 및 시간대 최대 5개로 확장</div>
-          <div>- ✅ <b>v4.25</b>: 코트 공지 시간 입력을 [시작-종료] 분리형 선택기로 개선</div>
-          <div>- ✅ <b>v4.26</b>: 회비/라운드/토너먼트 저장 시 선제적 로그인 체크 적용 (데이터 유실 방지 UX 개선)</div>
-          <div>- ✅ <b>v4.27</b>: 상단 로그인 상태 버튼 클릭 시 로그인/로그아웃 인터랙션 추가</div>
-          <div>- ✅ <b>v4.28</b>: 클럽 미선택 시 로그인 안내 문구 UX 개선</div>
-          <div>- ✅ <b>v4.3</b>: 교류전 기능 MVP 출시 — 교류전 생성/진행/집계, 전광판, 핸디캡 시스템, 상대 클럽 선수 로드</div>
-          <div>- ✅ <b>v4.4</b>: 커스텀 SVG 아이콘 시스템 도입 (잼코치 제작), 성별 색상 시각화, 모달 z-index 수정, 교류전 UI 전면 개선</div>
-          <div>- ✅ <b>v4.41</b>: 교류전 악수 아이콘 개선, 시뮬레이션 모드 점수 집계 버그 수정</div>
-          <div>- ✅ <b>v4.411</b>: 교류전 UI 아이콘 정밀 복구(handshake 🤝) 및 잼코치 절대 원칙 준수 이식</div>
-          <div>- ✅ <b>v4.412</b>: 교류전 UX 개선(뒤로가기 추가), 경기 유형별 라이브 가이드 문구 적용, 종료 잔상 및 경로 버그 수정</div>
-          <div>- ✅ <b>v4.413</b>: 교류전 가이드 문구 초기 노출 적용, 종료 확인 모달 디자인 통일(gsConfirm 이식)</div>
-          <div>- ✅ <b>v4.5</b>: v4.5 1단계 — 총괄/클럽 관리자 권한 분리 및 PIN 인증 UI 구축 시작</div>
-          <div>- ✅ <b>v4.5-2</b>: 마스터 백업, 선별 복원, 클럽 ID 세이프티 가드 로직 이식 완료 (admin.js 신규)</div>
+          <div>- ✅ <b>v1.0</b>: 광명 날씨 앱 → 테니스 스코어보드 첫 버전</div>
+          <div>- ✅ <b>v2.0</b>: 단/복식 게임 로직·랭킹 완성, 토너먼트 모드 도입</div>
+          <div>- ✅ <b>v3.0</b>: 사다리게임·라운드 모드·다중 클럽·클라우드·성별/혼복 시스템</div>
+          <div>- ✅ <b>v4.0</b>: 다종목 구조·급수·Firestore 마이그레이션·백업/복원·지역 필터</div>
+          <div>- ✅ <b>v4.5</b>: Firebase Auth 로그인·교류전 MVP·총괄/클럽 관리자 권한 분리</div>
           <div>- ✅ <b>v4.6</b>: PIN 루프 버그 수정, clubId 누락 시 현재 클럽 강제 연결, 이중 PIN 확인 제거</div>
           <div>- ✅ <b>v4.7</b>: 라운드/미니토너먼트 저장 버그 수정 (sync→Firestore 실제 저장), 주간랭킹 라운드 미반영 수정, 단일게임 저장 실패 롤백 처리, 교류전 개인/클럽 랭킹·통계 탭 완성, 교류전 기록 초기화 기능 (마스터 어드민), 점수초기화 시 matchLog Firestore 실제 삭제, 코드 정리 (GAS 잔재 제거·죽은 변수 제거)</div>
           <div>- ✅ <b>v4.71</b>: 라운드 저장 시 종합순위 미반영 수정 (score/wins/losses 누락), 교류전 랭킹 탭 버튼 초기화 수정, 총무모드 PIN 인증 오류 수정 (MASTER_PIN 미선언 변수 제거)</div>
@@ -1355,6 +1329,7 @@
           <div>- ✅ <b>v4.86</b>: 버그 수정 — 새 클럽 추가 PIN 인증 정상 작동, 클럽 드롭다운이 PIN 모달 위에 겹치는 문제 해결</div>
           <div>- ✅ <b>v4.87</b>: 실명인증 앱 재시작 후 자동 복원, 코트 시간대+코트번호 두 줄 레이아웃으로 개선</div>
           <div>- ✅ <b>v4.88</b>: 클럽 승인 시스템 도입 — 신규 클럽 총 20경기 무료 체험, 총무 기능 승인 후 사용, 총괄관리자 승인 관리 + 문의 이메일 설정</div>
+          <div>- ✅ <b>v4.89</b>: 클럽 승인 목록 검색/미승인 필터, 이메일 입력 UI 개선, 브리핑 정리</div>
 
         </div>
       </div>
