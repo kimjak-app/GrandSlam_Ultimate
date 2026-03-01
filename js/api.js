@@ -197,32 +197,22 @@ async function _fsAppendMatchLog(clubId, entries) {
 // ========================================
 
 // ✅ v4.932: sync 큐 — 동시 다중 실행 방지
-// 실행 중에 새 요청 오면 _pendingSyncClubId에 저장해두고
-// 현재 sync 완료 후 마지막 요청만 한 번 더 실행
 let _syncRunning = false;
 let _pendingSyncClubId = null;
 
 async function sync() {
   const requestedClubId = getActiveClubId() || 'default';
-
-  // ✅ v4.932: 이미 sync 실행 중이면 마지막 요청만 큐에 저장하고 리턴
   if (_syncRunning) {
     _pendingSyncClubId = requestedClubId;
     return;
   }
-
   _syncRunning = true;
   _pendingSyncClubId = null;
-
   await _doSync(requestedClubId);
-
   _syncRunning = false;
-
-  // ✅ v4.932: 실행 중 새 요청이 왔으면 마지막 것만 실행
   if (_pendingSyncClubId && _pendingSyncClubId !== requestedClubId) {
-    const nextClubId = _pendingSyncClubId;
     _pendingSyncClubId = null;
-    await sync(); // 재귀 호출 — 이번엔 _syncRunning=false 상태이므로 정상 실행
+    await sync();
   }
 }
 
@@ -230,12 +220,10 @@ async function _doSync(clubId) {
   $('loading-overlay').style.display = 'flex';
   setStatus(`<div style="color:#888; font-size:12px; margin-bottom:10px;">데이터 불러오는 중...</div>`);
   try {
-    // ========================================
-    // ✅ v4.10: 1단계 — players 먼저 로드해서 '즉시 렌더'
-    // ========================================
+    // 1단계 — players 먼저 로드
     const rawPlayers = await _fsGetPlayers(clubId);
 
-    // ✅ v4.932: 로드 완료 시점에 activeClub이 바뀌었으면 결과 버림
+    // ✅ v4.932: 로드 완료 시점에 클럽이 바뀌었으면 결과 버림
     if ((getActiveClubId() || 'default') !== clubId) {
       $('loading-overlay').style.display = 'none';
       setStatus('');
@@ -251,12 +239,10 @@ async function _doSync(clubId) {
     $('loading-overlay').style.display = 'none';
     setStatus(`<div style="color:#888; font-size:12px;">최근 경기 불러오는 중...</div>`);
 
-    // ========================================
-    // ✅ v4.10: 2단계 — matchLog 로드
-    // ========================================
+    // 2단계 — matchLog 로드
     const rawLog = await _fsGetMatchLog(clubId);
 
-    // ✅ v4.932: matchLog 로드 완료 시점에도 클럽 체크
+    // ✅ v4.932: matchLog 완료 시점에도 클럽 체크
     if ((getActiveClubId() || 'default') !== clubId) {
       setStatus('');
       return;
@@ -279,7 +265,6 @@ async function _doSync(clubId) {
     // ✅ v4.928: 데이터 완전 로드 후 → 해당 클럽에서 로그인 유저 복원 → renderHome()
     await _syncRestoreLoggedPlayer(clubId);
 
-    // ✅ v4.928: restore 완료 후 이벤트 발행
     AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'data', players, matchLog } }));
 
   } catch (e) {
@@ -287,7 +272,6 @@ async function _doSync(clubId) {
     setStatus(`<div style="color:#d33; font-weight:bold;">❌ 데이터 로딩 실패: ${e.message}</div>`);
     $('loading-overlay').style.display = 'none';
   }
-}
 }
 
 // ========================================
@@ -762,13 +746,10 @@ firebase.auth().onAuthStateChanged((user) => {
       loginStatusText.textContent = '👤 로그인됨';
       loginStatusText.style.color = '#4CAF50';
       loginStatusText.style.cursor = 'pointer';
-      loginStatusText.onclick = () => handleLogout(); // ✅ v4.929: handleLogout 내부에서 gsConfirm 처리하므로 중복 제거
+      loginStatusText.onclick = () => gsConfirm('로그아웃하시겠습니까?', ok => { if (ok) handleLogout(); });
     }
-    // ✅ v4.87: 앱 재시작 시 이전 실명 인증 자동 복원
-    // ✅ v4.931: _tryRestoreLoggedPlayer 제거 — sync() 완료 후 _syncRestoreLoggedPlayer에서 처리
-    // ✅ v4.929: 복원은 sync() 완료 후 _syncRestoreLoggedPlayer에서 처리
+    // ✅ v4.932: 복원은 sync() → _doSync() → _syncRestoreLoggedPlayer() 에서 처리
   } else {
-
     currentUserAuth = null;
     currentLoggedPlayer = null;
     if (authOverlay) authOverlay.style.display = 'none'; // 눈팅을 위해 기본 숨김
@@ -781,50 +762,6 @@ firebase.auth().onAuthStateChanged((user) => {
     }
   }
 });
-
-// ✅ v4.928: sync() 완료 후 해당 클럽의 로그인 유저 복원 후 renderHome() 호출
-async function _syncRestoreLoggedPlayer(clubId) {
-  if (!currentUserAuth || !clubId) {
-    if (typeof renderHome === 'function') renderHome();
-    return;
-  }
-  try {
-    const playersRef = _clubRef(clubId).collection('players');
-    // 1) uid로 연동된 선수 확인
-    const snap = await playersRef.where('uid', '==', currentUserAuth.uid).get();
-    if (!snap.empty) {
-      currentLoggedPlayer = snap.docs[0].data();
-      if (typeof renderHome === 'function') renderHome();
-      return;
-    }
-    // 2) localStorage에 저장된 이름으로 복원
-    const savedName = localStorage.getItem(`auth_name_${clubId}_${currentUserAuth.uid}`);
-    if (savedName) {
-      const doc = await playersRef.doc(savedName).get();
-      if (doc.exists) {
-        currentLoggedPlayer = doc.data();
-        // ✅ v4.931: localStorage 복원 성공했는데 Firestore uid 없으면 자동 저장
-        // (다른 기기 로그인, 캐시 초기화 시에도 라커룸 정상 복원 보장)
-        if (!currentLoggedPlayer.uid) {
-          playersRef.doc(savedName).update({
-            uid: currentUserAuth.uid,
-            email: currentUserAuth.email || ''
-          }).catch(e => console.warn('[v4.931] uid 자동 저장 실패:', e));
-          currentLoggedPlayer.uid = currentUserAuth.uid;
-        }
-        if (typeof renderHome === 'function') renderHome();
-        return;
-      }
-    }
-    // 3) 해당 클럽에 없음 → currentLoggedPlayer null 유지
-    currentLoggedPlayer = null;
-    if (typeof renderHome === 'function') renderHome();
-  } catch (e) {
-    console.warn('[v4.931] _syncRestoreLoggedPlayer error:', e);
-    currentLoggedPlayer = null;
-    if (typeof renderHome === 'function') renderHome();
-  }
-}
 
 async function handleGoogleLogin() {
   const provider = new firebase.auth.GoogleAuthProvider();
@@ -848,6 +785,49 @@ async function handleEmailLogin() {
     await firebase.auth().signInWithEmailAndPassword(email, pwd);
   } catch (error) {
     if (errEl) { errEl.textContent = '로그인 실패: ' + error.message; errEl.style.display = 'block'; }
+  }
+}
+
+// ✅ v4.928: sync() 완료 후 해당 클럽 로그인 유저 복원 → renderHome()
+async function _syncRestoreLoggedPlayer(clubId) {
+  if (!currentUserAuth || !clubId) {
+    if (typeof renderHome === 'function') renderHome();
+    return;
+  }
+  try {
+    const playersRef = _clubRef(clubId).collection('players');
+    // 1) uid로 연동된 선수 확인
+    const snap = await playersRef.where('uid', '==', currentUserAuth.uid).get();
+    if (!snap.empty) {
+      currentLoggedPlayer = snap.docs[0].data();
+      if (typeof renderHome === 'function') renderHome();
+      return;
+    }
+    // 2) localStorage에 저장된 이름으로 복원
+    const savedName = localStorage.getItem(`auth_name_${clubId}_${currentUserAuth.uid}`);
+    if (savedName) {
+      const doc = await playersRef.doc(savedName).get();
+      if (doc.exists) {
+        currentLoggedPlayer = doc.data();
+        // ✅ v4.931: Firestore uid 없으면 자동 저장 (다른 기기/캐시 초기화 대응)
+        if (!currentLoggedPlayer.uid) {
+          playersRef.doc(savedName).update({
+            uid: currentUserAuth.uid,
+            email: currentUserAuth.email || ''
+          }).catch(e => console.warn('[v4.931] uid 자동 저장 실패:', e));
+          currentLoggedPlayer.uid = currentUserAuth.uid;
+        }
+        if (typeof renderHome === 'function') renderHome();
+        return;
+      }
+    }
+    // 3) 해당 클럽에 없음
+    currentLoggedPlayer = null;
+    if (typeof renderHome === 'function') renderHome();
+  } catch (e) {
+    console.warn('[_syncRestoreLoggedPlayer] error:', e);
+    currentLoggedPlayer = null;
+    if (typeof renderHome === 'function') renderHome();
   }
 }
 

@@ -70,14 +70,14 @@ if (!listenersBound) {
 
     if (type === 'players') {
       // ✅ v4.10: players만 먼저 로드된 상태 — 빠른 체감용 렌더(랭킹/명단 중심)
-      // ✅ v4.928: renderHome은 제거 — currentLoggedPlayer 복원 전이라 라커룸 꼬임
+      // ✅ v4.928: renderHome 제거 — currentLoggedPlayer 복원 전이라 라커룸 꼬임
       try { if (typeof renderStatsPlayerList === 'function') renderStatsPlayerList(); } catch (e) { }
       console.log('[AppEvents] gs:state:changed(players) → 빠른 렌더 완료');
     }
 
     if (type === 'data') {
-      // 선수/경기 데이터 확정 → 시즌/주간 통계 갱신
-      // ✅ v4.928: renderHome은 _syncRestoreLoggedPlayer에서 이미 호출 → 중복 제거
+      // 선수/경기 데이터 확정 → 홈 화면 + 시즌/주간 통계 갱신
+      // ✅ v4.928: renderHome은 _syncRestoreLoggedPlayer에서 호출 → 중복 제거
       try { if (typeof updateSeason === 'function') updateSeason(); } catch (e) { }
       try { if (typeof updateWeekly === 'function') updateWeekly(); } catch (e) { }
       try { if (typeof renderStatsPlayerList === 'function') renderStatsPlayerList(); } catch (e) { }
@@ -180,7 +180,7 @@ function _renderLockerRoom() {
   const titleEl = document.getElementById('lockerRoomTitleText');
   if (titleEl) titleEl.textContent = myName ? `${typeof displayName === 'function' ? displayName(myName) : myName}님의 라커룸` : '라커룸';
 
-  // ✅ v4.930: 로그인은 됐지만 이 클럽에 실명연결 안 된 경우 → 연결하기 버튼 표시
+  // ✅ v4.930: 로그인됐지만 이 클럽에 실명 미연결 → 연결하기 버튼 표시
   const linkBtn = document.getElementById('lockerLinkBtn');
   if (linkBtn) {
     const loggedIn = typeof currentUserAuth !== 'undefined' && currentUserAuth;
@@ -195,34 +195,17 @@ function _renderLockerRoom() {
   const sortedD = [...activePlayers].sort((a,b) => (b.dScore||0) - (a.dScore||0));
   const sortedS = [...activePlayers].sort((a,b) => (b.sScore||0) - (a.sScore||0));
 
-  // ✅ v4.931: 시합을 뛴 선수만 순위 계산 (wins+losses=0이면 –)
-  const getRank = (arr, name) => {
+  // ✅ v4.931: 시합을 뛴 선수만 순위 표시 (wins+losses=0이면 –)
+  const getRank = (arr, name, wKey, lKey) => {
     const me = arr.find(p => p.name === name);
     if (!me) return null;
-    const total = (me.wins || 0) + (me.losses || 0);
-    if (total === 0) return null;
+    if ((me[wKey] || 0) + (me[lKey] || 0) === 0) return null;
     const i = arr.findIndex(p => p.name === name);
     return i >= 0 ? i + 1 : null;
   };
-  const getRankD = (arr, name) => {
-    const me = arr.find(p => p.name === name);
-    if (!me) return null;
-    const total = (me.dWins || 0) + (me.dLosses || 0);
-    if (total === 0) return null;
-    const i = arr.findIndex(p => p.name === name);
-    return i >= 0 ? i + 1 : null;
-  };
-  const getRankS = (arr, name) => {
-    const me = arr.find(p => p.name === name);
-    if (!me) return null;
-    const total = (me.sWins || 0) + (me.sLosses || 0);
-    if (total === 0) return null;
-    const i = arr.findIndex(p => p.name === name);
-    return i >= 0 ? i + 1 : null;
-  };
-  const myRank  = getRank(sorted, myName);
-  const myRankD = getRankD(sortedD, myName);
-  const myRankS = getRankS(sortedS, myName);
+  const myRank  = getRank(sorted,  myName, 'wins',  'losses');
+  const myRankD = getRank(sortedD, myName, 'dWins', 'dLosses');
+  const myRankS = getRank(sortedS, myName, 'sWins', 'sLosses');
 
   const myPlayer = players.find(p => p.name === myName);
 
