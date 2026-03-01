@@ -196,37 +196,74 @@ async function _fsAppendMatchLog(clubId, entries) {
 // SYNC (Firestore)
 // ========================================
 
+// ✅ v4.932: sync 큐 — 동시 다중 실행 방지
+// 실행 중에 새 요청 오면 _pendingSyncClubId에 저장해두고
+// 현재 sync 완료 후 마지막 요청만 한 번 더 실행
+let _syncRunning = false;
+let _pendingSyncClubId = null;
+
 async function sync() {
+  const requestedClubId = getActiveClubId() || 'default';
+
+  // ✅ v4.932: 이미 sync 실행 중이면 마지막 요청만 큐에 저장하고 리턴
+  if (_syncRunning) {
+    _pendingSyncClubId = requestedClubId;
+    return;
+  }
+
+  _syncRunning = true;
+  _pendingSyncClubId = null;
+
+  await _doSync(requestedClubId);
+
+  _syncRunning = false;
+
+  // ✅ v4.932: 실행 중 새 요청이 왔으면 마지막 것만 실행
+  if (_pendingSyncClubId && _pendingSyncClubId !== requestedClubId) {
+    const nextClubId = _pendingSyncClubId;
+    _pendingSyncClubId = null;
+    await sync(); // 재귀 호출 — 이번엔 _syncRunning=false 상태이므로 정상 실행
+  }
+}
+
+async function _doSync(clubId) {
   $('loading-overlay').style.display = 'flex';
   setStatus(`<div style="color:#888; font-size:12px; margin-bottom:10px;">데이터 불러오는 중...</div>`);
   try {
-    const clubId = getActiveClubId() || 'default';
-
     // ========================================
     // ✅ v4.10: 1단계 — players 먼저 로드해서 '즉시 렌더'
-    // (랭킹/명단 기반 화면을 먼저 띄워서 모바일 체감 개선)
     // ========================================
     const rawPlayers = await _fsGetPlayers(clubId);
-    players = (rawPlayers || []).map(ensure);
 
-    // matchLog는 아직 없음(또는 이전 값) — 일단 비워두고 빠르게 렌더
+    // ✅ v4.932: 로드 완료 시점에 activeClub이 바뀌었으면 결과 버림
+    if ((getActiveClubId() || 'default') !== clubId) {
+      $('loading-overlay').style.display = 'none';
+      setStatus('');
+      return;
+    }
+
+    players = (rawPlayers || []).map(ensure);
     matchLog = Array.isArray(matchLog) ? matchLog : [];
     try {
       AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'players', players } }));
     } catch (e) { }
 
-    // ✅ overlay는 players만 받아도 일단 내려서 사용자 체감 속도 확보
     $('loading-overlay').style.display = 'none';
     setStatus(`<div style="color:#888; font-size:12px;">최근 경기 불러오는 중...</div>`);
 
     // ========================================
-    // ✅ v4.10: 2단계 — matchLog는 최근 N개만 로드 (페이지네이션)
+    // ✅ v4.10: 2단계 — matchLog 로드
     // ========================================
     const rawLog = await _fsGetMatchLog(clubId);
+
+    // ✅ v4.932: matchLog 로드 완료 시점에도 클럽 체크
+    if ((getActiveClubId() || 'default') !== clubId) {
+      setStatus('');
+      return;
+    }
+
     matchLog = normalizeMatchLog(rawLog);
 
-    // migrate1v2 제거 (데이터 0 상태로 불필요)
-    // 기존 흐름 유지 (통계/사다리/토너먼트 등)
     updateSeason();
     updateWeekly();
     if (tabNow === 1) updateChartRange(0);
@@ -236,16 +273,13 @@ async function sync() {
 
     setStatus('');
 
-    // ✅ v4.12: fetchFeeData 복구 (채코치 패치에서 누락)
     fetchFeeData().catch(e => console.warn('sync fetchFeeData error:', e));
-
-    // ✅ v4.12: applyAutofitAllTables 복구 (채코치 패치에서 누락)
     setTimeout(applyAutofitAllTables, 0);
 
     // ✅ v4.928: 데이터 완전 로드 후 → 해당 클럽에서 로그인 유저 복원 → renderHome()
     await _syncRestoreLoggedPlayer(clubId);
 
-    // ✅ v4.928: restore 완료 후 이벤트 발행 (main.js type=data → renderHome 순서 보장)
+    // ✅ v4.928: restore 완료 후 이벤트 발행
     AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'data', players, matchLog } }));
 
   } catch (e) {
@@ -253,6 +287,7 @@ async function sync() {
     setStatus(`<div style="color:#d33; font-weight:bold;">❌ 데이터 로딩 실패: ${e.message}</div>`);
     $('loading-overlay').style.display = 'none';
   }
+}
 }
 
 // ========================================
