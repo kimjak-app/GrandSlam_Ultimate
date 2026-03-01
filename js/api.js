@@ -734,12 +734,19 @@ firebase.auth().onAuthStateChanged((user) => {
         const playersRef = _clubRef(clubId).collection('players');
         // 1) uid로 연동된 선수 확인
         const snap = await playersRef.where('uid', '==', user.uid).get();
-        if (!snap.empty) { currentLoggedPlayer = snap.docs[0].data(); return; }
+        if (!snap.empty) {
+          currentLoggedPlayer = snap.docs[0].data();
+          if (typeof renderHome === 'function') renderHome(); // ✅ v4.922: 복원 후 라커룸 업데이트
+          return;
+        }
         // 2) localStorage에 저장된 이름으로 복원
         const savedName = localStorage.getItem(`auth_name_${clubId}_${user.uid}`);
         if (savedName) {
           const doc = await playersRef.doc(savedName).get();
-          if (doc.exists) { currentLoggedPlayer = doc.data(); }
+          if (doc.exists) {
+            currentLoggedPlayer = doc.data();
+            if (typeof renderHome === 'function') renderHome(); // ✅ v4.922: 복원 후 라커룸 업데이트
+          }
         }
       } catch (e) { console.warn('auto restore logged player error:', e); }
     };

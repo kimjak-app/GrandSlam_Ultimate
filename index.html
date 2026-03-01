@@ -289,8 +289,8 @@
         border-radius:50%; background:rgba(93,156,118,0.15); pointer-events:none;"></div>
       <div style="position:absolute; bottom:-30px; left:10px; width:70px; height:70px;
         border-radius:50%; background:rgba(193,122,90,0.1); pointer-events:none;"></div>
-      <div style="font-size:11px; color:rgba(255,255,255,0.5); letter-spacing:2px; text-transform:uppercase; margin-bottom:4px;">GrandSlam Ultimate</div>
-      <div id="lockerRoomTitle" style="font-size:20px; font-weight:800; color:#fff; display:flex; align-items:center; gap:8px;">
+      <div style="font-size:11px; color:rgba(255,255,255,0.5); letter-spacing:2px; text-transform:uppercase; margin-bottom:4px; text-align:center;">GrandSlam Ultimate</div>
+      <div id="lockerRoomTitle" style="font-size:20px; font-weight:800; color:#fff; display:flex; align-items:center; justify-content:center; gap:8px; text-align:center;">
         🎾 <span id="lockerRoomTitleText">라커룸</span>
       </div>
     </div>
@@ -381,6 +381,20 @@
         <div id="clubStatusName" style="font-size:16px; font-weight:800; color:#1a1a1a;">🏆 우리 클럽 이번달</div>
       </div>
 
+      <!-- BEST PLAYER 섹션 — 최상단 배치 -->
+      <div id="clubTopPlayerRow" style="display:none;">
+        <!-- 이달의 1위 -->
+        <div style="padding:16px 16px 10px; text-align:center; background:linear-gradient(135deg, #fff8f3, #fdf3ec); border-bottom:1px solid #f0e8e0;">
+          <div style="font-size:10px; color:#C17A5A; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-bottom:6px;">BEST PLAYER THIS MONTH</div>
+          <div id="clubTopPlayer" style="font-size:30px; font-weight:900; color:#1a1a1a;"></div>
+        </div>
+        <!-- 이번/지난 주말 1위 -->
+        <div id="clubWeekendPlayerRow" style="padding:10px 16px 12px; text-align:center; border-bottom:1px solid #f5f5f5; display:none;">
+          <div style="font-size:10px; color:#888; font-weight:700; letter-spacing:2px; text-transform:uppercase; margin-bottom:4px;">BEST PLAYER THIS WEEKEND</div>
+          <div id="clubWeekendPlayer" style="font-size:20px; font-weight:800; color:#555;"></div>
+        </div>
+      </div>
+
       <!-- 이번주 (크게) -->
       <div style="padding: 14px 16px 10px;">
         <div style="font-size:11px; color:#888; font-weight:600; margin-bottom:8px;">이번주</div>
@@ -398,7 +412,7 @@
       </div>
 
       <!-- 지난주 (작게, 흐리게) -->
-      <div style="padding: 8px 16px 10px; border-top:1px solid #f5f5f5;">
+      <div style="padding: 8px 16px 14px; border-top:1px solid #f5f5f5;">
         <div style="font-size:11px; color:#bbb; font-weight:600; margin-bottom:6px;">지난주</div>
         <div style="display:flex; justify-content:space-around; text-align:center;">
           <div>
@@ -412,22 +426,17 @@
           </div>
         </div>
       </div>
-
-      <!-- 이달의 1위 -->
-      <div id="clubTopPlayerRow" style="padding:10px 16px 14px; border-top:1px solid #f0f0f0; text-align:center; display:none;">
-        <span style="font-size:12px; color:#C17A5A; font-weight:700; letter-spacing:1px;">BEST PLAYER THIS MONTH</span>
-        <div id="clubTopPlayer" style="font-size:20px; font-weight:900; color:#1a1a1a; margin-top:4px;"></div>
-      </div>
     </div>
 
-    <!-- ✅ v4.922: 날씨 링크 버튼 (축소) -->
+    <!-- ✅ v4.922: 날씨 링크 버튼 (윔블던 스타일) -->
     <div style="margin: 10px 12px 0;">
       <button onclick="openNaverWeather()" style="
-        width:100%; height:40px; border:1.5px solid #e0e0e0; border-radius:12px;
-        background:#fafafa; color:#888; font-size:13px; font-weight:600;
-        display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer;
+        width:100%; height:48px; border:none; border-radius:12px;
+        background:var(--wimbledon-sage); color:#fff; font-size:14px; font-weight:600;
+        display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer;
+        box-shadow: 0 4px 12px rgba(93,156,118,0.3);
       ">
-        <span style="font-size:16px;">🌤</span> 네이버 날씨 확인
+        <span class="material-symbols-outlined" style="font-size:18px;">open_in_new</span> 네이버 날씨 확인
       </button>
     </div>
 
@@ -441,7 +450,7 @@
     </div>
 
     <!-- ✅ v3.80: 코트 정보 섹션 -->
-    <div class="home-section-card" id="courtInfoCard">
+    <div class="home-section-card" id="courtInfoCard" style="margin-left:12px; margin-right:12px;">
       <div class="home-section-title">
         <span class="material-symbols-outlined">sports_tennis</span>
         오늘의 코트 정보
@@ -495,7 +504,7 @@
     </div>
 
     <!-- ✅ v3.80: 공지사항 섹션 -->
-    <div class="home-section-card" id="noticeCard">
+    <div class="home-section-card" id="noticeCard" style="margin-left:12px; margin-right:12px;">
       <div class="home-section-title">
         <span class="material-symbols-outlined">campaign</span>
         공지사항

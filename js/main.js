@@ -355,4 +355,35 @@ function _renderClubStatus() {
       el('clubTopPlayerRow').style.display = 'block';
     }
   }
+
+  // ✅ v4.922: BEST PLAYER THIS WEEKEND — 이번주 기록 있으면 이번주, 없으면 지난주 1위
+  const weekendSource = thisWeekGames > 0
+    ? matchLog.filter(m => m.date >= mondayStr)
+    : matchLog.filter(m => m.date >= lastMondayStr && m.date <= lastSundayStr);
+
+  if (weekendSource.length > 0) {
+    const wScoreMap = {};
+    weekendSource.forEach(m => {
+      const homeWin = m.winner === 'home';
+      const apply = (names, isWin) => names.forEach(n => {
+        if (!wScoreMap[n]) wScoreMap[n] = { w: 0, l: 0 };
+        isWin ? wScoreMap[n].w++ : wScoreMap[n].l++;
+      });
+      apply(m.home||[], homeWin);
+      apply(m.away||[], !homeWin);
+    });
+    const wTop = Object.entries(wScoreMap)
+      .filter(([n]) => players.find(p => p.name === n && !p.isGuest && (!p.status || p.status === 'active')))
+      .sort(([,a],[,b]) => b.w - a.w || (a.l - b.l))[0];
+    if (wTop && el('clubWeekendPlayer') && el('clubWeekendPlayerRow')) {
+      const wLabel = thisWeekGames > 0 ? 'THIS WEEKEND' : 'LAST WEEKEND';
+      const wdname = typeof displayName === 'function' ? displayName(wTop[0]) : wTop[0];
+      el('clubWeekendPlayer').textContent = `🥇 ${wdname}`;
+      // WEEKEND 레이블 업데이트
+      const wLabelEl = el('clubWeekendPlayerRow').querySelector('div');
+      if (wLabelEl) wLabelEl.textContent = `BEST PLAYER ${wLabel}`;
+      el('clubWeekendPlayerRow').style.display = 'block';
+      if (el('clubTopPlayerRow')) el('clubTopPlayerRow').style.display = 'block';
+    }
+  }
 }
