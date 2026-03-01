@@ -236,13 +236,19 @@ async function sync() {
 
     setStatus('');
 
-    AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'data', players, matchLog } }));
-
     // ✅ v4.12: fetchFeeData 복구 (채코치 패치에서 누락)
     fetchFeeData().catch(e => console.warn('sync fetchFeeData error:', e));
 
     // ✅ v4.12: applyAutofitAllTables 복구 (채코치 패치에서 누락)
     setTimeout(applyAutofitAllTables, 0);
+
+    // ✅ v4.928: 데이터 완전 로드 후 → 해당 클럽에서 로그인 유저 복원 → renderHome()
+    // onAuthStateChanged의 _tryRestoreLoggedPlayer는 최초 1회만 실행되므로
+    // 클럽 전환 시에도 이 시점에서 직접 복원해야 타이밍 보장됨
+    await _syncRestoreLoggedPlayer(clubId);
+
+    // ✅ v4.928: restore 완료 후 이벤트 발행 (main.js type=data → renderHome 순서 보장)
+    AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'data', players, matchLog } }));
 
   } catch (e) {
     console.error(e);
@@ -752,6 +758,7 @@ firebase.auth().onAuthStateChanged((user) => {
     };
     setTimeout(_tryRestoreLoggedPlayer, 1500); // 클럽 로드 후 실행
   } else {
+
     currentUserAuth = null;
     currentLoggedPlayer = null;
     if (authOverlay) authOverlay.style.display = 'none'; // 눈팅을 위해 기본 숨김
@@ -764,6 +771,44 @@ firebase.auth().onAuthStateChanged((user) => {
     }
   }
 });
+
+// ✅ v4.928: 클럽 전환 시 sync() 완료 후 해당 클럽의 로그인 유저 복원
+// onAuthStateChanged._tryRestoreLoggedPlayer는 앱 최초 1회만 실행되므로
+// 클럽 전환마다 이 함수를 sync() 끝에서 직접 호출해 타이밍을 보장함
+async function _syncRestoreLoggedPlayer(clubId) {
+  if (!currentUserAuth || !clubId) {
+    // 로그인 안 된 상태 → renderHome만 호출
+    if (typeof renderHome === 'function') renderHome();
+    return;
+  }
+  try {
+    const playersRef = _clubRef(clubId).collection('players');
+    // 1) uid로 연동된 선수 확인
+    const snap = await playersRef.where('uid', '==', currentUserAuth.uid).get();
+    if (!snap.empty) {
+      currentLoggedPlayer = snap.docs[0].data();
+      if (typeof renderHome === 'function') renderHome();
+      return;
+    }
+    // 2) localStorage에 저장된 이름으로 복원
+    const savedName = localStorage.getItem(`auth_name_${clubId}_${currentUserAuth.uid}`);
+    if (savedName) {
+      const doc = await playersRef.doc(savedName).get();
+      if (doc.exists) {
+        currentLoggedPlayer = doc.data();
+        if (typeof renderHome === 'function') renderHome();
+        return;
+      }
+    }
+    // 3) 해당 클럽에 없음 → currentLoggedPlayer는 null 유지, renderHome은 호출
+    currentLoggedPlayer = null;
+    if (typeof renderHome === 'function') renderHome();
+  } catch (e) {
+    console.warn('[v4.928] _syncRestoreLoggedPlayer error:', e);
+    currentLoggedPlayer = null;
+    if (typeof renderHome === 'function') renderHome();
+  }
+}
 
 async function handleGoogleLogin() {
   const provider = new firebase.auth.GoogleAuthProvider();

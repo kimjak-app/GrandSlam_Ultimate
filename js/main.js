@@ -70,14 +70,14 @@ if (!listenersBound) {
 
     if (type === 'players') {
       // ✅ v4.10: players만 먼저 로드된 상태 — 빠른 체감용 렌더(랭킹/명단 중심)
-      try { if (typeof renderHome === 'function') renderHome(); } catch (e) { console.warn('[AppEvents] renderHome error:', e); }
+      // ✅ v4.928: renderHome은 제거 — currentLoggedPlayer 복원 전이라 라커룸 꼬임
       try { if (typeof renderStatsPlayerList === 'function') renderStatsPlayerList(); } catch (e) { }
       console.log('[AppEvents] gs:state:changed(players) → 빠른 렌더 완료');
     }
 
     if (type === 'data') {
-      // 선수/경기 데이터 확정 → 홈 화면 + 시즌/주간 통계 갱신
-      try { if (typeof renderHome === 'function') renderHome(); } catch (e) { console.warn('[AppEvents] renderHome error:', e); }
+      // 선수/경기 데이터 확정 → 시즌/주간 통계 갱신
+      // ✅ v4.928: renderHome은 _syncRestoreLoggedPlayer에서 이미 호출 → 중복 제거
       try { if (typeof updateSeason === 'function') updateSeason(); } catch (e) { }
       try { if (typeof updateWeekly === 'function') updateWeekly(); } catch (e) { }
       try { if (typeof renderStatsPlayerList === 'function') renderStatsPlayerList(); } catch (e) { }
@@ -155,9 +155,16 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
-// ✅ v4.922: 라커룸 홈화면 렌더링
+// ✅ v4.924: 라커룸 홈화면 렌더링
 function renderHome() {
   try {
+    // ✅ v4.924 버그픽스: 클럽 전환 시 다른 클럽 선수가 남아있으면 초기화
+    if (typeof currentLoggedPlayer !== 'undefined' && currentLoggedPlayer && Array.isArray(players)) {
+      const stillExists = players.find(p => p.name === currentLoggedPlayer.name);
+      if (!stillExists) {
+        currentLoggedPlayer = null;
+      }
+    }
     _renderLockerRoom();
     _renderClubStatus();
   } catch(e) {
@@ -198,7 +205,7 @@ function _renderLockerRoom() {
       const down = delta < 0;
       if (up || down) {
         dEl.textContent = up ? `▲${delta}` : `▼${Math.abs(delta)}`;
-        dEl.style.color = up ? '#5D9C76' : '#FF3B30';
+        dEl.style.color = up ? '#FFD700' : '#FF9999';
         dEl.style.display = 'inline';
       }
     }
@@ -332,61 +339,103 @@ function _renderClubStatus() {
   if (el('clubLastWeekGames'))  el('clubLastWeekGames').textContent  = lastWeekGames || '0';
   if (el('clubLastWeekAttend')) el('clubLastWeekAttend').textContent = `${lastWeekNames.size}/${totalMembers}`;
 
-  // 이달의 1위
+  // ✅ v4.924: 총점 계산 헬퍼 (matchLog + TENNIS_RULES)
+  const calcMatchScore = (m, name) => {
+    const inHome = (m.home||[]).includes(name);
+    const inAway = (m.away||[]).includes(name);
+    if (!inHome && !inAway) return 0;
+    const isWin = (inHome && m.winner === 'home') || (inAway && m.winner === 'away');
+    const type = m.type || 'double';
+    const scoring = (typeof getClubScoring === 'function' ? getClubScoring() : null) || TENNIS_RULES.scoring;
+    const rule = scoring[type] || scoring.double;
+    return scoring.participate + (isWin ? rule.win : rule.loss);
+  };
+
+  const buildScoreMap = (logs) => {
+    const map = {};
+    logs.forEach(m => {
+      [...(m.home||[]), ...(m.away||[])].forEach(n => {
+        if (!map[n]) map[n] = { w:0, l:0, pts:0 };
+        const inHome = (m.home||[]).includes(n);
+        const isWin = (inHome && m.winner==='home') || (!inHome && m.winner==='away');
+        isWin ? map[n].w++ : map[n].l++;
+        map[n].pts += calcMatchScore(m, n);
+      });
+    });
+    return map;
+  };
+
+  const isActiveMember = n => players.find(p => p.name===n && !p.isGuest && (!p.status||p.status==='active'));
+
+  // 이달의 1위 (총점 기준)
   const thisMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   const monthGames = matchLog.filter(m => (m.date||'').startsWith(thisMonth));
   if (monthGames.length > 0) {
-    const scoreMap = {};
-    monthGames.forEach(m => {
-      const homeWin = m.winner === 'home';
-      const apply = (names, isWin) => names.forEach(n => {
-        if (!scoreMap[n]) scoreMap[n] = { w: 0, l: 0 };
-        isWin ? scoreMap[n].w++ : scoreMap[n].l++;
-      });
-      apply(m.home||[], homeWin);
-      apply(m.away||[], !homeWin);
-    });
+    const scoreMap = buildScoreMap(monthGames);
     const top = Object.entries(scoreMap)
-      .filter(([n]) => players.find(p => p.name === n && !p.isGuest && (!p.status || p.status === 'active')))
-      .sort(([,a],[,b]) => b.w - a.w || (a.l - b.l))[0];
+      .filter(([n]) => isActiveMember(n))
+      .sort(([,a],[,b]) => b.pts - a.pts || b.w - a.w)[0];
     if (top && el('clubTopPlayer') && el('clubTopPlayerRow')) {
       const dname = typeof displayName === 'function' ? displayName(top[0]) : top[0];
       const ts = top[1];
-      const rate = (ts.w + ts.l) > 0 ? Math.round(ts.w / (ts.w + ts.l) * 100) : 0;
-      el('clubTopPlayer').innerHTML = `👑 ${dname}<div style="font-size:13px; font-weight:600; color:#888; margin-top:4px;">${ts.w}승 ${ts.l}패 &nbsp;${rate}%</div>`;
+      const rate = (ts.w+ts.l)>0 ? Math.round(ts.w/(ts.w+ts.l)*100) : 0;
+      el('clubTopPlayer').innerHTML = `👑 ${dname}<div style="font-size:13px;font-weight:600;color:#888;margin-top:4px;">${ts.w}승 ${ts.l}패 &nbsp;${rate}%</div>`;
       el('clubTopPlayerRow').style.display = 'block';
     }
   }
 
-  // ✅ v4.922: BEST PLAYER THIS WEEKEND — 이번주 기록 있으면 이번주, 없으면 지난주 1위
+  // 이번주/지난주 BEST PLAYER (총점 기준)
   const weekendSource = thisWeekGames > 0
     ? matchLog.filter(m => m.date >= mondayStr)
     : matchLog.filter(m => m.date >= lastMondayStr && m.date <= lastSundayStr);
+  const isThisWeek = thisWeekGames > 0;
 
   if (weekendSource.length > 0) {
-    const wScoreMap = {};
-    weekendSource.forEach(m => {
-      const homeWin = m.winner === 'home';
-      const apply = (names, isWin) => names.forEach(n => {
-        if (!wScoreMap[n]) wScoreMap[n] = { w: 0, l: 0 };
-        isWin ? wScoreMap[n].w++ : wScoreMap[n].l++;
-      });
-      apply(m.home||[], homeWin);
-      apply(m.away||[], !homeWin);
-    });
-    const wTop = Object.entries(wScoreMap)
-      .filter(([n]) => players.find(p => p.name === n && !p.isGuest && (!p.status || p.status === 'active')))
-      .sort(([,a],[,b]) => b.w - a.w || (a.l - b.l))[0];
+    const wMap = buildScoreMap(weekendSource);
+    const wTop = Object.entries(wMap)
+      .filter(([n]) => isActiveMember(n))
+      .sort(([,a],[,b]) => b.pts - a.pts || b.w - a.w)[0];
     if (wTop && el('clubWeekendPlayer') && el('clubWeekendPlayerRow')) {
-      const wLabel = thisWeekGames > 0 ? 'THIS WEEKEND' : 'LAST WEEKEND';
+      const wLabel = isThisWeek ? 'THIS WEEKEND' : 'LAST WEEKEND';
       const wdname = typeof displayName === 'function' ? displayName(wTop[0]) : wTop[0];
       const ws = wTop[1];
-      const wrate = (ws.w + ws.l) > 0 ? Math.round(ws.w / (ws.w + ws.l) * 100) : 0;
-      el('clubWeekendPlayer').innerHTML = `🥇 ${wdname}<div style="font-size:12px; font-weight:600; color:#999; margin-top:3px;">${ws.w}승 ${ws.l}패 &nbsp;${wrate}%</div>`;
-      // WEEKEND 레이블 업데이트
+      const wrate = (ws.w+ws.l)>0 ? Math.round(ws.w/(ws.w+ws.l)*100) : 0;
+      el('clubWeekendPlayer').innerHTML = `🥇 ${wdname}<div style="font-size:12px;font-weight:600;color:#999;margin-top:3px;">${ws.w}승 ${ws.l}패 &nbsp;${wrate}%</div>`;
       const wLabelEl = el('clubWeekendPlayerRow').querySelector('div');
       if (wLabelEl) wLabelEl.textContent = `BEST PLAYER ${wLabel}`;
       el('clubWeekendPlayerRow').style.display = 'block';
+      if (el('clubTopPlayerRow')) el('clubTopPlayerRow').style.display = 'block';
+    }
+  }
+
+  // ✅ v4.924: MOST IMPROVED THIS WEEK (승률 상승폭 기준, 최소 2경기)
+  if (isThisWeek) {
+    const thisWeekLogs = matchLog.filter(m => m.date >= mondayStr);
+    const lastWeekLogs = matchLog.filter(m => m.date >= lastMondayStr && m.date <= lastSundayStr);
+    const twMap = buildScoreMap(thisWeekLogs);
+    const lwMap = buildScoreMap(lastWeekLogs);
+
+    const improved = Object.entries(twMap)
+      .filter(([n, d]) => isActiveMember(n) && (d.w+d.l) >= 2)
+      .map(([n, d]) => {
+        const twRate = Math.round(d.w/(d.w+d.l)*100);
+        const lw = lwMap[n];
+        const lwRate = lw && (lw.w+lw.l)>=1 ? Math.round(lw.w/(lw.w+lw.l)*100) : 0;
+        const delta = twRate - lwRate;
+        return { name:n, delta, twRate, lwRate, pts: d.pts };
+      })
+      .filter(p => p.delta > 0)
+      .sort((a,b) => b.delta - a.delta || b.pts - a.pts)
+      .slice(0, 3);
+
+    if (improved.length > 0 && el('clubImprovedRow') && el('clubImprovedPlayer')) {
+      const single = improved.length === 1;
+      el('clubImprovedPlayer').innerHTML = improved.map(p => {
+        const dname = typeof displayName === 'function' ? displayName(p.name) : p.name;
+        const detail = `▲${p.delta}% (지난주 ${p.lwRate}% → 이번주 ${p.twRate}%)`;
+        return `<div style="margin-bottom:6px;">📈 ${dname}<div style="font-size:12px;color:#5D9C76;font-weight:600;margin-top:2px;">${detail}</div></div>`;
+      }).join('');
+      el('clubImprovedRow').style.display = 'block';
       if (el('clubTopPlayerRow')) el('clubTopPlayerRow').style.display = 'block';
     }
   }

@@ -253,6 +253,10 @@ function activateClub(club, doSync) {
     const savedFee = localStorage.getItem('grandslam_monthly_fee_' + newCid);
     if (savedFee) { monthlyFeeAmount = parseInt(savedFee) || 0; }
   }
+  // ✅ v4.928: 클럽 전환 시 실명인증 + 데이터 즉시 초기화 (타이밍 버그 수정)
+  if (typeof currentLoggedPlayer !== 'undefined') currentLoggedPlayer = null;
+  players = [];
+  matchLog = []; // ✅ v4.928: matchLog도 여기서 즉시 비워야 이전 클럽 데이터 섞임 방지
   // ✅ v3.811: 클럽별 코트/공지 데이터 분리
   courtNotices = [];
   announcements = [];
@@ -260,8 +264,6 @@ function activateClub(club, doSync) {
   oneTimePlayers = [];
 
   if (doSync !== false) {
-    players = [];
-    matchLog = [];
     try { sync(); } catch (e) { console.error('Club sync error:', e); }
     // ✅ v3.80: 클럽 전환시 코트/공지 리로드
     fetchCourtNotices().then(() => loadCourtInfo()).catch(() => { });
