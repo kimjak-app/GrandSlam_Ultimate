@@ -341,8 +341,25 @@ async function pushPayload(payload) {
       matchLog = [];
     }
 
-    // 경기 기록 추가
+    // ✅ v4.88: 경기 저장 시 미승인 클럽 gameCount 체크 (총 20회 제한)
     if (Array.isArray(payload.matchLogAppend) && payload.matchLogAppend.length > 0) {
+      // 미승인 클럽 체크
+      const clubDoc = await _db.collection('clubs').doc(clubId).get();
+      const clubInfo = clubDoc.exists ? clubDoc.data() : {};
+      if (clubInfo.approved !== true) {
+        const currentCount = clubInfo.gameCount || 0;
+        if (currentCount >= 20) {
+          const email = await getContactEmail();
+          setStatus('');
+          $('loading-overlay').style.display = 'none';
+          gsAlert(`🔒 무료 체험 경기(20회)를 모두 사용했습니다.\n\n계속 사용하려면 총괄 관리자에게 문의하세요.\n📧 ${email}`);
+          return false;
+        }
+        // gameCount 증가
+        await _db.collection('clubs').doc(clubId).update({
+          gameCount: firebase.firestore.FieldValue.increment(payload.matchLogAppend.length)
+        });
+      }
       const normalized = normalizeMatchLog(payload.matchLogAppend);
       await _fsAppendMatchLog(clubId, normalized);
       // 로컬 matchLog에도 반영 (dedupe)

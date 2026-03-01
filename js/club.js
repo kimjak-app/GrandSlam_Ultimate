@@ -415,25 +415,27 @@ async function switchClub(clubId) {
 
 // --- 클럽 생성/수정 ---
 function openClubCreate() {
-  checkMasterPin(ok => {
-    if (!ok) return;
-    closeClubDropdown();
-    $('clubFormTitle').textContent = '새 클럽 추가';
-    $('cfName').value = '';
-    $('cfPin').value = '';
-    $('cfCity').value = '';
-    $('cfCityKo').value = '';
-    if ($('cfRegion1')) $('cfRegion1').value = '';
-    if ($('cfRegion2')) $('cfRegion2').innerHTML = '<option value="">시/군/구 선택</option>';
-    if ($('cfRegion2Custom')) { $('cfRegion2Custom').style.display = 'none'; $('cfRegion2Custom').value = ''; }
-    $('cfEditId').value = '';
-    renderColorChips('');
-    if ($('cfGuideToggle')) $('cfGuideToggle').style.display = 'block';
-    if ($('cfGuideBody')) $('cfGuideBody').style.display = 'none';
-    if ($('cfGuideArrow')) $('cfGuideArrow').style.transform = '';
-    initRegionSelects();
-    $('clubFormModal').classList.add('active');
-  });
+  // ✅ v4.88: 로그인만으로 클럽 생성 가능 (마스터 PIN 불필요)
+  if (!currentUserAuth) {
+    gsAlert('클럽을 추가하려면 먼저 로그인해주세요.');
+    return;
+  }
+  closeClubDropdown();
+  $('clubFormTitle').textContent = '새 클럽 추가';
+  $('cfName').value = '';
+  $('cfPin').value = '';
+  $('cfCity').value = '';
+  $('cfCityKo').value = '';
+  if ($('cfRegion1')) $('cfRegion1').value = '';
+  if ($('cfRegion2')) $('cfRegion2').innerHTML = '<option value="">시/군/구 선택</option>';
+  if ($('cfRegion2Custom')) { $('cfRegion2Custom').style.display = 'none'; $('cfRegion2Custom').value = ''; }
+  $('cfEditId').value = '';
+  renderColorChips('');
+  if ($('cfGuideToggle')) $('cfGuideToggle').style.display = 'block';
+  if ($('cfGuideBody')) $('cfGuideBody').style.display = 'none';
+  if ($('cfGuideArrow')) $('cfGuideArrow').style.transform = '';
+  initRegionSelects();
+  $('clubFormModal').classList.add('active');
 }
 
 function openClubEdit(clubId) {
@@ -545,11 +547,13 @@ async function saveClubForm() {
     } else {
       // ✅ v4.037: Firestore 클럽 생성
       const newId = 'club_' + Date.now();
+      // ✅ v4.88: 신규 클럽 approved:false, gameCount:0 기본값
       await _db.collection('clubs').doc(newId).set({
         clubId: newId, clubName: name, adminPin: pin,
         city: city || 'Gwangmyeong', cityKo: cityKo || city || '도시',
         color: color, isDefault: false, sport: 'tennis', createdAt: Date.now(),
-        countryCode, region1, region2, regionKey
+        countryCode, region1, region2, regionKey,
+        approved: false, gameCount: 0
       });
       await fetchClubList();
       gsAlert('"' + name + '" 클럽이 생성되었습니다!', () => {

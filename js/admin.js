@@ -178,7 +178,41 @@ function _renderMasterAdminTab() {
           <span class="material-symbols-outlined">sync_problem</span> 교류전 기록 초기화
         </button>
       </div>
+    </div>
+    <!-- ✅ v4.88: 클럽 승인 관리 -->
+    <div class="section-card active" style="display:block; margin-top:14px;">
+      <div class="sub-rank-title" style="margin-bottom:14px;">
+        <span class="material-symbols-outlined" style="vertical-align:middle; font-size:20px; margin-right:5px;">approval</span>
+        클럽 승인 관리
+      </div>
+      <div id="club-approval-list" style="font-size:13px; color:#888;">불러오는 중...</div>
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <button class="btn-purple-main" onclick="_loadClubApprovalList()"
+          style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px; background:#3A7BD5;">
+          <span class="material-symbols-outlined">refresh</span> 새로고침
+        </button>
+        <button class="btn-purple-main" onclick="approveAllExistingClubs()"
+          style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px; background:#34C759;">
+          <span class="material-symbols-outlined">done_all</span> 전체 일괄 승인
+        </button>
+      </div>
+    </div>
+    <!-- ✅ v4.88: 문의 이메일 설정 -->
+    <div class="section-card active" style="display:block; margin-top:14px;">
+      <div class="sub-rank-title" style="margin-bottom:14px;">
+        <span class="material-symbols-outlined" style="vertical-align:middle; font-size:20px; margin-right:5px;">mail</span>
+        문의 이메일 설정
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input id="contact-email-input" type="email" class="w-input" placeholder="문의 이메일 주소"
+          style="flex:1; padding:10px;">
+        <button class="btn-purple-main" onclick="_saveContactEmail()"
+          style="padding:10px 16px; white-space:nowrap;">저장</button>
+      </div>
+      <div id="contact-email-current" style="font-size:12px; color:#888; margin-top:6px;"></div>
     </div>`;
+    _loadClubApprovalList();
+    _loadContactEmail();
 }
 
 // ========================================
@@ -505,4 +539,108 @@ async function resetExchangeData() {
       }
     }
   );
+}
+
+// ========================================
+// ✅ v4.88: 클럽 승인 관리 함수들
+// ========================================
+
+async function _loadClubApprovalList() {
+    const el = document.getElementById('club-approval-list');
+    if (!el) return;
+    try {
+        const snap = await _db.collection('clubs').get();
+        if (snap.empty) { el.innerHTML = '<p style="color:#888;">등록된 클럽 없음</p>'; return; }
+        const clubs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        el.innerHTML = clubs.map(c => {
+            const approved = c.approved === true;
+            const gameCount = c.gameCount || 0;
+            const name = c.clubName || c.name || c.id;
+            return `<div style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid #f0f0f0;">
+              <div>
+                <div style="font-weight:600; font-size:14px;">${name}</div>
+                <div style="font-size:11px; color:#888;">총 경기: ${gameCount}회 ${approved ? '· ✅ 승인됨' : '· ⏳ 미승인'}</div>
+              </div>
+              <button onclick="_toggleClubApproval('${c.id}', ${approved})"
+                style="padding:7px 14px; border-radius:20px; border:none; cursor:pointer; font-size:12px; font-weight:600;
+                background:${approved ? '#FF3B30' : '#34C759'}; color:white;">
+                ${approved ? '승인 취소' : '승인'}
+              </button>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        el.innerHTML = '<p style="color:#FF3B30;">불러오기 실패</p>';
+        console.error('[admin] _loadClubApprovalList error:', e);
+    }
+}
+
+async function _toggleClubApproval(clubId, currentApproved) {
+    const newVal = !currentApproved;
+    const label = newVal ? '승인' : '승인 취소';
+    gsConfirm(`이 클럽을 ${label}하시겠습니까?`, async ok => {
+        if (!ok) return;
+        try {
+            await _db.collection('clubs').doc(clubId).update({ approved: newVal });
+            gsAlert(`✅ ${label} 완료!`);
+            _loadClubApprovalList();
+        } catch (e) {
+            gsAlert('처리 실패: ' + e.message);
+        }
+    });
+}
+
+async function _loadContactEmail() {
+    try {
+        const doc = await MASTER_CONFIG_REF().get();
+        const email = doc.exists ? (doc.data().contactEmail || '') : '';
+        const input = document.getElementById('contact-email-input');
+        const curr = document.getElementById('contact-email-current');
+        if (input) input.value = email;
+        if (curr) curr.textContent = email ? `현재 설정: ${email}` : '설정된 이메일 없음';
+    } catch (e) { console.warn('[admin] _loadContactEmail error:', e); }
+}
+
+async function _saveContactEmail() {
+    const input = document.getElementById('contact-email-input');
+    const email = (input ? input.value : '').trim();
+    if (!email) { gsAlert('이메일 주소를 입력해주세요.'); return; }
+    try {
+        await MASTER_CONFIG_REF().set({ contactEmail: email }, { merge: true });
+        const curr = document.getElementById('contact-email-current');
+        if (curr) curr.textContent = `현재 설정: ${email}`;
+        gsAlert('✅ 이메일 저장 완료!');
+    } catch (e) {
+        gsAlert('저장 실패: ' + e.message);
+    }
+}
+
+// 외부에서 contactEmail 가져오는 헬퍼
+async function getContactEmail() {
+    try {
+        const doc = await MASTER_CONFIG_REF().get();
+        return doc.exists ? (doc.data().contactEmail || 'oropa@kakao.com') : 'oropa@kakao.com';
+    } catch (e) { return 'oropa@kakao.com'; }
+}
+
+// ========================================
+// ✅ v4.88: 기존 클럽 일괄 승인 (최초 1회 실행용)
+// ========================================
+async function approveAllExistingClubs() {
+    gsConfirm('현재 등록된 모든 클럽을 일괄 승인하시겠습니까?\n(신규 클럽 제외, 기존 클럽 전체 approved:true 처리)', async ok => {
+        if (!ok) return;
+        try {
+            const snap = await _db.collection('clubs').get();
+            const batch = _db.batch();
+            snap.docs.forEach(d => {
+                if (d.data().approved !== true) {
+                    batch.update(d.ref, { approved: true });
+                }
+            });
+            await batch.commit();
+            gsAlert(`✅ ${snap.size}개 클럽 일괄 승인 완료!`);
+            _loadClubApprovalList();
+        } catch (e) {
+            gsAlert('일괄 승인 실패: ' + e.message);
+        }
+    });
 }

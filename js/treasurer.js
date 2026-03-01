@@ -38,7 +38,20 @@ function removeOneTimePlayer(name) {
 
 // ========================================
 
-function enterTreasurer() {
+async function enterTreasurer() {
+  // ✅ v4.88: 미승인 클럽 총무 기능 잠금
+  const clubId = typeof getActiveClubId === 'function' ? getActiveClubId() : null;
+  if (clubId) {
+    try {
+      const doc = await _db.collection('clubs').doc(clubId).get();
+      const info = doc.exists ? doc.data() : {};
+      if (info.approved !== true) {
+        const email = typeof getContactEmail === 'function' ? await getContactEmail() : 'oropa@kakao.com';
+        gsAlert(`🔒 총무 기능은 승인된 클럽에서만 사용할 수 있습니다.\n\n총괄 관리자에게 승인을 요청하세요.\n📧 ${email}`);
+        return;
+      }
+    } catch (e) { console.warn('[treasurer] approved check error:', e); }
+  }
   showView('treasurer');
 }
 
