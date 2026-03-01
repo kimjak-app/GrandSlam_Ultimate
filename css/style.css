@@ -32,7 +32,12 @@
     .app-screen { display: none; padding: 15px; max-width: 600px; margin: 0 auto; padding-bottom: 120px;  }
     .app-screen.active { display: block; }
 
-    .header-banner { background: var(--wimbledon-sage); color: white; margin: 0 0 20px 0; padding: 20px; text-align: center; border-radius: 16px; box-shadow: 0 4px 15px rgba(93, 156, 118, 0.3); display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 20px; font-weight: 400; letter-spacing: -0.5px; }
+    .header-banner { background: var(--wimbledon-sage); color: white; margin: 0 0 20px 0; padding: 20px; text-align: center; border-radius: 16px; box-shadow: 0 4px 15px rgba(93, 156, 118, 0.3); display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 20px; font-weight: 400; letter-spacing: -0.5px; position: relative; overflow: hidden; }
+    .header-banner::before { content:''; position:absolute; top:-20px; right:-20px; width:90px; height:90px; border-radius:50%; background:rgba(255,255,255,0.12); pointer-events:none; }
+    .header-banner::after  { content:''; position:absolute; bottom:-25px; left:5px;  width:65px; height:65px; border-radius:50%; background:rgba(255,255,255,0.08); pointer-events:none; }
+    .header-banner-locker { background: linear-gradient(135deg, #1a2e1a 0%, #2d4a2d 50%, #1a3a2a 100%); color: white; margin: 0 12px 0; padding: 18px 20px 14px; text-align: center; border-radius: 16px; box-shadow: 0 4px 20px rgba(26,46,26,0.4); position: relative; overflow: hidden; }
+    .header-banner-locker::before { content:''; position:absolute; top:-20px; right:-20px; width:100px; height:100px; border-radius:50%; background:rgba(93,156,118,0.18); pointer-events:none; }
+    .header-banner-locker::after  { content:''; position:absolute; bottom:-30px; left:10px; width:70px;  height:70px;  border-radius:50%; background:rgba(193,122,90,0.12); pointer-events:none; }
     .weather-card { border-radius: 24px; padding: 20px; background: #fff; box-shadow: 0 8px 30px rgba(0,0,0,0.08); margin-bottom: 20px; }
 
     .search-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; justify-content: space-between; width: 100%; }

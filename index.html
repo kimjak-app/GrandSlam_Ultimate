@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.922</title>
+  <title>GrandSlam Ultimate v4.923</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -277,20 +277,10 @@
 
   <div id="view-home" class="app-screen active">
 
-    <!-- ✅ v4.922: 라커룸 헤더 -->
-    <div id="lockerRoomHeader" style="
-      background: linear-gradient(135deg, #1a2e1a 0%, #2d4a2d 50%, #1a3a2a 100%);
-      padding: 18px 20px 14px;
-      margin-bottom: 0;
-      position: relative;
-      overflow: hidden;
-    ">
-      <div style="position:absolute; top:-20px; right:-20px; width:100px; height:100px;
-        border-radius:50%; background:rgba(93,156,118,0.15); pointer-events:none;"></div>
-      <div style="position:absolute; bottom:-30px; left:10px; width:70px; height:70px;
-        border-radius:50%; background:rgba(193,122,90,0.1); pointer-events:none;"></div>
-      <div style="font-size:11px; color:rgba(255,255,255,0.5); letter-spacing:2px; text-transform:uppercase; margin-bottom:4px; text-align:center;">GrandSlam Ultimate</div>
-      <div id="lockerRoomTitle" style="font-size:20px; font-weight:800; color:#fff; display:flex; align-items:center; justify-content:center; gap:8px; text-align:center;">
+    <!-- ✅ v4.923: 라커룸 헤더 — header-banner-locker 클래스 사용 -->
+    <div id="lockerRoomHeader" class="header-banner-locker">
+      <div style="font-size:11px; color:rgba(255,255,255,0.5); letter-spacing:2px; text-transform:uppercase; margin-bottom:4px;">GrandSlam Ultimate</div>
+      <div id="lockerRoomTitle" style="font-size:20px; font-weight:800; color:#fff; display:flex; align-items:center; justify-content:center; gap:8px;">
         🎾 <span id="lockerRoomTitleText">라커룸</span>
       </div>
     </div>
@@ -303,37 +293,37 @@
       box-shadow: 0 4px 16px rgba(0,0,0,0.08);
       overflow: hidden;
     ">
-      <!-- 순위 섹션 -->
-      <div style="padding: 16px 16px 12px; background: linear-gradient(135deg, #f8fdf9 0%, #f0f9f3 100%);">
-        <div style="font-size:11px; color:#888; font-weight:600; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px;">순위</div>
+      <!-- 순위 섹션 — 호주 블루 배경 -->
+      <div style="padding: 16px 16px 14px; background: linear-gradient(135deg, #e8f3f8 0%, #deeef5 100%);">
+        <div style="font-size:11px; color:#669DB3; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:12px;">순위</div>
         <div style="display:flex; align-items:center; gap:0;">
           <!-- 종합 순위 메인 -->
           <div style="flex:1.2;">
-            <div style="font-size:11px; color:#5D9C76; font-weight:600; margin-bottom:2px;">종합</div>
+            <div style="font-size:12px; color:#4a7f99; font-weight:700; margin-bottom:3px;">종합</div>
             <div style="display:flex; align-items:baseline; gap:4px;">
-              <span id="myRankTotal" style="font-size:42px; font-weight:900; color:#1a2e1a; line-height:1;">–</span>
-              <span style="font-size:16px; font-weight:700; color:#1a2e1a;">위</span>
-              <span id="myRankTotalDelta" style="font-size:13px; font-weight:700; display:none;"></span>
+              <span id="myRankTotal" style="font-size:48px; font-weight:900; color:#1a3a4a; line-height:1;">–</span>
+              <span style="font-size:18px; font-weight:700; color:#1a3a4a;">위</span>
+              <span id="myRankTotalDelta" style="font-size:14px; font-weight:800; display:none;"></span>
             </div>
           </div>
           <!-- 구분선 -->
-          <div style="width:1px; height:50px; background:#e0e0e0; margin:0 16px;"></div>
+          <div style="width:1px; height:56px; background:rgba(102,157,179,0.3); margin:0 16px;"></div>
           <!-- 복식/단식 -->
-          <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+          <div style="flex:1; display:flex; flex-direction:column; gap:10px;">
             <div>
-              <div style="font-size:10px; color:#888; margin-bottom:1px;">복식</div>
+              <div style="font-size:11px; color:#669DB3; font-weight:600; margin-bottom:2px;">복식</div>
               <div style="display:flex; align-items:center; gap:4px;">
-                <span id="myRankDouble" style="font-size:20px; font-weight:800; color:#333;">–</span>
-                <span style="font-size:12px; color:#666;">위</span>
-                <span id="myRankDoubleDelta" style="font-size:11px; font-weight:700; display:none;"></span>
+                <span id="myRankDouble" style="font-size:26px; font-weight:900; color:#1a3a4a;">–</span>
+                <span style="font-size:14px; font-weight:600; color:#4a7f99;">위</span>
+                <span id="myRankDoubleDelta" style="font-size:12px; font-weight:800; display:none;"></span>
               </div>
             </div>
             <div>
-              <div style="font-size:10px; color:#888; margin-bottom:1px;">단식</div>
+              <div style="font-size:11px; color:#669DB3; font-weight:600; margin-bottom:2px;">단식</div>
               <div style="display:flex; align-items:center; gap:4px;">
-                <span id="myRankSingle" style="font-size:20px; font-weight:800; color:#333;">–</span>
-                <span style="font-size:12px; color:#666;">위</span>
-                <span id="myRankSingleDelta" style="font-size:11px; font-weight:700; display:none;"></span>
+                <span id="myRankSingle" style="font-size:26px; font-weight:900; color:#1a3a4a;">–</span>
+                <span style="font-size:14px; font-weight:600; color:#4a7f99;">위</span>
+                <span id="myRankSingleDelta" style="font-size:12px; font-weight:800; display:none;"></span>
               </div>
             </div>
           </div>
@@ -341,7 +331,7 @@
       </div>
 
       <!-- 전적 섹션 -->
-      <div style="padding: 12px 16px; border-top: 1px solid #f0f0f0;">
+      <div style="padding: 12px 16px; border-top: 1px solid rgba(102,157,179,0.2); background:#f5f9fc;">
         <div style="font-size:11px; color:#888; font-weight:600; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px;">전적</div>
         <div style="display:flex; flex-direction:column; gap:6px;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -360,7 +350,7 @@
       </div>
 
       <!-- 최근 경기 섹션 -->
-      <div style="padding: 12px 16px 16px; border-top: 1px solid #f0f0f0;">
+      <div style="padding: 12px 16px 16px; border-top: 1px solid rgba(102,157,179,0.2); background:#f5f9fc;">
         <div style="font-size:11px; color:#888; font-weight:600; letter-spacing:1px; text-transform:uppercase; margin-bottom:10px;">최근 경기</div>
         <div id="myRecentGames" style="display:flex; flex-direction:column; gap:6px;">
           <div style="font-size:12px; color:#bbb; text-align:center; padding:8px 0;">실명인증 후 확인 가능합니다</div>
@@ -376,9 +366,9 @@
       box-shadow: 0 4px 16px rgba(0,0,0,0.08);
       overflow: hidden;
     ">
-      <div style="padding: 14px 16px 12px; background: linear-gradient(135deg, #fdf8f5 0%, #faf3ee 100%);">
-        <div style="font-size:11px; color:#C17A5A; font-weight:600; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px;">클럽 현황</div>
-        <div id="clubStatusName" style="font-size:16px; font-weight:800; color:#1a1a1a;">🏆 우리 클럽 이번달</div>
+      <div style="padding: 14px 16px 12px; background: linear-gradient(135deg, #f5ede8 0%, #f0e5de 100%);">
+        <div style="font-size:11px; color:#C17A5A; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px;">클럽 현황</div>
+        <div id="clubStatusName" style="font-size:16px; font-weight:800; color:#5a2a10;">🏆 우리 클럽 이번달</div>
       </div>
 
       <!-- BEST PLAYER 섹션 — 최상단 배치 -->
@@ -428,15 +418,16 @@
       </div>
     </div>
 
-    <!-- ✅ v4.922: 날씨 링크 버튼 (윔블던 스타일) -->
-    <div style="margin: 10px 12px 0;">
+    <!-- ✅ v4.923: 날씨 링크 버튼 -->
+    <div style="margin: 10px 12px 16px;">
       <button onclick="openNaverWeather()" style="
-        width:100%; height:48px; border:none; border-radius:12px;
-        background:var(--wimbledon-sage); color:#fff; font-size:14px; font-weight:600;
+        width:100%; height:54px; border:none; border-radius:14px;
+        background:var(--wimbledon-sage); color:#fff; font-size:15px; font-weight:700;
         display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer;
-        box-shadow: 0 4px 12px rgba(93,156,118,0.3);
+        box-shadow: 0 6px 16px rgba(93,156,118,0.35);
+        letter-spacing:0.3px;
       ">
-        <span class="material-symbols-outlined" style="font-size:18px;">open_in_new</span> 네이버 날씨 확인
+        <span class="material-symbols-outlined" style="font-size:20px;">open_in_new</span> 네이버 날씨 확인
       </button>
     </div>
 
@@ -515,7 +506,7 @@
     </div>
 
     <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">
-      v4.922</div>
+      v4.923</div>
   </div>
 
   <div id="view-tennis" class="app-screen">
@@ -1467,6 +1458,7 @@
           <div>- ✅ <b>v4.88</b>: 클럽 승인 시스템 도입 — 신규 클럽 총 20경기 무료 체험, 총무 기능 승인 후 사용, 총괄관리자 승인 관리 + 문의 이메일 설정</div>
           <div>- ✅ <b>v4.89</b>: 클럽 승인 목록 검색/미승인 필터, 이메일 입력 UI 개선, 브리핑 정리</div>
           <div>- ✅ <b>v4.90</b>: 휴면 회원 당일 참여 허용 — 경기 기록 정식 반영, 브리핑 정리</div>
+          <div>- ✅ <b>v4.923</b>: 라커룸 UI 개선 — 순위 크기/색상, 배너 통일, BEST PLAYER 성적 표시, 날씨 버튼 강화</div>
           <div>- ✅ <b>v4.922</b>: 홈화면 라커룸 UI — 내 순위/전적/최근경기 + 클럽 현황 카드, 날씨 축소</div>
           <div>- ✅ <b>v4.921</b>: 인트로 1초 딜레이 제거, 기록 초기화 총무 모드로 이동, 조별 순수 랭킹 추가</div>
           <div>- ✅ <b>v4.92</b>: 월 리포트 생성 시 회비→재정 자동 동기화 버그 수정, 운영 위험 감지 클럽 창설 전 달 오작동 수정</div>

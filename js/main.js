@@ -351,7 +351,9 @@ function _renderClubStatus() {
       .sort(([,a],[,b]) => b.w - a.w || (a.l - b.l))[0];
     if (top && el('clubTopPlayer') && el('clubTopPlayerRow')) {
       const dname = typeof displayName === 'function' ? displayName(top[0]) : top[0];
-      el('clubTopPlayer').textContent = `👑 ${dname}`;
+      const ts = top[1];
+      const rate = (ts.w + ts.l) > 0 ? Math.round(ts.w / (ts.w + ts.l) * 100) : 0;
+      el('clubTopPlayer').innerHTML = `👑 ${dname}<div style="font-size:13px; font-weight:600; color:#888; margin-top:4px;">${ts.w}승 ${ts.l}패 &nbsp;${rate}%</div>`;
       el('clubTopPlayerRow').style.display = 'block';
     }
   }
@@ -378,7 +380,9 @@ function _renderClubStatus() {
     if (wTop && el('clubWeekendPlayer') && el('clubWeekendPlayerRow')) {
       const wLabel = thisWeekGames > 0 ? 'THIS WEEKEND' : 'LAST WEEKEND';
       const wdname = typeof displayName === 'function' ? displayName(wTop[0]) : wTop[0];
-      el('clubWeekendPlayer').textContent = `🥇 ${wdname}`;
+      const ws = wTop[1];
+      const wrate = (ws.w + ws.l) > 0 ? Math.round(ws.w / (ws.w + ws.l) * 100) : 0;
+      el('clubWeekendPlayer').innerHTML = `🥇 ${wdname}<div style="font-size:12px; font-weight:600; color:#999; margin-top:3px;">${ws.w}승 ${ws.l}패 &nbsp;${wrate}%</div>`;
       // WEEKEND 레이블 업데이트
       const wLabelEl = el('clubWeekendPlayerRow').querySelector('div');
       if (wLabelEl) wLabelEl.textContent = `BEST PLAYER ${wLabel}`;
