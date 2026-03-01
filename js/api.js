@@ -730,30 +730,7 @@ firebase.auth().onAuthStateChanged((user) => {
       loginStatusText.onclick = () => handleLogout(); // ✅ v4.929: handleLogout 내부에서 gsConfirm 처리하므로 중복 제거
     }
     // ✅ v4.87: 앱 재시작 시 이전 실명 인증 자동 복원
-    const _tryRestoreLoggedPlayer = async () => {
-      if (currentLoggedPlayer) return; // 이미 복원됨
-      const clubId = typeof getActiveClubId === 'function' ? getActiveClubId() : null;
-      if (!clubId) return;
-      try {
-        const playersRef = _clubRef(clubId).collection('players');
-        // 1) uid로 연동된 선수 확인
-        const snap = await playersRef.where('uid', '==', user.uid).get();
-        if (!snap.empty) {
-          currentLoggedPlayer = snap.docs[0].data();
-          if (typeof renderHome === 'function') renderHome(); // ✅ v4.922: 복원 후 라커룸 업데이트
-          return;
-        }
-        // 2) localStorage에 저장된 이름으로 복원
-        const savedName = localStorage.getItem(`auth_name_${clubId}_${user.uid}`);
-        if (savedName) {
-          const doc = await playersRef.doc(savedName).get();
-          if (doc.exists) {
-            currentLoggedPlayer = doc.data();
-            if (typeof renderHome === 'function') renderHome(); // ✅ v4.922: 복원 후 라커룸 업데이트
-          }
-        }
-      } catch (e) { console.warn('auto restore logged player error:', e); }
-    };
+    // ✅ v4.931: _tryRestoreLoggedPlayer 제거 — sync() 완료 후 _syncRestoreLoggedPlayer에서 처리
     // ✅ v4.929: 복원은 sync() 완료 후 _syncRestoreLoggedPlayer에서 처리
   } else {
 
@@ -773,7 +750,6 @@ firebase.auth().onAuthStateChanged((user) => {
 // ✅ v4.928: sync() 완료 후 해당 클럽의 로그인 유저 복원 후 renderHome() 호출
 async function _syncRestoreLoggedPlayer(clubId) {
   if (!currentUserAuth || !clubId) {
-    // 로그인 안 된 상태 → renderHome만 호출
     if (typeof renderHome === 'function') renderHome();
     return;
   }
@@ -792,15 +768,24 @@ async function _syncRestoreLoggedPlayer(clubId) {
       const doc = await playersRef.doc(savedName).get();
       if (doc.exists) {
         currentLoggedPlayer = doc.data();
+        // ✅ v4.931: localStorage 복원 성공했는데 Firestore uid 없으면 자동 저장
+        // (다른 기기 로그인, 캐시 초기화 시에도 라커룸 정상 복원 보장)
+        if (!currentLoggedPlayer.uid) {
+          playersRef.doc(savedName).update({
+            uid: currentUserAuth.uid,
+            email: currentUserAuth.email || ''
+          }).catch(e => console.warn('[v4.931] uid 자동 저장 실패:', e));
+          currentLoggedPlayer.uid = currentUserAuth.uid;
+        }
         if (typeof renderHome === 'function') renderHome();
         return;
       }
     }
-    // 3) 해당 클럽에 없음 → currentLoggedPlayer는 null 유지, renderHome은 호출
+    // 3) 해당 클럽에 없음 → currentLoggedPlayer null 유지
     currentLoggedPlayer = null;
     if (typeof renderHome === 'function') renderHome();
   } catch (e) {
-    console.warn('[v4.928] _syncRestoreLoggedPlayer error:', e);
+    console.warn('[v4.931] _syncRestoreLoggedPlayer error:', e);
     currentLoggedPlayer = null;
     if (typeof renderHome === 'function') renderHome();
   }

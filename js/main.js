@@ -195,10 +195,34 @@ function _renderLockerRoom() {
   const sortedD = [...activePlayers].sort((a,b) => (b.dScore||0) - (a.dScore||0));
   const sortedS = [...activePlayers].sort((a,b) => (b.sScore||0) - (a.sScore||0));
 
-  const getRank = (arr, name) => { const i = arr.findIndex(p => p.name === name); return i >= 0 ? i + 1 : null; };
+  // ✅ v4.931: 시합을 뛴 선수만 순위 계산 (wins+losses=0이면 –)
+  const getRank = (arr, name) => {
+    const me = arr.find(p => p.name === name);
+    if (!me) return null;
+    const total = (me.wins || 0) + (me.losses || 0);
+    if (total === 0) return null;
+    const i = arr.findIndex(p => p.name === name);
+    return i >= 0 ? i + 1 : null;
+  };
+  const getRankD = (arr, name) => {
+    const me = arr.find(p => p.name === name);
+    if (!me) return null;
+    const total = (me.dWins || 0) + (me.dLosses || 0);
+    if (total === 0) return null;
+    const i = arr.findIndex(p => p.name === name);
+    return i >= 0 ? i + 1 : null;
+  };
+  const getRankS = (arr, name) => {
+    const me = arr.find(p => p.name === name);
+    if (!me) return null;
+    const total = (me.sWins || 0) + (me.sLosses || 0);
+    if (total === 0) return null;
+    const i = arr.findIndex(p => p.name === name);
+    return i >= 0 ? i + 1 : null;
+  };
   const myRank  = getRank(sorted, myName);
-  const myRankD = getRank(sortedD, myName);
-  const myRankS = getRank(sortedS, myName);
+  const myRankD = getRankD(sortedD, myName);
+  const myRankS = getRankS(sortedS, myName);
 
   const myPlayer = players.find(p => p.name === myName);
 
