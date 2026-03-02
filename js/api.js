@@ -203,7 +203,6 @@ let _pendingSyncClubId = null;
 async function sync() {
   const requestedClubId = getActiveClubId() || 'default';
   if (_syncRunning) {
-    // ✅ v4.928: 실행 중이면 최신 클럽 ID 저장하고 대기
     _pendingSyncClubId = requestedClubId;
     return;
   }
@@ -211,12 +210,9 @@ async function sync() {
   _pendingSyncClubId = null;
   await _doSync(requestedClubId);
   _syncRunning = false;
-
-  // ✅ v4.928: _doSync 완료 후 현재 클럽이 바뀌었거나 pending이 있으면 재실행
-  const currentClubId = getActiveClubId() || 'default';
-  if (_pendingSyncClubId || currentClubId !== requestedClubId) {
+  if (_pendingSyncClubId && _pendingSyncClubId !== requestedClubId) {
     _pendingSyncClubId = null;
-    await sync(); // 재귀 — 이번엔 _syncRunning=false 상태라 정상 실행
+    await sync();
   }
 }
 
@@ -235,7 +231,7 @@ async function _doSync(clubId) {
     }
 
     players = (rawPlayers || []).map(ensure);
-    matchLog = []; // ✅ v4.928: 이전 클럽 matchLog 즉시 비움 (클럽 현황 데이터 꼬임 방지)
+    matchLog = Array.isArray(matchLog) ? matchLog : [];
     try {
       AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'players', players } }));
     } catch (e) { }
