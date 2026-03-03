@@ -839,13 +839,7 @@ function doLockerLink() {
 }
 
 function handleLogout() {
-  if (typeof gsConfirm === 'function') {
-    gsConfirm('로그아웃 하시겠습니까?', (res) => {
-      if (res) firebase.auth().signOut();
-    });
-  } else {
-    if (confirm('로그아웃 하시겠습니까?')) firebase.auth().signOut();
-  }
+  firebase.auth().signOut();
 }
 
 // ✅ 핵심: 특정 액션(경기 추가, 저장 등)을 할 때만 호출하는 권한 체크 함수
