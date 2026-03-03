@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.929</title>
+  <title>GrandSlam Ultimate v4.93</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -517,7 +517,7 @@
     </div>
 
     <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">
-      v4.929</div>
+      v4.93</div>
   </div>
 
   <div id="view-tennis" class="app-screen">
@@ -714,6 +714,10 @@
     </div>
 
     <div id="s2" class="section-card">
+      <!-- ✅ v4.93: 이번 주/지난 주 기준 라벨 -->
+      <div style="text-align:center; font-size:12px; font-weight:600; color:#888; margin-bottom:8px; letter-spacing:0.3px;">
+        <span class="weekly-section-label">주간 랭킹</span>
+      </div>
       <div class="sub-rank-title">📅 주간 종합 순위</div>
       <div class="rank-table-wrap">
         <table id="weeklyTotalTable" class="tennis-table"></table>
@@ -1796,7 +1800,6 @@
           </div>
           <div style="display:flex; flex-direction:column; gap:10px;">
             <button class="btn-sub sky" onclick="resetScoresKeepPlayers()">점수 초기화 (선수유지)</button>
-            <button class="btn-sub royal" onclick="resetWeeklyOnly()">주간 리셋</button>
             <button class="btn-sub navy" onclick="adminResetAll()">전체 삭제 (초기화)</button>
             <hr style="margin:4px 0;">
             <button id="btnTourMode" class="btn-sub" style="background:#34C759;" onclick="toggleTournamentMode()">🟩 전체 게임 연습 모드 (기록반영 X)</button>

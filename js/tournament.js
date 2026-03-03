@@ -380,9 +380,7 @@ async function commitTournamentIfNeeded() {
   if (tourCommitted) return;
   if (!tourBuffer.length) return;
 
-  // ✅ v3.945: 이번 주 첫 게임 저장 시 주간 랭킹 리셋
-  if (typeof checkAndResetWeeklyOnSave === 'function') checkAndResetWeeklyOnSave();
-
+  // ✅ v4.93: 주간 리셋 제거 — matchLog 기반으로 변경됨
   snapshotLastRanks();
 
   tourBuffer.forEach(le => {

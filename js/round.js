@@ -745,8 +745,6 @@ function saveRoundResults() {
     // ✅ v4.6-fix: Firestore에 실제 저장 (players + matchLog 동시)
     pushWithMatchLogAppend(newLogEntries).then(ok => {
       if (ok) {
-        // ✅ v4.6-fix: 저장 성공 후 주간 리셋 (순서 보장)
-        if (typeof checkAndResetWeeklyOnSave === 'function') checkAndResetWeeklyOnSave();
         gsAlert('라운드 결과가 저장되었습니다!');
         showView('game');
         sync();

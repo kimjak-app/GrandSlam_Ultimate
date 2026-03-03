@@ -52,8 +52,6 @@ async function save() {
   const ok = await pushWithMatchLogAppend(logEntry);
 
   if (ok) {
-    // ✅ v4.6-fix: 저장 성공 후 주간 리셋 (순서 보장)
-    if (typeof checkAndResetWeeklyOnSave === 'function') checkAndResetWeeklyOnSave();
     gsAlert("저장!");
   } else {
     // ✅ v4.6-fix: 저장 실패 시 메모리 롤백

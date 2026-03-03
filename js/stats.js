@@ -641,10 +641,82 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
     }).join('');
   }
 
+  // ✅ v4.93: matchLog 기반 주간 랭킹 — 이번 주 게임 있으면 이번 주, 없으면 지난 주 표시
   function updateWeekly() {
-    renderRankTable('weeklyTotalTable', 'weekly', 'wWins', 'wLosses', 'lastW');
-    renderRankTable('weeklyDoubleTable', 'wdScore', 'wdWins', 'wdLosses', 'lastWD');
-    renderRankTable('weeklySingleTable', 'wsScore', 'wsWins', 'wsLosses', 'lastWS');
+    // 날짜 범위 계산 (KST 기준)
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMon = (day === 0 ? -6 : 1 - day);
+    const monday = new Date(now); monday.setDate(now.getDate() + diffToMon); monday.setHours(0,0,0,0);
+    const lastMonday = new Date(monday); lastMonday.setDate(monday.getDate() - 7);
+    const toStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const mondayStr     = toStr(monday);
+    const lastMondayStr = toStr(lastMonday);
+    const lastSundayStr = toStr(new Date(monday.getTime() - 86400000));
+
+    const thisWeekLogs = (matchLog || []).filter(m => m.date >= mondayStr);
+    const lastWeekLogs = (matchLog || []).filter(m => m.date >= lastMondayStr && m.date <= lastSundayStr);
+
+    const isThisWeek = thisWeekLogs.length > 0;
+    const sourceLogs = isThisWeek ? thisWeekLogs : lastWeekLogs;
+
+    // 주간 라벨 업데이트
+    const weekLabel = isThisWeek ? '이번 주 주간 랭킹' : '지난 주 주간 랭킹';
+    const weekLabelEls = document.querySelectorAll('.weekly-section-label');
+    weekLabelEls.forEach(el => { el.textContent = weekLabel; });
+
+    // matchLog에서 주간 필드 재계산 후 players에 임시 반영
+    const getGender = (n) => { const p = players.find(x => x.name === n); return p ? p.gender : 'M'; };
+    const isMixedTeam = (arr) => {
+      if (arr.length < 2) return false;
+      const gs = arr.map(getGender);
+      return gs.includes('M') && gs.includes('F');
+    };
+
+    // 주간 필드 초기화 (임시 계산용)
+    players.forEach(p => {
+      p.weekly = 0; p.wWins = 0; p.wLosses = 0;
+      p.wdScore = 0; p.wdWins = 0; p.wdLosses = 0;
+      p.wsScore = 0; p.wsWins = 0; p.wsLosses = 0;
+    });
+
+    // sourceLogs 기반으로 주간 필드 재계산
+    sourceLogs.forEach(m => {
+      const type = m.type || 'double';
+      const home = Array.isArray(m.home) ? m.home : [];
+      const away = Array.isArray(m.away) ? m.away : [];
+      const homeMixed = type === 'double' && isMixedTeam(home);
+      const awayMixed = type === 'double' && isMixedTeam(away);
+      const isCrossDouble = type === 'double' && !homeMixed && !awayMixed && (() => {
+        const hg = home.map(getGender); const ag = away.map(getGender);
+        return (hg.every(g=>g==='M') && ag.every(g=>g==='F')) || (hg.every(g=>g==='F') && ag.every(g=>g==='M'));
+      })();
+      const isCrossSingle = type === 'single' && home.length === 1 && away.length === 1
+        && getGender(home[0]) !== getGender(away[0]);
+
+      [[home, true], [away, false]].forEach(([arr, isHomeSide]) => {
+        const isW = isHomeSide ? m.winner === 'home' : m.winner === 'away';
+        arr.forEach(n => {
+          const p = players.find(x => x.name === n);
+          if (!p) return;
+          const d = calcDeltas(type, isW);
+          p.weekly += d.total;
+          p.wWins  += isW ? 1 : 0;
+          p.wLosses += isW ? 0 : 1;
+          if (type === 'double' && !isCrossDouble) {
+            p.wdScore += d.d; p.wdWins += isW ? 1 : 0; p.wdLosses += isW ? 0 : 1;
+          } else if (type === 'single' && !isCrossSingle) {
+            p.wsScore += d.s; p.wsWins += isW ? 1 : 0; p.wsLosses += isW ? 0 : 1;
+          }
+        });
+      });
+    });
+
+    // 스냅샷 후 렌더링
+    snapshotLastRanks();
+    renderRankTable('weeklyTotalTable',  'weekly',  'wWins',   'wLosses',   'lastW');
+    renderRankTable('weeklyDoubleTable', 'wdScore', 'wdWins',  'wdLosses',  'lastWD');
+    renderRankTable('weeklySingleTable', 'wsScore', 'wsWins',  'wsLosses',  'lastWS');
   }
 
   function updateChartRange(rangeIdx) {
