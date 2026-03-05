@@ -17,15 +17,27 @@ function tab(n) {
   setTimeout(applyAutofitAllTables, 0);
 }
 
+
+function getLeaderboardPlayers(basePlayers, opts = {}) {
+  return (basePlayers || []).map(p => {
+    const stats = getPlayerStats(p.name, opts);
+    return Object.assign({}, p, {
+      score: Number(stats.score || 0),
+      wins: Number(stats.wins || 0),
+      losses: Number(stats.losses || 0),
+      dScore: Number(stats.dScore || 0),
+      sScore: Number(stats.sScore || 0)
+    });
+  });
+}
+
 function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
   const levelFilter = window.levelRankTab || 'all';
 
   const baseList = (() => {
     if (filterMode === 'guest') {
       const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name) && (!p.status || p.status === 'active'));
-      const names = guests.map(p => p.name);
-      const agg = aggregateSeasonForNamesFromLog(names);
-      return guests.map(p => Object.assign({}, p, agg[p.name] || {}));
+      return getLeaderboardPlayers(guests);
     }
     let list;
     if (filterMode === 'all') list = players.filter(p => !p.status || p.status === 'active');
@@ -35,7 +47,7 @@ function renderRankTable(tableId, scoreK, winK, lossK, lastK, filterMode) {
     if (levelFilter !== 'all' && filterMode !== 'guest') {
       list = list.filter(p => (p.level || 'A') === levelFilter);
     }
-    return list;
+    return getLeaderboardPlayers(list);
   })();
 
   const isOverallKey = (scoreK === 'score' || scoreK === 'weekly');
@@ -727,7 +739,7 @@ function _getMvpAwardCount(name) {
 }
 
 function renderStatsPlayerList() {
-  const members = players.filter(p => !p.isGuest && (!p.status || p.status === 'active')).sort((a, b) => (b.score || 0) - (a.score || 0));
+  const members = getLeaderboardPlayers(players.filter(p => !p.isGuest && (!p.status || p.status === 'active'))).sort((a, b) => (b.score || 0) - (a.score || 0));
   const guests  = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name) && (!p.status || p.status === 'active'));
 
   let html = '<div style="border: 2px solid #E5E5EA; border-radius: 15px; padding: 15px; background: white; margin-bottom: 30px;">';

@@ -3,7 +3,10 @@
 // ========================================
 
 function renderPoolView() {
-  const members = players.filter(p => !p.isGuest && (!p.status || p.status === 'active')).sort((a, b) => (b.score || 0) - (a.score || 0));
+  const members = players
+    .filter(p => !p.isGuest && (!p.status || p.status === 'active'))
+    .map(p => Object.assign({}, p, { score: Number(getPlayerStats(p.name).score || 0) }))
+    .sort((a, b) => (b.score || 0) - (a.score || 0));
   const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name));
 
   const hint = $('hint-1v2');
