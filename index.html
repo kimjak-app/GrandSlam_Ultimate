@@ -86,8 +86,12 @@
       <div id="gsEditNameTitle" style="font-size:14px; color:var(--text-dark); margin-bottom:14px; font-weight:400;">실명
         대조</div>
       <input type="text" id="gsEditNameInput"
-        style="width:100%; box-sizing:border-box; padding:12px 14px; border:2px solid var(--wimbledon-sage); border-radius:12px; font-size:15px; outline:none; margin-bottom:16px;"
+        style="width:100%; box-sizing:border-box; padding:12px 14px; border:2px solid var(--wimbledon-sage); border-radius:12px; font-size:15px; outline:none; margin-bottom:10px;"
         onkeydown="if(event.key==='Enter')gsEditNameConfirm()" />
+      <div id="gsEditNameGenderRow" style="display:none; gap:8px; margin-bottom:14px;">
+        <button type="button" id="gsEditNameGenderM" data-gender="M" style="flex:1; padding:9px 10px; border:1px solid #ddd; border-radius:10px; background:#f3f4f6;">남</button>
+        <button type="button" id="gsEditNameGenderF" data-gender="F" style="flex:1; padding:9px 10px; border:1px solid #ddd; border-radius:10px; background:#f3f4f6;">여</button>
+      </div>
       <div style="display:flex; gap:10px;">
         <button onclick="gsEditNameConfirm()"
           style="flex:1; padding:13px; background:var(--wimbledon-sage); color:white; border:none; border-radius:12px; font-size:15px; cursor:pointer;">확인</button>
@@ -1328,6 +1332,21 @@
             <label for="round-auto-court-count" style="font-size:13px; color:#555; font-weight:600;">코트 수</label>
             <input id="round-auto-court-count" type="number" min="1" value="2"
               style="width:70px; border:1px solid #ddd; border-radius:8px; padding:6px 8px; font-size:13px;" />
+          </div>
+          <div style="font-size:13px; color:#555; font-weight:600; margin-bottom:6px;">등급 필터</div>
+          <div id="round-auto-level-filters" style="display:flex; gap:10px; margin-bottom:10px;">
+            <label style="font-size:13px;"><input type="checkbox" value="A"> A</label>
+            <label style="font-size:13px;"><input type="checkbox" value="B"> B</label>
+            <label style="font-size:13px;"><input type="checkbox" value="C"> C</label>
+          </div>
+          <div style="font-size:13px; color:#555; font-weight:600; margin-bottom:6px;">성별 필터</div>
+          <div id="round-auto-gender-filters" style="display:flex; gap:8px; margin-bottom:10px;">
+            <button type="button" class="opt-btn" data-gender="all" style="margin:0;">전체</button>
+            <button type="button" class="opt-btn" data-gender="M" style="margin:0;">남</button>
+            <button type="button" class="opt-btn" data-gender="F" style="margin:0;">여</button>
+          </div>
+          <div style="margin-bottom:12px;">
+            <button type="button" id="round-auto-mixed-toggle" class="opt-btn" style="margin:0; width:100%;">혼복 허용: ON</button>
           </div>
           <div style="font-size:13px; color:#555; font-weight:600; margin-bottom:8px;">참가자 선택</div>
           <div id="round-auto-player-pool"></div>
