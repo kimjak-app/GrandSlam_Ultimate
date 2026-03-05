@@ -114,17 +114,34 @@ function roundEngineApplyRoundScore(winner, loser, mode, winPoint, losePoint) {
 
     p.score = (p.score || 0) + earn;
     p.weekly = (p.weekly || 0) + earn;
-    isWin ? p.wins++ : p.losses++;
-    isWin ? p.wWins++ : p.wLosses++;
+    if (isWin) {
+      p.wins = (p.wins || 0) + 1;
+      p.wWins = (p.wWins || 0) + 1;
+    } else {
+      p.losses = (p.losses || 0) + 1;
+      p.wLosses = (p.wLosses || 0) + 1;
+    }
 
     if (mode === 'single') {
       p.sScore = (p.sScore || 0) + earn;
       p.wsScore = (p.wsScore || 0) + earn;
-      isWin ? (p.sWins++, p.wsWins++) : (p.sLosses++, p.wsLosses++);
+      if (isWin) {
+        p.sWins = (p.sWins || 0) + 1;
+        p.wsWins = (p.wsWins || 0) + 1;
+      } else {
+        p.sLosses = (p.sLosses || 0) + 1;
+        p.wsLosses = (p.wsLosses || 0) + 1;
+      }
     } else {
       p.dScore = (p.dScore || 0) + earn;
       p.wdScore = (p.wdScore || 0) + earn;
-      isWin ? (p.dWins++, p.wdWins++) : (p.dLosses++, p.wdLosses++);
+      if (isWin) {
+        p.dWins = (p.dWins || 0) + 1;
+        p.wdWins = (p.wdWins || 0) + 1;
+      } else {
+        p.dLosses = (p.dLosses || 0) + 1;
+        p.wdLosses = (p.wdLosses || 0) + 1;
+      }
     }
   };
 
