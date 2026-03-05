@@ -673,11 +673,67 @@ function updateChartRange(rangeIdx) {
 // 8. 개인 통계
 // ----------------------------------------
 
+
+function _getMonthlyMvpCards() {
+  const monthly = (mvpHistory && mvpHistory.monthly) ? Object.values(mvpHistory.monthly) : [];
+  return monthly.sort((a, b) => (b.key || '').localeCompare(a.key || ''));
+}
+
+function _getWeeklyMvpCards() {
+  const weekly = (mvpHistory && mvpHistory.weekly) ? Object.values(mvpHistory.weekly) : [];
+  const now = new Date();
+  const cutoff = new Date(now.getFullYear(), now.getMonth() - 2, 1).getTime();
+  return weekly
+    .filter(w => {
+      if (!w || !w.key) return false;
+      const d = new Date(`${w.key}T00:00:00`);
+      return !Number.isNaN(d.getTime()) && d.getTime() >= cutoff;
+    })
+    .sort((a, b) => (b.key || '').localeCompare(a.key || ''));
+}
+
+function renderClubHistorySection() {
+  const target = $('stats-club-history');
+  if (!target) return;
+
+  const monthlyCards = _getMonthlyMvpCards();
+  const weeklyCards = _getWeeklyMvpCards();
+
+  const mItems = monthlyCards.map(item => {
+    const ym = String(item.key || '').replace('-', '.');
+    return `<div style="min-width:160px; border:1px solid #E5E5EA; border-radius:10px; padding:8px 10px; background:#fff; font-size:12px;">${ym} ${escapeHtml(displayName(item.playerName || '-'))}(${escapeHtml(item.level || 'A')})</div>`;
+  }).join('');
+
+  const wItems = weeklyCards.map(item => {
+    const label = item.label || '';
+    return `<div style="min-width:160px; border:1px solid #E5E5EA; border-radius:10px; padding:8px 10px; background:#fff; font-size:12px;">${escapeHtml(label)} ${escapeHtml(displayName(item.playerName || '-'))}(${escapeHtml(item.level || 'A')})</div>`;
+  }).join('');
+
+  target.innerHTML = `
+    <div style="font-size:12px; color:#666; margin-bottom:8px; font-weight:bold;">이달의 선수</div>
+    <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; margin-bottom:10px; max-width:520px;">${mItems || '<div style="font-size:12px;color:#999;">기록 없음</div>'}</div>
+    <div style="font-size:12px; color:#666; margin-bottom:8px; font-weight:bold;">이주의 선수</div>
+    <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:4px;">${wItems || '<div style="font-size:12px;color:#999;">기록 없음</div>'}</div>
+  `;
+}
+
+function _getMvpAwardCount(name) {
+  const monthly = (mvpHistory && mvpHistory.monthly) ? Object.values(mvpHistory.monthly) : [];
+  const weekly = (mvpHistory && mvpHistory.weekly) ? Object.values(mvpHistory.weekly) : [];
+  return {
+    monthly: monthly.filter(x => x && x.playerName === name).length,
+    weekly: weekly.filter(x => x && x.playerName === name).length,
+  };
+}
+
 function renderStatsPlayerList() {
   const members = players.filter(p => !p.isGuest && (!p.status || p.status === 'active')).sort((a, b) => (b.score || 0) - (a.score || 0));
   const guests  = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name) && (!p.status || p.status === 'active'));
 
   let html = '<div style="border: 2px solid #E5E5EA; border-radius: 15px; padding: 15px; background: white; margin-bottom: 30px;">';
+
+  html += '<div style="font-size:13px; color:#333; margin-bottom:8px; font-weight:700;">클럽 기록</div>';
+  html += '<div id="stats-club-history" style="margin-bottom:14px;"></div>';
 
   html += '<div style="font-size:12px; color:#666; margin-bottom:8px; font-weight:bold; text-align:left; padding-left:5px;">정식 회원</div>';
   html += '<div class="player-pool" style="margin-bottom:20px;">';
@@ -702,6 +758,7 @@ function renderStatsPlayerList() {
 
   html += '</div>';
   $('stats-pList').innerHTML = html;
+  renderClubHistorySection();
 }
 
 function renderStatsHTML(name, data) {
@@ -829,7 +886,18 @@ function viewStats(name) {
   $('welcome-msg').style.display = 'none';
   const report = $('stats-report');
   report.style.display = 'block';
+  const awards = _getMvpAwardCount(name);
   $('target-name-text').innerText = `${displayName(name)} (${p.level || 'A'}조) 분석 리포트`;
+  const nameTitle = $('target-name');
+  if (nameTitle) {
+    const oldMeta = nameTitle.querySelector('.stats-award-meta');
+    if (oldMeta) oldMeta.remove();
+    const meta = document.createElement('div');
+    meta.className = 'stats-award-meta';
+    meta.style.cssText = 'margin-top:6px; font-size:12px; color:#EAF3FF;';
+    meta.textContent = `이달의 선수 ${awards.monthly}회 · 이주의 선수 ${awards.weekly}회`;
+    nameTitle.appendChild(meta);
+  }
 
   const data = computeStatsFromMatchLog(name);
   renderStatsHTML(name, data);

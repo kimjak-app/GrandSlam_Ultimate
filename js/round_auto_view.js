@@ -449,10 +449,7 @@ function initRoundAutoPlayerPool() {
   }).join('')}
     </div>
     <div id="round-auto-guests-wrap" style="margin-top:12px; border-top:1px dashed #ddd; padding-top:10px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <div style="font-size:13px; font-weight:700; color:#666;">당일 게스트</div>
-        <button type="button" class="opt-btn" onclick="roundAutoOpenAddGuestModal()" style="margin:0;">+ 게스트 추가</button>
-      </div>
+      <div style="font-size:13px; font-weight:700; color:#666; margin-bottom:8px;">당일 게스트</div>
       <div class="player-pool" id="round-auto-guest-pool">
         ${filteredGuests.length ? filteredGuests.map((guest, idx) => {
     const id = `round-auto-guest-${idx}`;

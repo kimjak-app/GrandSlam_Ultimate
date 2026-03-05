@@ -1348,7 +1348,11 @@
           <div style="margin-bottom:12px;">
             <button type="button" id="round-auto-mixed-toggle" class="opt-btn" style="margin:0; width:100%;">혼복 허용: ON</button>
           </div>
-          <div style="font-size:13px; color:#555; font-weight:600; margin-bottom:8px;">참가자 선택</div>
+          <div class="tour-section-title" style="display:flex; justify-content:space-between; align-items:center; margin:0 0 8px 0;"><span
+              style="display:flex;align-items:center;gap:4px;"><span class="material-symbols-outlined">group_add</span>참가 선수
+              선택</span><button onclick="roundAutoOpenAddGuestModal()"
+              style="font-size:11px; padding:4px 10px; border-radius:20px; border:1px solid var(--aussie-blue); background:var(--aussie-blue); color:white; cursor:pointer; font-weight:600;">+
+              당일 게스트</button></div>
           <div id="round-auto-player-pool"></div>
           <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
             <button id="round-auto-gen-btn" class="btn-main" onclick="roundAutoGenerateNextTurn()"
