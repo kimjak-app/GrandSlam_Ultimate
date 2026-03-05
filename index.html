@@ -86,8 +86,12 @@
       <div id="gsEditNameTitle" style="font-size:14px; color:var(--text-dark); margin-bottom:14px; font-weight:400;">실명
         대조</div>
       <input type="text" id="gsEditNameInput"
-        style="width:100%; box-sizing:border-box; padding:12px 14px; border:2px solid var(--wimbledon-sage); border-radius:12px; font-size:15px; outline:none; margin-bottom:16px;"
+        style="width:100%; box-sizing:border-box; padding:12px 14px; border:2px solid var(--wimbledon-sage); border-radius:12px; font-size:15px; outline:none; margin-bottom:10px;"
         onkeydown="if(event.key==='Enter')gsEditNameConfirm()" />
+      <div id="gsEditNameGenderRow" style="display:none; gap:8px; margin-bottom:14px;">
+        <button type="button" id="gsEditNameGenderM" data-gender="M" style="flex:1; padding:9px 10px; border:1px solid #ddd; border-radius:10px; background:#f3f4f6;">남</button>
+        <button type="button" id="gsEditNameGenderF" data-gender="F" style="flex:1; padding:9px 10px; border:1px solid #ddd; border-radius:10px; background:#f3f4f6;">여</button>
+      </div>
       <div style="display:flex; gap:10px;">
         <button onclick="gsEditNameConfirm()"
           style="flex:1; padding:13px; background:var(--wimbledon-sage); color:white; border:none; border-radius:12px; font-size:15px; cursor:pointer;">확인</button>
@@ -1292,6 +1296,10 @@
             style="display:flex; align-items:center; justify-content:center; gap:8px;">
             <span class="material-symbols-outlined">cached</span> 라운드
           </button>
+          <button class="btn-purple-main" onclick="openRoundAuto()"
+            style="display:flex; align-items:center; justify-content:center; gap:8px;">
+            <span class="material-symbols-outlined">autorenew</span> 라운드(자동생성)
+          </button>
           <button class="btn-purple-main" onclick="openExchange()"
             style="display:flex; align-items:center; justify-content:center; gap:8px;">
             <span class="material-symbols-outlined" style="font-size:20px;">handshake</span> 교류전
@@ -1306,6 +1314,100 @@
         <button class="btn-main" onclick="showView('weather')"
           style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined"
             style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 라운드(자동생성) View -->
+  <div id="view-round-auto" class="app-screen" style="display:none;">
+    <div class="section-card" style="display:block;">
+      <div class="header-banner"><span class="material-symbols-outlined" style="font-size:32px;">autorenew</span>GrandSlam
+        Round (자동생성)</div>
+
+      <div id="round-auto-setup-area">
+        <div class="tour-section-title"><span class="material-symbols-outlined">settings</span>라운드 설정</div>
+        <div
+          style="border: 2px solid #E5E5EA; border-radius: 15px; padding: 14px; background: white; margin-bottom: 30px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+            <label for="round-auto-court-count" style="font-size:13px; color:#555; font-weight:600;">코트 수</label>
+            <input id="round-auto-court-count" type="number" min="1" value="2"
+              style="width:70px; border:1px solid #ddd; border-radius:8px; padding:6px 8px; font-size:13px;" />
+          </div>
+          <div style="font-size:13px; color:#555; font-weight:600; margin-bottom:6px;">등급 필터</div>
+          <div id="round-auto-level-filters" style="display:flex; gap:10px; margin-bottom:10px;">
+            <label style="font-size:13px;"><input type="checkbox" value="A"> A</label>
+            <label style="font-size:13px;"><input type="checkbox" value="B"> B</label>
+            <label style="font-size:13px;"><input type="checkbox" value="C"> C</label>
+          </div>
+          <div style="font-size:13px; color:#555; font-weight:600; margin-bottom:6px;">성별 필터</div>
+          <div id="round-auto-gender-filters" style="display:flex; gap:8px; margin-bottom:10px;">
+            <button type="button" class="opt-btn" data-gender="all" style="margin:0;">전체</button>
+            <button type="button" class="opt-btn" data-gender="M" style="margin:0;">남</button>
+            <button type="button" class="opt-btn" data-gender="F" style="margin:0;">여</button>
+          </div>
+          <div style="margin-bottom:12px;">
+            <button type="button" id="round-auto-mixed-toggle" class="opt-btn" style="margin:0; width:100%;">혼복 허용: ON</button>
+          </div>
+          <div class="tour-section-title" style="display:flex; justify-content:space-between; align-items:center; margin:0 0 8px 0;"><span
+              style="display:flex;align-items:center;gap:4px;"><span class="material-symbols-outlined">group_add</span>참가 선수
+              선택</span><button onclick="roundAutoOpenAddGuestModal()"
+              style="font-size:11px; padding:4px 10px; border-radius:20px; border:1px solid var(--aussie-blue); background:var(--aussie-blue); color:white; cursor:pointer; font-weight:600;">+
+              당일 게스트</button></div>
+          <div id="round-auto-player-pool"></div>
+          <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+            <button id="round-auto-gen-btn" class="btn-main" onclick="roundAutoGenerateNextTurn()"
+              style="flex:1; margin-top:0; background:var(--aussie-blue); min-width:120px;">다음 턴 생성</button>
+            <button class="btn-main" onclick="roundAutoOpenMiniTournamentModal()"
+              style="flex:1; margin-top:0; background:#5f6caf; min-width:120px;">미니 토너먼트 Go</button>
+            <button class="btn-main" onclick="roundAutoReset()" style="flex:1; margin-top:0; background:var(--roland-clay); min-width:120px;">초기화</button>
+          </div>
+        </div>
+
+        <div class="tour-section-title"><span class="material-symbols-outlined">leaderboard</span>누적 랭킹</div>
+        <div
+          style="border: 2px solid #E5E5EA; border-radius: 15px; padding: 14px; background: white; margin-bottom: 16px;">
+          <div id="round-auto-rank-table" style="font-size:13px; color:#8E8E93;">경기 결과가 아직 없습니다.</div>
+        </div>
+
+        <div class="tour-section-title"><span class="material-symbols-outlined">view_list</span>이번 턴 대진표</div>
+        <div
+          style="border: 2px solid #E5E5EA; border-radius: 15px; padding: 14px; background: white; margin-bottom: 30px;">
+          <div id="round-auto-match-list" style="font-size:13px; color:#8E8E93;">생성된 매치가 없습니다.</div>
+        </div>
+      </div>
+    </div>
+    <div style="padding: 0 15px;">
+      <button class="btn-main" onclick="showView('game')" style="background:var(--text-gray); margin-top:20px;"><span
+          class="material-symbols-outlined"
+          style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
+    </div>
+  </div>
+
+  <div id="round-auto-tournament-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="material-symbols-outlined">emoji_events</span>
+        미니 토너먼트 Go 참가자 선택
+      </div>
+      <div class="modal-body">
+        <div class="modal-info">
+          <strong>💡 오늘 성적 기준 랭킹</strong><br>
+          • 단식은 선수, 복식은 팀 단위로 표시됩니다.<br>
+          • 2/4/8명(팀) 자동 추천 선택이 기본 적용됩니다.<br>
+          • 그 외 인원 선택 시 상위 랭커에게 부전승이 배정됩니다.
+        </div>
+        <div id="round-auto-modal-participant-list" class="modal-participant-list"></div>
+        <div style="margin-top: 15px; text-align: center; color: var(--aussie-blue); font-weight: 400;">
+          선택된 인원: <strong><span id="round-auto-modal-selected-count">0</span>명/팀</strong>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn modal-btn-secondary" onclick="roundAutoCloseMiniTournamentModal()">
+          <span class="material-symbols-outlined btn-ico">close</span>취소
+        </button>
+        <button class="modal-btn modal-btn-primary" onclick="roundAutoStartMiniTournamentFromModal()">
+          <span class="material-symbols-outlined btn-ico">play_arrow</span>시작하기
+        </button>
       </div>
     </div>
   </div>
@@ -1923,6 +2025,7 @@
   <script src="js/tournament.js"></script>
   <script src="js/round_engine.js"></script>
   <script src="js/round_view.js"></script>
+  <script src="js/round_auto_view.js"></script>
   <script src="js/round.js"></script>
   <script src="js/ladder.js"></script>
   <script src="js/stats_calc.js"></script>
