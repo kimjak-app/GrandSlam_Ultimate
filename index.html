@@ -1292,6 +1292,10 @@
             style="display:flex; align-items:center; justify-content:center; gap:8px;">
             <span class="material-symbols-outlined">cached</span> 라운드
           </button>
+          <button class="btn-purple-main" onclick="openRoundAuto()"
+            style="display:flex; align-items:center; justify-content:center; gap:8px;">
+            <span class="material-symbols-outlined">autorenew</span> 라운드(자동생성)
+          </button>
           <button class="btn-purple-main" onclick="openExchange()"
             style="display:flex; align-items:center; justify-content:center; gap:8px;">
             <span class="material-symbols-outlined" style="font-size:20px;">handshake</span> 교류전
@@ -1307,6 +1311,27 @@
           style="background:var(--text-gray); margin-top:20px;"><span class="material-symbols-outlined"
             style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 라운드(자동생성) View -->
+  <div id="view-round-auto" class="app-screen" style="display:none;">
+    <div class="section-card" style="display:block;">
+      <div class="header-banner"><span class="material-symbols-outlined" style="font-size:32px;">autorenew</span>GrandSlam
+        Round (자동생성)</div>
+
+      <div id="round-auto-setup-area">
+        <div class="tour-section-title"><span class="material-symbols-outlined">construction</span>준비 중</div>
+        <div
+          style="border: 2px solid #E5E5EA; border-radius: 15px; padding: 14px; background: white; margin-bottom: 30px;">
+          <div id="round-auto-p-list" style="font-size:13px; color:#8E8E93;">자동생성 라운드 화면 스켈레톤입니다.</div>
+        </div>
+      </div>
+    </div>
+    <div style="padding: 0 15px;">
+      <button class="btn-main" onclick="showView('game')" style="background:var(--text-gray); margin-top:20px;"><span
+          class="material-symbols-outlined"
+          style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
     </div>
   </div>
 
@@ -1923,6 +1948,7 @@
   <script src="js/tournament.js"></script>
   <script src="js/round_engine.js"></script>
   <script src="js/round_view.js"></script>
+  <script src="js/round_auto_view.js"></script>
   <script src="js/round.js"></script>
   <script src="js/ladder.js"></script>
   <script src="js/stats_calc.js"></script>

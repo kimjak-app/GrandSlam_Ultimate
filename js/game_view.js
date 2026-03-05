@@ -132,6 +132,7 @@ function showViewUI(v) {
   if (v === 'tournament') initTournament();
   if (v === 'stats') renderStatsPlayerList();
   if (v === 'round') initRoundPlayerPool();
+  if (v === 'round-auto') initRoundAutoPlayerPool();
   if (v === 'club-mgmt') renderClubManageList();
   if (v === 'home') { loadCourtInfo(); loadNotices(); }
   if (v === 'treasurer') resetTreasurerView();
