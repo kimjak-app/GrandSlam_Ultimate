@@ -3,6 +3,7 @@
 // ========================================
 
 function openRound() { return roundViewOpenRound(); }
+function openRoundAuto() { return showViewUI('round-auto'); }
 function setRoundOpt(opt) { return roundViewSetRoundOpt(opt); }
 function setRoundMode(mode) { return roundViewSetRoundMode(mode); }
 function initRoundPlayerPool() { return roundViewInitRoundPlayerPool(); }
@@ -33,6 +34,7 @@ function renderMiniTournament() { return roundViewRenderMiniTournament(); }
 function setMiniTournamentWinner(matchId, side) { return roundViewSetMiniTournamentWinner(matchId, side); }
 
 window.openRound = openRound;
+window.openRoundAuto = openRoundAuto;
 window.setRoundOpt = setRoundOpt;
 window.setRoundMode = setRoundMode;
 window.initRoundPlayerPool = initRoundPlayerPool;
