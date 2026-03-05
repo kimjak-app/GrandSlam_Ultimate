@@ -279,6 +279,13 @@ function roundViewSaveRoundResults() {
   gsConfirm(`${finishedMatches.length}경기의 결과를 저장하시겠습니까?`, ok => {
     if (!ok) return;
 
+    let didSnapshot = false;
+    const ensureSnapshotLastRanks = () => {
+      if (didSnapshot) return;
+      snapshotLastRanks();
+      didSnapshot = true;
+    };
+
     const standings = {};
     roundParticipants.forEach(p => {
       const key = roundMode === 'single' ? p : p.join('&');
@@ -316,6 +323,8 @@ function roundViewSaveRoundResults() {
       else if (idx < 8) bonus = TENNIS_RULES.roundBonus[4];
       s.points = 1 + (s.wins * winPoint) + (s.losses * losePoint) + bonus;
     });
+
+    ensureSnapshotLastRanks();
 
     const newLogEntries = [];
     finishedMatches.forEach(m => {
@@ -397,6 +406,15 @@ async function roundViewConvertRoundToTournament() {
 }
 
 async function roundViewSaveRoundDataToLog(finishedMatches) {
+  let didSnapshot = false;
+  const ensureSnapshotLastRanks = () => {
+    if (didSnapshot) return;
+    snapshotLastRanks();
+    didSnapshot = true;
+  };
+
+  ensureSnapshotLastRanks();
+
   const newLogEntries = [];
 
   finishedMatches.forEach(m => {

@@ -1121,9 +1121,18 @@ async function roundAutoCommitTurnToGlobalLog(activeTurn) {
 
   roundAutoState._commitInFlight = true;
 
+  let didSnapshot = false;
+  const ensureSnapshotLastRanks = () => {
+    if (didSnapshot) return;
+    snapshotLastRanks();
+    didSnapshot = true;
+  };
+
   const playerSnapshot = JSON.parse(JSON.stringify(players || []));
 
   try {
+    ensureSnapshotLastRanks();
+
     const now = Date.now();
     const ds = new Date(now - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
     const newLogEntries = decidedUncommitted.map((match, idx) => {

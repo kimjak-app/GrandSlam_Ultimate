@@ -157,7 +157,12 @@ function roundEngineApplyRoundScore(winner, loser, mode, winPoint, losePoint) {
 function roundEngineApplyRoundBonus(participant, mode, bonus) {
   if (mode === 'single') {
     const p = players.find(pl => pl.name === participant);
-    if (p) { p.sScore = (p.sScore || 0) + bonus; p.score = (p.score || 0) + bonus; }
+    if (p) {
+      p.sScore = (p.sScore || 0) + bonus;
+      p.wsScore = (p.wsScore || 0) + bonus;
+      p.weekly = (p.weekly || 0) + bonus;
+      p.score = (p.score || 0) + bonus;
+    }
   } else {
     participant.forEach(name => {
       const p = players.find(pl => pl.name === name);
