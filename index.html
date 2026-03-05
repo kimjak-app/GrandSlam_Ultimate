@@ -1321,10 +1321,33 @@
         Round (자동생성)</div>
 
       <div id="round-auto-setup-area">
-        <div class="tour-section-title"><span class="material-symbols-outlined">construction</span>준비 중</div>
+        <div class="tour-section-title"><span class="material-symbols-outlined">settings</span>라운드 설정</div>
         <div
           style="border: 2px solid #E5E5EA; border-radius: 15px; padding: 14px; background: white; margin-bottom: 30px;">
-          <div id="round-auto-p-list" style="font-size:13px; color:#8E8E93;">자동생성 라운드 화면 스켈레톤입니다.</div>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+            <label for="round-auto-court-count" style="font-size:13px; color:#555; font-weight:600;">코트 수</label>
+            <input id="round-auto-court-count" type="number" min="1" value="2"
+              style="width:70px; border:1px solid #ddd; border-radius:8px; padding:6px 8px; font-size:13px;" />
+          </div>
+          <div style="font-size:13px; color:#555; font-weight:600; margin-bottom:8px;">참가자 선택</div>
+          <div id="round-auto-player-pool"></div>
+          <div style="display:flex; gap:8px; margin-top:14px;">
+            <button id="round-auto-gen-btn" class="btn-main" onclick="roundAutoGenerateNextTurn()"
+              style="flex:1; margin-top:0; background:var(--aussie-blue);">다음 턴 생성</button>
+            <button class="btn-main" onclick="roundAutoReset()" style="flex:1; margin-top:0; background:var(--roland-clay);">초기화</button>
+          </div>
+        </div>
+
+        <div class="tour-section-title"><span class="material-symbols-outlined">leaderboard</span>누적 랭킹</div>
+        <div
+          style="border: 2px solid #E5E5EA; border-radius: 15px; padding: 14px; background: white; margin-bottom: 16px;">
+          <div id="round-auto-rank-table" style="font-size:13px; color:#8E8E93;">경기 결과가 아직 없습니다.</div>
+        </div>
+
+        <div class="tour-section-title"><span class="material-symbols-outlined">view_list</span>이번 턴 대진표</div>
+        <div
+          style="border: 2px solid #E5E5EA; border-radius: 15px; padding: 14px; background: white; margin-bottom: 30px;">
+          <div id="round-auto-match-list" style="font-size:13px; color:#8E8E93;">생성된 매치가 없습니다.</div>
         </div>
       </div>
     </div>
