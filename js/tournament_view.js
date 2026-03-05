@@ -3,10 +3,7 @@
 // ========================================
 
 function tournamentViewInitTournament() {
-  const members = players
-    .filter(p => !p.isGuest)
-    .map(p => Object.assign({}, p, { score: Number(getPlayerStats(p.name).score || 0) }))
-    .sort((a, b) => (b.score || 0) - (a.score || 0));
+  const members = players.filter(p => !p.isGuest).sort((a, b) => (b.score || 0) - (a.score || 0));
   const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name));
 
   const gIcon = p => p.gender === 'F'
@@ -132,11 +129,7 @@ function tournamentViewMakeBracket() {
   if (tMode === 'rank') {
     const names = pool.map(x => x.n);
     const otNames = names.filter(n => oneTimePlayers.includes(n));
-    pool = players
-      .filter(p => names.includes(p.name))
-      .map(p => Object.assign({}, p, { score: Number(getPlayerStats(p.name).score || 0) }))
-      .sort((a, b) => (b.score || 0) - (a.score || 0))
-      .map(p => ({ n: p.name }));
+    pool = players.filter(p => names.includes(p.name)).sort((a, b) => (b.score || 0) - (a.score || 0)).map(p => ({ n: p.name }));
     otNames.forEach(n => pool.push({ n }));
   } else if (tMode === 'random') {
     pool.sort(() => Math.random() - 0.5);

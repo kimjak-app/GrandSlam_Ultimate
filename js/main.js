@@ -132,19 +132,8 @@ function _renderLockerRoom() {
 
   if (!myName || !Array.isArray(players) || !Array.isArray(matchLog)) { resetLocker(); return; }
 
-  // 순위 계산 (matchLog 기반 stats engine 사용)
-  const active = players
-    .filter(p => !p.isGuest && (!p.status || p.status === 'active'))
-    .map(p => {
-      const stats = getPlayerStats(p.name);
-      return Object.assign({}, p, {
-        score: Number(stats.score || 0),
-        wins: Number(stats.wins || 0),
-        losses: Number(stats.losses || 0),
-        dScore: Number(stats.dScore || 0),
-        sScore: Number(stats.sScore || 0)
-      });
-    });
+  // 순위 계산
+  const active  = players.filter(p => !p.isGuest && (!p.status || p.status === 'active'));
   const sorted  = [...active].sort((a, b) => (b.score  || 0) - (a.score  || 0));
   const sortedD = [...active].sort((a, b) => (b.dScore || 0) - (a.dScore || 0));
   const sortedS = [...active].sort((a, b) => (b.sScore || 0) - (a.sScore || 0));
