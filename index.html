@@ -1355,6 +1355,8 @@
               style="flex:1; margin-top:0; background:var(--aussie-blue); min-width:120px;">다음 턴 생성</button>
             <button class="btn-main" onclick="roundAutoToTournament()"
               style="flex:1; margin-top:0; background:var(--wimbledon-sage); min-width:120px;">토너먼트 Go</button>
+            <button class="btn-main" onclick="roundAutoOpenMiniTournamentModal()"
+              style="flex:1; margin-top:0; background:#5f6caf; min-width:120px;">미니 토너먼트 Go</button>
             <button class="btn-main" onclick="roundAutoReset()" style="flex:1; margin-top:0; background:var(--roland-clay); min-width:120px;">초기화</button>
           </div>
         </div>
@@ -1376,6 +1378,35 @@
       <button class="btn-main" onclick="showView('game')" style="background:var(--text-gray); margin-top:20px;"><span
           class="material-symbols-outlined"
           style="font-size:18px; vertical-align:middle; margin-right:5px;">arrow_back</span>뒤로가기</button>
+    </div>
+  </div>
+
+  <div id="round-auto-tournament-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span class="material-symbols-outlined">emoji_events</span>
+        미니 토너먼트 Go 참가자 선택
+      </div>
+      <div class="modal-body">
+        <div class="modal-info">
+          <strong>💡 오늘 성적 기준 랭킹</strong><br>
+          • 단식은 선수, 복식은 팀 단위로 표시됩니다.<br>
+          • 2/4/8명(팀) 자동 추천 선택이 기본 적용됩니다.<br>
+          • 그 외 인원 선택 시 상위 랭커에게 부전승이 배정됩니다.
+        </div>
+        <div id="round-auto-modal-participant-list" class="modal-participant-list"></div>
+        <div style="margin-top: 15px; text-align: center; color: var(--aussie-blue); font-weight: 400;">
+          선택된 인원: <strong><span id="round-auto-modal-selected-count">0</span>명/팀</strong>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn modal-btn-secondary" onclick="roundAutoCloseMiniTournamentModal()">
+          <span class="material-symbols-outlined btn-ico">close</span>취소
+        </button>
+        <button class="modal-btn modal-btn-primary" onclick="roundAutoStartMiniTournamentFromModal()">
+          <span class="material-symbols-outlined btn-ico">play_arrow</span>시작하기
+        </button>
+      </div>
     </div>
   </div>
 

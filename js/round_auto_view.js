@@ -18,6 +18,8 @@ function createRoundAutoInitialState() {
       allowMixed: true,
     },
     oneTimeGuests: [],
+    miniTournament: { matches: [], round: 0 },
+    modalRankedParticipants: [],
   };
 }
 
@@ -324,55 +326,204 @@ function initRoundAutoPlayerPool() {
   saveRoundAutoState();
 }
 
-function roundAutoToTournament() {
-  const standingsMap = {};
-  const teamStandingsMap = {};
 
-  const ensurePlayer = (name) => {
-    if (!standingsMap[name]) standingsMap[name] = { key: name, players: [name], wins: 0, losses: 0, matches: 0 };
-    return standingsMap[name];
-  };
-  const teamKeyOf = (team) => [...team].sort().join('|');
-  const ensureTeam = (team) => {
-    const key = teamKeyOf(team);
-    if (!teamStandingsMap[key]) teamStandingsMap[key] = { key, players: [...team], wins: 0, losses: 0, matches: 0 };
-    return teamStandingsMap[key];
+function roundAutoDisplayParticipant(participant) {
+  const names = Array.isArray(participant) ? participant : [participant];
+  return roundAutoState.mode === 'single'
+    ? roundAutoPlayerLabel(names[0])
+    : `${roundAutoPlayerLabel(names[0])} & ${roundAutoPlayerLabel(names[1])}`;
+}
+
+function roundAutoTeamKey(playersList) {
+  return [...playersList].sort().join('|');
+}
+
+function roundAutoComputeSessionStandings() {
+  const isDouble = roundAutoState.mode === 'double';
+  const map = {};
+
+  const ensure = (key, playersList) => {
+    if (!map[key]) map[key] = { key, players: [...playersList], wins: 0, losses: 0, matches: 0 };
+    return map[key];
   };
 
   roundAutoFlattenMatches().forEach(match => {
     if (!match || (match.winner !== 'home' && match.winner !== 'away')) return;
-
     const homePlayers = Array.isArray(match.home) ? match.home : [match.home];
     const awayPlayers = Array.isArray(match.away) ? match.away : [match.away];
+    const homeKey = isDouble ? roundAutoTeamKey(homePlayers) : homePlayers[0];
+    const awayKey = isDouble ? roundAutoTeamKey(awayPlayers) : awayPlayers[0];
 
-    if (roundAutoState.mode === 'double') {
-      const homeTeam = ensureTeam(homePlayers);
-      const awayTeam = ensureTeam(awayPlayers);
-      homeTeam.matches += 1;
-      awayTeam.matches += 1;
-      if (match.winner === 'home') {
-        homeTeam.wins += 1;
-        awayTeam.losses += 1;
-      } else {
-        awayTeam.wins += 1;
-        homeTeam.losses += 1;
-      }
-      return;
-    }
+    const home = ensure(homeKey, homePlayers);
+    const away = ensure(awayKey, awayPlayers);
+    home.matches += 1;
+    away.matches += 1;
 
-    homePlayers.forEach(name => ensurePlayer(name).matches += 1);
-    awayPlayers.forEach(name => ensurePlayer(name).matches += 1);
     if (match.winner === 'home') {
-      homePlayers.forEach(name => ensurePlayer(name).wins += 1);
-      awayPlayers.forEach(name => ensurePlayer(name).losses += 1);
+      home.wins += 1;
+      away.losses += 1;
     } else {
-      awayPlayers.forEach(name => ensurePlayer(name).wins += 1);
-      homePlayers.forEach(name => ensurePlayer(name).losses += 1);
+      away.wins += 1;
+      home.losses += 1;
     }
   });
 
-  const rows = Object.values(roundAutoState.mode === 'double' ? teamStandingsMap : standingsMap)
+  return Object.values(map)
     .sort((a, b) => (b.wins - a.wins) || (a.losses - b.losses) || (b.matches - a.matches) || a.key.localeCompare(b.key));
+}
+
+function roundAutoCloseMiniTournamentModal() {
+  const modal = document.getElementById('round-auto-tournament-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+function roundAutoToggleModalParticipant(idx) {
+  const checkbox = document.getElementById(`round-auto-modal-p-${idx}`);
+  if (!checkbox) return;
+  const item = checkbox.closest('.modal-participant-item');
+  if (!item) return;
+  checkbox.checked = !checkbox.checked;
+  item.classList.toggle('selected', checkbox.checked);
+  roundAutoUpdateModalCount();
+}
+
+function roundAutoUpdateModalCount() {
+  const count = document.querySelectorAll('#round-auto-modal-participant-list .modal-checkbox:checked').length;
+  const countSpan = document.getElementById('round-auto-modal-selected-count');
+  if (countSpan) countSpan.textContent = count;
+}
+
+function roundAutoOpenMiniTournamentModal() {
+  const rows = roundAutoComputeSessionStandings();
+  if (!rows.length) {
+    gsAlert('오늘 성적 데이터가 없습니다. 먼저 승자를 선택해 주세요.');
+    return;
+  }
+
+  const list = document.getElementById('round-auto-modal-participant-list');
+  const modal = document.getElementById('round-auto-tournament-modal');
+  if (!list || !modal) {
+    gsAlert('모달 UI를 찾을 수 없습니다.');
+    return;
+  }
+
+  roundAutoState.modalRankedParticipants = rows.map(row => row.players);
+  const recommended = roundAutoLargestPowerOfTwo(rows.length);
+
+  list.innerHTML = rows.map((row, idx) => {
+    const checked = idx < recommended ? 'checked' : '';
+    const selected = idx < recommended ? 'selected' : '';
+    return `
+      <div class="modal-participant-item ${selected}" onclick="roundAutoToggleModalParticipant(${idx})">
+        <input type="checkbox" class="modal-checkbox" id="round-auto-modal-p-${idx}" ${checked} onclick="event.stopPropagation(); roundAutoToggleModalParticipant(${idx})">
+        <span class="modal-rank">${idx + 1}위</span>
+        <span>${roundAutoEscape(roundAutoDisplayParticipant(row.players))}</span>
+      </div>`;
+  }).join('');
+
+  roundAutoUpdateModalCount();
+  modal.classList.add('active');
+}
+
+function roundAutoStartMiniTournamentFromModal() {
+  const checkboxes = document.querySelectorAll('#round-auto-modal-participant-list .modal-checkbox:checked');
+  if (checkboxes.length < 2) {
+    gsAlert('최소 2명/팀을 선택해야 합니다.');
+    return;
+  }
+
+  const selectedIndices = Array.from(checkboxes)
+    .map(cb => Number(cb.id.replace('round-auto-modal-p-', '')))
+    .sort((a, b) => a - b);
+
+  const ranked = Array.isArray(roundAutoState.modalRankedParticipants) ? roundAutoState.modalRankedParticipants : [];
+  const selectedParticipants = selectedIndices.map(i => ranked[i]).filter(Boolean);
+  roundAutoCloseMiniTournamentModal();
+  roundAutoStartMiniTournament(selectedParticipants);
+}
+
+function roundAutoStartMiniTournament(rankedParticipants) {
+  if (!rankedParticipants || rankedParticipants.length === 0) {
+    gsAlert('토너먼트를 시작할 수 없습니다. 참가자 데이터가 없습니다.');
+    return;
+  }
+
+  const n = rankedParticipants.length;
+  let bracketSize = 2;
+  while (bracketSize < n) bracketSize *= 2;
+  const byeCount = bracketSize - n;
+
+  const miniMatches = [];
+  let matchCount = 0;
+
+  for (let i = 0; i < bracketSize / 2; i += 1) {
+    const high = i < n ? rankedParticipants[i] : null;
+    const low = (bracketSize - 1 - i) < n ? rankedParticipants[bracketSize - 1 - i] : null;
+
+    if (high && low) {
+      matchCount += 1;
+      miniMatches.push({ id: `RA-T-R1-M${matchCount}`, round: 1, home: high, away: low, winner: null });
+    } else if (high && !low) {
+      matchCount += 1;
+      miniMatches.push({ id: `RA-T-R1-M${matchCount}`, round: 1, home: high, away: null, winner: 'home', isBye: true });
+    }
+  }
+
+  roundAutoState.miniTournament = { matches: miniMatches, round: 1 };
+  roundAutoRenderMatches();
+  saveRoundAutoState();
+
+  if (byeCount > 0) {
+    setTimeout(() => gsAlert(`💡 ${byeCount}명/팀이 부전승으로 다음 라운드에 자동 진출합니다.
+상위 랭커에게 부전승이 배정됩니다.`), 200);
+  }
+}
+
+function roundAutoSetMiniTournamentWinner(matchId, side) {
+  const mini = roundAutoState.miniTournament || { matches: [], round: 0 };
+  const match = (mini.matches || []).find(m => m.id === matchId);
+  if (!match || match.winner !== null) return;
+
+  const winnerLabel = side === 'home' ? roundAutoDisplayParticipant(match.home) : roundAutoDisplayParticipant(match.away);
+  gsConfirm(`승자를 ${winnerLabel}(으)로 확정할까요?`, ok => {
+    if (!ok) return;
+
+    match.winner = side;
+    const currentRound = (mini.matches || []).filter(m => m.round === mini.round);
+    const allFinished = currentRound.every(m => m.winner !== null);
+
+    if (allFinished) {
+      const winners = currentRound.map(m => m.winner === 'home' ? m.home : m.away);
+      if (winners.length === 1) {
+        gsAlert(`🏆 우승: ${roundAutoDisplayParticipant(winners[0])}!
+
+미니 토너먼트가 종료되었습니다.`);
+        roundAutoRenderMatches();
+        saveRoundAutoState();
+        return;
+      }
+
+      mini.round += 1;
+      const nextMatches = [];
+      for (let i = 0; i < winners.length; i += 2) {
+        nextMatches.push({
+          id: `RA-T-R${mini.round}-M${(i / 2) + 1}`,
+          round: mini.round,
+          home: winners[i],
+          away: winners[i + 1],
+          winner: null,
+        });
+      }
+      mini.matches.push(...nextMatches);
+    }
+
+    roundAutoRenderMatches();
+    saveRoundAutoState();
+  });
+}
+
+function roundAutoToTournament() {
+  const rows = roundAutoComputeSessionStandings();
 
   if (!rows.length) {
     gsAlert('토너먼트로 넘길 승/패 데이터가 없습니다. 먼저 승자를 선택해 주세요.');
@@ -473,6 +624,56 @@ function roundAutoRenderMatches() {
   const list = document.getElementById('round-auto-match-list');
   if (!list) return;
 
+  const mini = roundAutoState.miniTournament || { matches: [], round: 0 };
+  if (Array.isArray(mini.matches) && mini.round > 0 && mini.matches.length) {
+    const currentRound = mini.matches.filter(m => m.round === mini.round);
+    if (!currentRound.length) {
+      list.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-gray);">표시할 매치가 없습니다.</div>';
+      return;
+    }
+
+    let html = `<div style="text-align:center; margin-bottom:20px; padding:15px; background:var(--wimbledon-sage); color:white; border-radius:12px; font-size:16px; font-weight:bold;">🏆 라운드 자동생성 미니 토너먼트 - Round ${mini.round}</div>`;
+    currentRound.forEach(m => {
+      const isFinished = m.winner !== null;
+      const homeDisplay = roundAutoDisplayParticipant(m.home);
+
+      if (m.isBye) {
+        html += `
+          <div class="team-box" style="margin-bottom:10px; padding:12px; opacity:0.7; background:linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%);">
+            <div style="font-size:11px; color:var(--text-gray); margin-bottom:8px;">${m.id} - 부전승</div>
+            <div style="text-align:center; padding:10px;">
+              <span style="color:var(--wimbledon-sage); font-weight:700; font-size:15px;">✓ ${roundAutoEscape(homeDisplay)}</span>
+              <div style="font-size:12px; color:var(--text-gray); margin-top:5px;">다음 라운드 자동 진출</div>
+            </div>
+          </div>`;
+        return;
+      }
+
+      const awayDisplay = roundAutoDisplayParticipant(m.away);
+      html += `
+        <div class="team-box" style="margin-bottom:10px; padding:12px; ${isFinished ? 'opacity:0.5;' : ''}">
+          <div style="font-size:11px; color:var(--text-gray); margin-bottom:8px;">${m.id}</div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button onclick="roundAutoSetMiniTournamentWinner('${m.id}', 'home')"
+              class="opt-btn"
+              style="flex:1; padding:10px; ${m.winner === 'home' ? 'background:var(--wimbledon-sage); opacity:1;' : 'opacity:0.7;'}">
+              ${roundAutoEscape(homeDisplay)}
+            </button>
+            <div style="font-size:14px; color:var(--text-gray);">vs</div>
+            <button onclick="roundAutoSetMiniTournamentWinner('${m.id}', 'away')"
+              class="opt-btn"
+              style="flex:1; padding:10px; ${m.winner === 'away' ? 'background:var(--wimbledon-sage); opacity:1;' : 'opacity:0.7;'}">
+              ${roundAutoEscape(awayDisplay)}
+            </button>
+          </div>
+        </div>`;
+    });
+
+    list.innerHTML = html;
+    return;
+  }
+
+
   const turns = (roundAutoState.turns || []).filter(t => t.status === 'active' || t.status === 'preview');
 
   if (!turns.length) {
@@ -505,9 +706,9 @@ function roundAutoRenderMatches() {
               </div>
               <div style="display:flex; gap:8px;">
                 <button class="opt-btn" onclick="roundAutoSetWinner('${match.id}','home')" ${disableAttr}
-                  style="flex:1; ${match.winner === 'home' ? 'background:var(--wimbledon-sage); color:white;' : ''}">HOME 승</button>
+                  style="flex:1; ${match.winner === 'home' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${roundAutoEscape(home)} 승</button>
                 <button class="opt-btn" onclick="roundAutoSetWinner('${match.id}','away')" ${disableAttr}
-                  style="flex:1; ${match.winner === 'away' ? 'background:var(--wimbledon-sage); color:white;' : ''}">AWAY 승</button>
+                  style="flex:1; ${match.winner === 'away' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${roundAutoEscape(away)} 승</button>
               </div>
             </div>
           `;
@@ -521,48 +722,24 @@ function roundAutoRenderRanking() {
   const table = document.getElementById('round-auto-rank-table');
   if (!table) return;
 
-  const standingsMap = {};
-  const ensure = (name) => {
-    if (!standingsMap[name]) standingsMap[name] = { name, wins: 0, losses: 0, matches: 0 };
-    return standingsMap[name];
-  };
-
-  roundAutoFlattenMatches()
-    .filter(match => match.winner === 'home' || match.winner === 'away')
-    .forEach(match => {
-      const homePlayers = Array.isArray(match.home) ? match.home : [match.home];
-      const awayPlayers = Array.isArray(match.away) ? match.away : [match.away];
-
-      homePlayers.forEach(name => ensure(name).matches += 1);
-      awayPlayers.forEach(name => ensure(name).matches += 1);
-
-      if (match.winner === 'home') {
-        homePlayers.forEach(name => ensure(name).wins += 1);
-        awayPlayers.forEach(name => ensure(name).losses += 1);
-      } else {
-        awayPlayers.forEach(name => ensure(name).wins += 1);
-        homePlayers.forEach(name => ensure(name).losses += 1);
-      }
-    });
-
-  const standings = Object.values(standingsMap)
-    .sort((a, b) => (b.wins - a.wins) || (b.matches - a.matches) || a.name.localeCompare(b.name));
+  const standings = roundAutoComputeSessionStandings();
 
   if (!standings.length) {
     table.innerHTML = '<div style="font-size:12px; color:#999;">승자 선택 후 랭킹이 표시됩니다.</div>';
     return;
   }
 
+  const label = roundAutoState.mode === 'single' ? '선수' : '팀';
   table.innerHTML = `
     <table class="tennis-table">
       <thead>
-        <tr><th>순위</th><th>선수</th><th>승</th><th>패</th><th>경기</th></tr>
+        <tr><th>순위</th><th>${label}</th><th>승</th><th>패</th><th>경기</th></tr>
       </thead>
       <tbody>
         ${standings.map((s, idx) => `
           <tr>
             <td>${idx + 1}</td>
-            <td>${roundAutoEscape(roundAutoPlayerLabel(s.name))}</td>
+            <td>${roundAutoEscape(roundAutoDisplayParticipant(s.players))}</td>
             <td>${s.wins}</td>
             <td>${s.losses}</td>
             <td>${s.matches}</td>
@@ -572,6 +749,7 @@ function roundAutoRenderRanking() {
     </table>
   `;
 }
+
 
 function roundAutoReset() {
   roundAutoState = createRoundAutoInitialState();
@@ -597,3 +775,10 @@ window.roundAutoReset = roundAutoReset;
 window.roundAutoViewOpen = roundAutoViewOpen;
 window.roundAutoToTournament = roundAutoToTournament;
 window.roundAutoOpenAddGuestModal = roundAutoOpenAddGuestModal;
+window.roundAutoComputeSessionStandings = roundAutoComputeSessionStandings;
+window.roundAutoOpenMiniTournamentModal = roundAutoOpenMiniTournamentModal;
+window.roundAutoCloseMiniTournamentModal = roundAutoCloseMiniTournamentModal;
+window.roundAutoToggleModalParticipant = roundAutoToggleModalParticipant;
+window.roundAutoUpdateModalCount = roundAutoUpdateModalCount;
+window.roundAutoStartMiniTournamentFromModal = roundAutoStartMiniTournamentFromModal;
+window.roundAutoSetMiniTournamentWinner = roundAutoSetMiniTournamentWinner;
