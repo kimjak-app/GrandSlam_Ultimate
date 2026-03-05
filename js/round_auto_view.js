@@ -254,6 +254,115 @@ function roundAutoEnsureSessionStats(playerName, statsRef) {
   return statsRef[playerName];
 }
 
+function roundAutoApplyTurnParticipation(activePlayers, eligiblePool, turnNo, statsRef) {
+  const activeNames = new Set(activePlayers.map(p => p.name));
+  activePlayers.forEach(p => {
+    const stat = roundAutoEnsureSessionStats(p.name, statsRef);
+    stat.played += 1;
+    stat.lastTurnPlayed = turnNo;
+    stat.restStreak = 0;
+  });
+  eligiblePool.forEach(p => {
+    if (activeNames.has(p.name)) return;
+    const stat = roundAutoEnsureSessionStats(p.name, statsRef);
+    stat.rested += 1;
+    stat.restStreak += 1;
+  });
+}
+
+function roundAutoBuildHistoryMaps() {
+  const partnerMap = new Map();
+  const opponentMap = new Map();
+  const add = (map, a, b) => {
+    const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+    map.set(key, (map.get(key) || 0) + 1);
+  };
+
+  roundAutoGetTurns({ includePreview: false }).forEach(turn => {
+    (turn.matches || []).forEach(match => {
+      const home = Array.isArray(match.home) ? match.home : [match.home];
+      const away = Array.isArray(match.away) ? match.away : [match.away];
+      if (home.length !== 2 || away.length !== 2) return;
+      add(partnerMap, home[0], home[1]);
+      add(partnerMap, away[0], away[1]);
+      home.forEach(h => away.forEach(a => add(opponentMap, h, a)));
+    });
+  });
+
+  return { partnerMap, opponentMap };
+}
+
+function roundAutoChooseFairSingleCourtSetup(eligiblePool, turnNo, statsRef) {
+  if (eligiblePool.length < 4) return null;
+
+  const minPlayed = Math.min(...eligiblePool.map(p => roundAutoEnsureSessionStats(p.name, statsRef).played));
+  const { partnerMap, opponentMap } = roundAutoBuildHistoryMaps();
+  const combos = [];
+
+  for (let i = 0; i < eligiblePool.length - 3; i += 1) {
+    for (let j = i + 1; j < eligiblePool.length - 2; j += 1) {
+      for (let k = j + 1; k < eligiblePool.length - 1; k += 1) {
+        for (let l = k + 1; l < eligiblePool.length; l += 1) {
+          combos.push([eligiblePool[i], eligiblePool[j], eligiblePool[k], eligiblePool[l]]);
+        }
+      }
+    }
+  }
+
+  const pairKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+  const scoreCombo = (combo) => {
+    const playedVals = combo.map(p => roundAutoEnsureSessionStats(p.name, statsRef).played);
+    const atMinCount = playedVals.filter(v => v === minPlayed).length;
+    const spread = Math.max(...playedVals) - Math.min(...playedVals);
+    const restedLastTurn = combo.filter(p => {
+      const st = roundAutoEnsureSessionStats(p.name, statsRef);
+      return st.lastTurnPlayed !== (turnNo - 1);
+    }).length;
+
+    const [a, b, c, d] = combo;
+    const pairings = [
+      { home: [a, b], away: [c, d] },
+      { home: [a, c], away: [b, d] },
+      { home: [a, d], away: [b, c] },
+    ];
+
+    let bestPairing = null;
+    pairings.forEach(p => {
+      const partnerRepeat = (partnerMap.get(pairKey(p.home[0].name, p.home[1].name)) || 0)
+        + (partnerMap.get(pairKey(p.away[0].name, p.away[1].name)) || 0);
+      const opponentRepeat = p.home.reduce((sum, hp) => (
+        sum + p.away.reduce((s2, ap) => s2 + (opponentMap.get(pairKey(hp.name, ap.name)) || 0), 0)
+      ), 0);
+      const current = { partnerRepeat, opponentRepeat };
+      if (!bestPairing
+        || current.partnerRepeat < bestPairing.partnerRepeat
+        || (current.partnerRepeat === bestPairing.partnerRepeat && current.opponentRepeat < bestPairing.opponentRepeat)) {
+        bestPairing = { ...current, pairing: p };
+      }
+    });
+
+    return { combo, atMinCount, spread, restedLastTurn, bestPairing };
+  };
+
+  const scored = combos.map(scoreCombo);
+  scored.sort((x, y) => {
+    if (y.atMinCount !== x.atMinCount) return y.atMinCount - x.atMinCount;
+    if (x.spread !== y.spread) return x.spread - y.spread;
+    if (x.bestPairing.partnerRepeat !== y.bestPairing.partnerRepeat) return x.bestPairing.partnerRepeat - y.bestPairing.partnerRepeat;
+    if (x.bestPairing.opponentRepeat !== y.bestPairing.opponentRepeat) return x.bestPairing.opponentRepeat - y.bestPairing.opponentRepeat;
+    if (y.restedLastTurn !== x.restedLastTurn) return y.restedLastTurn - x.restedLastTurn;
+    return Math.random() - 0.5;
+  });
+
+  const chosen = scored[0];
+  if (!chosen) return null;
+
+  return {
+    activePlayers: chosen.combo,
+    pairing: chosen.bestPairing.pairing,
+  };
+}
+
 function roundAutoPickActivePlayers(eligiblePool, requiredPlayers, turnNo, statsRef) {
   const sorted = [...eligiblePool].sort((a, b) => {
     const sa = roundAutoEnsureSessionStats(a.name, statsRef);
@@ -264,20 +373,7 @@ function roundAutoPickActivePlayers(eligiblePool, requiredPlayers, turnNo, stats
   });
 
   const activePlayers = sorted.slice(0, requiredPlayers);
-  const restedPlayers = sorted.slice(requiredPlayers);
-
-  activePlayers.forEach(p => {
-    const stat = roundAutoEnsureSessionStats(p.name, statsRef);
-    stat.played += 1;
-    stat.lastTurnPlayed = turnNo;
-    stat.restStreak = 0;
-  });
-  restedPlayers.forEach(p => {
-    const stat = roundAutoEnsureSessionStats(p.name, statsRef);
-    stat.rested += 1;
-    stat.restStreak += 1;
-  });
-
+  roundAutoApplyTurnParticipation(activePlayers, eligiblePool, turnNo, statsRef);
   return activePlayers;
 }
 
@@ -331,23 +427,38 @@ function roundAutoBuildTurnWithStats(turnNo, status, statsRef, mutateRealStats) 
     return null;
   }
 
-  const activePlayers = roundAutoPickActivePlayers(eligiblePool, requiredPlayers, turnNo, statsRef);
-  const pairs = roundAutoPairByGender(activePlayers);
-  roundAutoApplyPartnerSwap(pairs);
+  let matches = [];
 
-  const matches = [];
-  for (let i = 0; i < roundAutoState.courtCount; i += 1) {
-    const teamHome = pairs[i * 2];
-    const teamAway = pairs[i * 2 + 1];
-    if (!teamHome || !teamAway) break;
-    matches.push({
-      id: `ra-${turnNo}-${i + 1}`,
+  if (roundAutoState.courtCount === 1 && roundAutoState.mode === 'double') {
+    const fairPick = roundAutoChooseFairSingleCourtSetup(eligiblePool, turnNo, statsRef);
+    if (!fairPick) return null;
+    roundAutoApplyTurnParticipation(fairPick.activePlayers, eligiblePool, turnNo, statsRef);
+    matches = [{
+      id: `ra-${turnNo}-1`,
       turnNo,
-      courtNo: i + 1,
-      home: [teamHome[0].name, teamHome[1].name],
-      away: [teamAway[0].name, teamAway[1].name],
+      courtNo: 1,
+      home: fairPick.pairing.home.map(p => p.name),
+      away: fairPick.pairing.away.map(p => p.name),
       winner: null,
-    });
+    }];
+  } else {
+    const activePlayers = roundAutoPickActivePlayers(eligiblePool, requiredPlayers, turnNo, statsRef);
+    const pairs = roundAutoPairByGender(activePlayers);
+    roundAutoApplyPartnerSwap(pairs);
+
+    for (let i = 0; i < roundAutoState.courtCount; i += 1) {
+      const teamHome = pairs[i * 2];
+      const teamAway = pairs[i * 2 + 1];
+      if (!teamHome || !teamAway) break;
+      matches.push({
+        id: `ra-${turnNo}-${i + 1}`,
+        turnNo,
+        courtNo: i + 1,
+        home: [teamHome[0].name, teamHome[1].name],
+        away: [teamAway[0].name, teamAway[1].name],
+        winner: null,
+      });
+    }
   }
 
   if (mutateRealStats) {
@@ -730,7 +841,7 @@ function roundAutoSetMiniTournamentWinner(matchId, side) {
   });
 }
 
-function roundAutoGenerateNextTurn() {
+async function roundAutoGenerateNextTurn() {
   roundAutoState.turns = (roundAutoState.turns || []).filter(turn => turn?.status !== 'preview');
 
   if (!roundAutoState.turns.length) {
@@ -755,6 +866,8 @@ function roundAutoGenerateNextTurn() {
       gsAlert('승자 먼저 체크');
       return;
     }
+
+    await roundAutoCommitTurnToGlobalLog(activeTurn);
 
     activeTurn.status = 'done';
     const newActiveTurnNo = roundAutoState.turnNo + 1;
@@ -784,9 +897,75 @@ function roundAutoSetWinner(matchId, side) {
       break;
     }
   }
+
+  const activeTurn = (roundAutoState.turns || []).find(turn => turn?.status === 'active');
+  if (activeTurn) {
+    const isFullyDecided = (activeTurn.matches || []).every(m => m.winner === 'home' || m.winner === 'away');
+    if (isFullyDecided) roundAutoCommitTurnToGlobalLog(activeTurn);
+  }
+
   roundAutoRenderMatches();
   roundAutoRenderRanking();
   saveRoundAutoState();
+}
+
+async function roundAutoCommitTurnToGlobalLog(activeTurn) {
+  if (!activeTurn || !Array.isArray(activeTurn.matches)) return;
+  if (roundAutoState._commitInFlight) return;
+
+  const mode = roundAutoState.mode === 'single' ? 'single' : 'double';
+  const decidedUncommitted = activeTurn.matches.filter(m => {
+    const decided = m && (m.winner === 'home' || m.winner === 'away');
+    return decided && !m.committed;
+  });
+  if (!decidedUncommitted.length) return;
+
+  roundAutoState._commitInFlight = true;
+
+  const playerSnapshot = JSON.parse(JSON.stringify(players || []));
+
+  try {
+    const now = Date.now();
+    const ds = new Date(now - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const newLogEntries = decidedUncommitted.map((match, idx) => {
+      const winner = match.winner === 'home' ? match.home : match.away;
+      const loser = match.winner === 'home' ? match.away : match.home;
+      const logId = `${now}-${activeTurn.turnNo}-${match.courtNo || 0}-${idx}-${Math.floor(Math.random() * 100000)}`;
+
+      roundEngineApplyRoundScore(winner, loser, mode);
+
+      return {
+        id: logId,
+        ts: now + idx,
+        date: ds,
+        type: mode,
+        home: mode === 'single' ? [winner] : winner,
+        away: mode === 'single' ? [loser] : loser,
+        winner: 'home',
+        memo: 'round_auto',
+      };
+    });
+
+    computeAll();
+    const ok = await pushWithMatchLogAppend(newLogEntries);
+    if (!ok) {
+      players = playerSnapshot;
+      computeAll();
+      return;
+    }
+
+    decidedUncommitted.forEach((match, idx) => {
+      match.committed = true;
+      match.logId = newLogEntries[idx].id;
+    });
+    saveRoundAutoState();
+  } catch (e) {
+    players = playerSnapshot;
+    computeAll();
+    console.error('[round-auto] commit turn failed:', e);
+  } finally {
+    roundAutoState._commitInFlight = false;
+  }
 }
 
 function roundAutoRenderMatches() {
