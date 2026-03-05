@@ -56,8 +56,53 @@ function roundAutoLargestPowerOfTwo(n) {
   return p;
 }
 
-function roundAutoFlattenMatches() {
-  return (roundAutoState.turns || []).flatMap(turn => Array.isArray(turn.matches) ? turn.matches : []);
+function roundAutoGetTurns({ includePreview = false } = {}) {
+  const turns = Array.isArray(roundAutoState.turns) ? roundAutoState.turns : [];
+  return includePreview ? turns : turns.filter(turn => turn?.status !== 'preview');
+}
+
+function roundAutoNormalizeTurnsState() {
+  const turns = Array.isArray(roundAutoState.turns) ? roundAutoState.turns : [];
+  const previews = turns.filter(turn => turn?.status === 'preview');
+  const activeTurns = turns.filter(turn => turn?.status === 'active');
+
+  if (previews.length > 1) {
+    console.warn('[round-auto] invalid state: multiple preview turns detected. keeping latest preview only.');
+    const latestPreview = previews.sort((a, b) => (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0)).pop();
+    roundAutoState.turns = turns.filter(turn => turn?.status !== 'preview');
+    if (latestPreview) roundAutoState.turns.push(latestPreview);
+  }
+
+  if (activeTurns.length > 1) {
+    console.warn('[round-auto] invalid state: multiple active turns detected. keeping latest active only.');
+    const latestActive = activeTurns.sort((a, b) => (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0)).pop();
+    roundAutoState.turns = (roundAutoState.turns || []).map(turn => {
+      if (turn?.status !== 'active') return turn;
+      return turn === latestActive ? turn : { ...turn, status: 'done' };
+    });
+  }
+
+  let activeTurn = (roundAutoState.turns || [])
+    .filter(turn => turn?.status === 'active')
+    .sort((a, b) => (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0))
+    .pop();
+
+  if (!activeTurn) {
+    const latestRealTurn = roundAutoGetTurns({ includePreview: false })
+      .sort((a, b) => (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0))
+      .pop();
+    if (latestRealTurn) {
+      console.warn('[round-auto] invalid state: active turn missing. promoting latest real turn to active.');
+      latestRealTurn.status = 'active';
+      activeTurn = latestRealTurn;
+    }
+  }
+
+  if (activeTurn) roundAutoState.turnNo = Number(activeTurn.turnNo) || 0;
+}
+
+function roundAutoFlattenMatches({ includePreview = false } = {}) {
+  return roundAutoGetTurns({ includePreview }).flatMap(turn => Array.isArray(turn.matches) ? turn.matches : []);
 }
 
 function roundAutoGetClubPlayers() {
@@ -129,9 +174,7 @@ function loadRoundAutoState() {
         ? roundAutoState.config.levels
         : ['A', 'B', 'C'];
     }
-    if (!Number.isFinite(roundAutoState.config.previewTurns)) {
-      roundAutoState.config.previewTurns = 1;
-    }
+    roundAutoState.config.previewTurns = 1;
 
     if (!roundAutoState.turns.length && Array.isArray(parsed.matches) && parsed.matches.length) {
       const grouped = parsed.matches.reduce((acc, m) => {
@@ -146,10 +189,24 @@ function loadRoundAutoState() {
         status: idx === turnNos.length - 1 ? 'active' : 'done',
       }));
       if (roundAutoState.turns.length === 1) {
-        roundAutoState.turnNo = Math.max(roundAutoState.turnNo, roundAutoState.turns[0].turnNo);
-        roundAutoState.turns.push(roundAutoBuildTurn(roundAutoState.turnNo + 1, 'preview'));
-        roundAutoState.turnNo += 1;
+        const activeTurnNo = Number(roundAutoState.turns[0].turnNo) || 0;
+        roundAutoState.turns[0].status = 'active';
+        roundAutoState.turnNo = activeTurnNo;
+        roundAutoState.turns = roundAutoState.turns.filter(turn => turn.status !== 'preview');
+        roundAutoState.turns.push(roundAutoBuildTurn(activeTurnNo + 1, 'preview'));
       }
+    }
+
+    roundAutoNormalizeTurnsState();
+
+    const activeTurn = (roundAutoState.turns || []).find(turn => turn?.status === 'active');
+    const latestPreview = (roundAutoState.turns || [])
+      .filter(turn => turn?.status === 'preview')
+      .sort((a, b) => (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0))
+      .pop();
+    if (activeTurn && latestPreview && Number(latestPreview.turnNo) !== (Number(activeTurn.turnNo) + 1)) {
+      roundAutoState.turns = roundAutoState.turns.filter(turn => turn?.status !== 'preview');
+      roundAutoState.turns.push(roundAutoBuildTurn((Number(activeTurn.turnNo) || 0) + 1, 'preview'));
     }
   } catch (e) {
     console.warn('[round-auto] state load failed:', e);
@@ -465,11 +522,11 @@ function initRoundAutoPlayerPool() {
   `;
 
   playerPool.querySelectorAll('input[type="checkbox"]').forEach(chk => {
-    chk.addEventListener('change', () => {
+    chk.onchange = () => {
       const selected = Array.from(playerPool.querySelectorAll('input[type="checkbox"]:checked')).map(el => el.value);
       roundAutoState.selectedPlayers = selected;
       saveRoundAutoState();
-    });
+    };
   });
 
   roundAutoRenderMatches();
@@ -498,7 +555,7 @@ function roundAutoComputeSessionStandings() {
     return map[key];
   };
 
-  roundAutoFlattenMatches().forEach(match => {
+  roundAutoFlattenMatches({ includePreview: false }).forEach(match => {
     if (!match || (match.winner !== 'home' && match.winner !== 'away')) return;
     const homePlayers = Array.isArray(match.home) ? match.home : [match.home];
     const awayPlayers = Array.isArray(match.away) ? match.away : [match.away];
@@ -674,6 +731,8 @@ function roundAutoSetMiniTournamentWinner(matchId, side) {
 }
 
 function roundAutoGenerateNextTurn() {
+  roundAutoState.turns = (roundAutoState.turns || []).filter(turn => turn?.status !== 'preview');
+
   if (!roundAutoState.turns.length) {
     const activeTurnNo = roundAutoState.turnNo + 1;
     const realStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
@@ -698,8 +757,6 @@ function roundAutoGenerateNextTurn() {
     }
 
     activeTurn.status = 'done';
-    roundAutoState.turns = roundAutoState.turns.filter(t => t.status !== 'preview');
-
     const newActiveTurnNo = roundAutoState.turnNo + 1;
     const realStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
     const newActiveTurn = roundAutoBuildTurnWithStats(newActiveTurnNo, 'active', realStats, true);
@@ -713,6 +770,7 @@ function roundAutoGenerateNextTurn() {
     roundAutoState.turnNo = newActiveTurnNo;
   }
 
+  roundAutoNormalizeTurnsState();
   roundAutoRenderMatches();
   roundAutoRenderRanking();
   saveRoundAutoState();
