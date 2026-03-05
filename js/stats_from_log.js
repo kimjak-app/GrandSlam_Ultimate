@@ -174,15 +174,14 @@ function _deriveWeeklyBoundsFromNow() {
 function compareLegacyVsEngine() {
   const logs = Array.isArray(window.matchLog) ? window.matchLog : [];
   const legacyPlayers = Array.isArray(window.players) ? window.players : [];
-  const bounds = _deriveWeeklyBoundsFromNow();
-  const engine = computeStats(logs, legacyPlayers, bounds);
+  const engine = computeStats(logs, legacyPlayers);
 
   const keys = new Set([
     ...legacyPlayers.map(p => p && p.name).filter(Boolean),
     ...Object.keys(engine.players || {})
   ]);
 
-  let mismatch = false;
+  let mismatches = 0;
   keys.forEach(playerKey => {
     const lp = legacyPlayers.find(p => p && p.name === playerKey) || {};
     const ep = (engine.players && engine.players[playerKey]) || _statsInitPlayer();
@@ -208,13 +207,13 @@ function compareLegacyVsEngine() {
 
     const same = Object.keys(legacy).every(k => legacy[k] === engineOne[k]);
     if (!same) {
-      mismatch = true;
-      console.warn('STAT MISMATCH', playerKey, { legacy }, { engine: engineOne });
+      mismatches += 1;
+      console.warn('STAT MISMATCH', playerKey, { legacy, engine: engineOne });
     }
   });
 
-  if (!mismatch) console.log('Stats parity verified: legacy == engine');
-  return { ok: !mismatch, compared: keys.size, bounds };
+  if (mismatches === 0) console.log('Stats parity verified: legacy == engine');
+  return { ok: mismatches === 0, compared: keys.size, mismatches };
 }
 
 window.computeStats = computeStats;
