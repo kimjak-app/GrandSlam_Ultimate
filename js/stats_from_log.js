@@ -1,5 +1,6 @@
 // ========================================
 // STATS_FROM_LOG.JS - 로그 기반 통계 엔진 (검증용)
+// Phase1 parity checker WIP
 // ========================================
 
 function _statsMetaMap(playersMeta) {
