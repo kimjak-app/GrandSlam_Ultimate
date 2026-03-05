@@ -13,10 +13,13 @@ function createRoundAutoInitialState() {
     history: { partners: {}, opponents: {}, playedCount: {} },
     turnNo: 0,
     config: {
-      levels: ['A', 'B', 'C'],
+      levelFilter: ['A', 'B', 'C'],
       gender: 'all',
       allowMixed: true,
+      previewTurns: 1,
     },
+    sessionStats: {},
+    partnerHistory: {},
     oneTimeGuests: [],
     miniTournament: { matches: [], round: 0 },
     modalRankedParticipants: [],
@@ -72,8 +75,11 @@ function roundAutoGetClubPlayers() {
 
 function roundAutoGetFilteredClubPlayers() {
   const cfg = roundAutoState.config || {};
+  const levelFilter = Array.isArray(cfg.levelFilter)
+    ? cfg.levelFilter
+    : (Array.isArray(cfg.levels) ? cfg.levels : ['A', 'B', 'C']);
   return roundAutoGetClubPlayers().filter(p => {
-    const levelOk = Array.isArray(cfg.levels) ? cfg.levels.includes((p.level || 'A')) : true;
+    const levelOk = levelFilter.includes((p.level || 'A'));
     const genderOk = cfg.gender === 'all' || p.gender === cfg.gender;
     return levelOk && genderOk;
   });
@@ -81,8 +87,17 @@ function roundAutoGetFilteredClubPlayers() {
 
 function roundAutoGetFilteredGuests() {
   const cfg = roundAutoState.config || {};
+  const levelFilter = Array.isArray(cfg.levelFilter)
+    ? cfg.levelFilter
+    : (Array.isArray(cfg.levels) ? cfg.levels : ['A', 'B', 'C']);
   const guests = Array.isArray(roundAutoState.oneTimeGuests) ? roundAutoState.oneTimeGuests : [];
-  return guests.filter(g => cfg.gender === 'all' || g.gender === cfg.gender);
+  return guests.filter(g => {
+    const guestLevel = g.level || 'A';
+    const guestGender = g.gender || 'U';
+    const levelOk = levelFilter.includes(guestLevel);
+    const genderOk = cfg.gender === 'all' || guestGender === cfg.gender;
+    return levelOk && genderOk;
+  });
 }
 
 function loadRoundAutoState() {
@@ -102,8 +117,19 @@ function loadRoundAutoState() {
       history: parsed.history && typeof parsed.history === 'object' ? parsed.history : initial.history,
       turnNo: Number(parsed.turnNo) || 0,
       config: { ...initial.config, ...(parsed.config || {}) },
+      sessionStats: parsed.sessionStats && typeof parsed.sessionStats === 'object' ? parsed.sessionStats : {},
+      partnerHistory: parsed.partnerHistory && typeof parsed.partnerHistory === 'object' ? parsed.partnerHistory : {},
       oneTimeGuests: Array.isArray(parsed.oneTimeGuests) ? parsed.oneTimeGuests : [],
     };
+
+    if (!Array.isArray(roundAutoState.config.levelFilter)) {
+      roundAutoState.config.levelFilter = Array.isArray(roundAutoState.config.levels)
+        ? roundAutoState.config.levels
+        : ['A', 'B', 'C'];
+    }
+    if (!Number.isFinite(roundAutoState.config.previewTurns)) {
+      roundAutoState.config.previewTurns = 1;
+    }
 
     if (!roundAutoState.turns.length && Array.isArray(parsed.matches) && parsed.matches.length) {
       const grouped = parsed.matches.reduce((acc, m) => {
@@ -138,40 +164,143 @@ function saveRoundAutoState() {
 }
 
 function roundAutoBuildTurn(turnNo, status) {
-  const requiredPerCourt = roundAutoState.mode === 'single' ? 2 : 4;
-  const pool = shuffleArray([...roundAutoState.selectedPlayers]);
-  const matches = [];
+  const simulatedStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
+  return roundAutoBuildTurnWithStats(turnNo, status, simulatedStats, false);
+}
 
-  for (let i = 0; i < roundAutoState.courtCount; i += 1) {
-    const start = i * requiredPerCourt;
-    const picked = pool.slice(start, start + requiredPerCourt);
-    if (picked.length < requiredPerCourt) break;
+function roundAutoGetSelectedEligiblePool() {
+  const clubMap = new Map(roundAutoGetFilteredClubPlayers().map(p => [p.name, {
+    id: p.name,
+    name: p.name,
+    level: p.level || 'A',
+    gender: p.gender || 'U',
+    isGuest: false,
+  }]));
+  const guestMap = new Map(roundAutoGetFilteredGuests().map(g => [g.name, {
+    id: g.id || g.name,
+    name: g.name,
+    level: g.level || 'A',
+    gender: g.gender || 'U',
+    isGuest: true,
+  }]));
+  return (roundAutoState.selectedPlayers || [])
+    .map(name => clubMap.get(name) || guestMap.get(name))
+    .filter(Boolean);
+}
 
-    if (roundAutoState.mode === 'double') {
-      const [a, b, c, d] = picked;
-      if (!roundAutoState.config.allowMixed) {
-        const genders = [a, b, c, d].map(name => {
-          const member = roundAutoGetClubPlayers().find(p => p.name === name);
-          const guest = (roundAutoState.oneTimeGuests || []).find(g => g.name === name);
-          return member?.gender || guest?.gender || 'M';
-        });
-        const valid = (genders[0] === genders[2]) && (genders[1] === genders[3]);
-        if (!valid) {
-          continue;
-        }
-      }
-      matches.push({
-        id: `ra-${turnNo}-${i + 1}`,
-        turnNo,
-        courtNo: i + 1,
-        home: [a, c],
-        away: [b, d],
-        winner: null,
-      });
-    } else {
-      const [a, b] = picked;
-      matches.push({ id: `ra-${turnNo}-${i + 1}`, turnNo, courtNo: i + 1, home: a, away: b, winner: null });
+function roundAutoEnsureSessionStats(playerName, statsRef) {
+  if (!statsRef[playerName]) {
+    statsRef[playerName] = { played: 0, rested: 0, lastTurnPlayed: null, restStreak: 0 };
+  }
+  return statsRef[playerName];
+}
+
+function roundAutoPickActivePlayers(eligiblePool, requiredPlayers, turnNo, statsRef) {
+  const sorted = [...eligiblePool].sort((a, b) => {
+    const sa = roundAutoEnsureSessionStats(a.name, statsRef);
+    const sb = roundAutoEnsureSessionStats(b.name, statsRef);
+    if (sa.played !== sb.played) return sa.played - sb.played;
+    if (sa.restStreak !== sb.restStreak) return sb.restStreak - sa.restStreak;
+    return Math.random() - 0.5;
+  });
+
+  const activePlayers = sorted.slice(0, requiredPlayers);
+  const restedPlayers = sorted.slice(requiredPlayers);
+
+  activePlayers.forEach(p => {
+    const stat = roundAutoEnsureSessionStats(p.name, statsRef);
+    stat.played += 1;
+    stat.lastTurnPlayed = turnNo;
+    stat.restStreak = 0;
+  });
+  restedPlayers.forEach(p => {
+    const stat = roundAutoEnsureSessionStats(p.name, statsRef);
+    stat.rested += 1;
+    stat.restStreak += 1;
+  });
+
+  return activePlayers;
+}
+
+function roundAutoPartnerPenalty(a, b) {
+  const histA = roundAutoState.partnerHistory?.[a.name] || [];
+  const histB = roundAutoState.partnerHistory?.[b.name] || [];
+  return (histA.includes(b.name) ? 1 : 0) + (histB.includes(a.name) ? 1 : 0);
+}
+
+function roundAutoPairByGender(playersList) {
+  const men = shuffleArray(playersList.filter(p => p.gender === 'M'));
+  const women = shuffleArray(playersList.filter(p => p.gender === 'F'));
+  const unknown = shuffleArray(playersList.filter(p => p.gender !== 'M' && p.gender !== 'F'));
+  men.push(...unknown);
+
+  const pairs = [];
+  if (roundAutoState.config.allowMixed) {
+    while (men.length && women.length) {
+      pairs.push([men.shift(), women.shift()]);
     }
+  }
+
+  const remain = shuffleArray([...men, ...women]);
+  while (remain.length >= 2) pairs.push([remain.shift(), remain.shift()]);
+  return pairs;
+}
+
+function roundAutoApplyPartnerSwap(pairs) {
+  for (let i = 0; i < pairs.length - 1; i += 1) {
+    for (let t = 0; t < 2; t += 1) {
+      const a = pairs[i][0];
+      const b = pairs[i][1];
+      const c = pairs[i + 1][0];
+      const d = pairs[i + 1][1];
+      const current = roundAutoPartnerPenalty(a, b) + roundAutoPartnerPenalty(c, d);
+      const swapped = roundAutoPartnerPenalty(a, d) + roundAutoPartnerPenalty(c, b);
+      if (swapped < current) {
+        pairs[i] = [a, d];
+        pairs[i + 1] = [c, b];
+      }
+    }
+  }
+}
+
+function roundAutoBuildTurnWithStats(turnNo, status, statsRef, mutateRealStats) {
+  const requiredPlayers = roundAutoState.courtCount * 4;
+  const eligiblePool = roundAutoGetSelectedEligiblePool();
+
+  if (eligiblePool.length < requiredPlayers) {
+    alert('참가자 수가 부족합니다. 코트 수를 줄이거나 참가자를 더 선택해주세요.');
+    return null;
+  }
+
+  const activePlayers = roundAutoPickActivePlayers(eligiblePool, requiredPlayers, turnNo, statsRef);
+  const pairs = roundAutoPairByGender(activePlayers);
+  roundAutoApplyPartnerSwap(pairs);
+
+  const matches = [];
+  for (let i = 0; i < roundAutoState.courtCount; i += 1) {
+    const teamHome = pairs[i * 2];
+    const teamAway = pairs[i * 2 + 1];
+    if (!teamHome || !teamAway) break;
+    matches.push({
+      id: `ra-${turnNo}-${i + 1}`,
+      turnNo,
+      courtNo: i + 1,
+      home: [teamHome[0].name, teamHome[1].name],
+      away: [teamAway[0].name, teamAway[1].name],
+      winner: null,
+    });
+  }
+
+  if (mutateRealStats) {
+    roundAutoState.sessionStats = statsRef;
+    matches.forEach(m => {
+      const [a, b] = m.home;
+      const [c, d] = m.away;
+      roundAutoState.partnerHistory[a] = [b, ...(roundAutoState.partnerHistory[a] || []).filter(x => x !== b)].slice(0, 4);
+      roundAutoState.partnerHistory[b] = [a, ...(roundAutoState.partnerHistory[b] || []).filter(x => x !== a)].slice(0, 4);
+      roundAutoState.partnerHistory[c] = [d, ...(roundAutoState.partnerHistory[c] || []).filter(x => x !== d)].slice(0, 4);
+      roundAutoState.partnerHistory[d] = [c, ...(roundAutoState.partnerHistory[d] || []).filter(x => x !== c)].slice(0, 4);
+    });
   }
 
   return { turnNo, matches, status };
@@ -184,10 +313,11 @@ function roundAutoRenderFilterUI() {
   if (!levelsWrap) return;
 
   levelsWrap.querySelectorAll('input[type="checkbox"]').forEach(chk => {
-    chk.checked = (roundAutoState.config.levels || []).includes(chk.value);
+    chk.checked = (roundAutoState.config.levelFilter || []).includes(chk.value);
     chk.onchange = () => {
       const selected = Array.from(levelsWrap.querySelectorAll('input[type="checkbox"]:checked')).map(el => el.value);
-      roundAutoState.config.levels = selected.length ? selected : ['A', 'B', 'C'];
+      roundAutoState.config.levelFilter = selected.length ? selected : ['A', 'B', 'C'];
+      saveRoundAutoState();
       initRoundAutoPlayerPool();
     };
   });
@@ -198,6 +328,7 @@ function roundAutoRenderFilterUI() {
     btn.style.color = active ? '#fff' : '#333';
     btn.onclick = () => {
       roundAutoState.config.gender = btn.dataset.gender;
+      saveRoundAutoState();
       initRoundAutoPlayerPool();
     };
   });
@@ -238,6 +369,7 @@ function roundAutoOpenAddGuestModal() {
       id: guestId,
       name: cleanName,
       gender: gender || 'M',
+      level: 'A',
       isGuest: true,
       source: 'guest',
       createdAt: Date.now(),
@@ -543,22 +675,17 @@ function roundAutoSetMiniTournamentWinner(matchId, side) {
 }
 
 function roundAutoGenerateNextTurn() {
-  const requiredPerCourt = roundAutoState.mode === 'single' ? 2 : 4;
-  const needed = roundAutoState.courtCount * requiredPerCourt;
-
-  if (roundAutoState.selectedPlayers.length < needed) {
-    gsAlert(`${roundAutoState.mode === 'single' ? '단식' : '복식'}은 코트 ${roundAutoState.courtCount}개 기준 최소 ${needed}명이 필요합니다.`);
-    return;
-  }
-
   if (!roundAutoState.turns.length) {
     const activeTurnNo = roundAutoState.turnNo + 1;
+    const realStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
+    const activeTurn = roundAutoBuildTurnWithStats(activeTurnNo, 'active', realStats, true);
+    if (!activeTurn) return;
+
     const previewTurnNo = activeTurnNo + 1;
-    roundAutoState.turns = [
-      roundAutoBuildTurn(activeTurnNo, 'active'),
-      roundAutoBuildTurn(previewTurnNo, 'preview')
-    ];
-    roundAutoState.turnNo = previewTurnNo;
+    const simulatedStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
+    const previewTurn = roundAutoBuildTurnWithStats(previewTurnNo, 'preview', simulatedStats, false);
+    roundAutoState.turns = previewTurn ? [activeTurn, previewTurn] : [activeTurn];
+    roundAutoState.turnNo = activeTurnNo;
   } else {
     const activeTurn = roundAutoState.turns.find(t => t.status === 'active');
     if (!activeTurn) {
@@ -572,12 +699,19 @@ function roundAutoGenerateNextTurn() {
     }
 
     activeTurn.status = 'done';
-    const previewTurn = roundAutoState.turns.find(t => t.status === 'preview');
-    if (previewTurn) previewTurn.status = 'active';
+    roundAutoState.turns = roundAutoState.turns.filter(t => t.status !== 'preview');
 
-    const newTurnNo = roundAutoState.turnNo + 1;
-    roundAutoState.turns.push(roundAutoBuildTurn(newTurnNo, 'preview'));
-    roundAutoState.turnNo = newTurnNo;
+    const newActiveTurnNo = roundAutoState.turnNo + 1;
+    const realStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
+    const newActiveTurn = roundAutoBuildTurnWithStats(newActiveTurnNo, 'active', realStats, true);
+    if (!newActiveTurn) return;
+    roundAutoState.turns.push(newActiveTurn);
+
+    const previewTurnNo = newActiveTurnNo + 1;
+    const simulatedStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
+    const previewTurn = roundAutoBuildTurnWithStats(previewTurnNo, 'preview', simulatedStats, false);
+    if (previewTurn) roundAutoState.turns.push(previewTurn);
+    roundAutoState.turnNo = newActiveTurnNo;
   }
 
   roundAutoRenderMatches();
