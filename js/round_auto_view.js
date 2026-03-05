@@ -31,6 +31,18 @@ function roundAutoPlayerLabel(name) {
   return name;
 }
 
+function roundAutoGenderIcon(player) {
+  return player?.gender === 'F'
+    ? '<span class="material-symbols-outlined" style="font-size:12px; color:#E8437A; vertical-align:middle;">female</span>'
+    : '<span class="material-symbols-outlined" style="font-size:12px; color:#3A7BD5; vertical-align:middle;">male</span>';
+}
+
+function roundAutoLargestPowerOfTwo(n) {
+  let p = 1;
+  while (p * 2 <= n) p *= 2;
+  return p;
+}
+
 function loadRoundAutoState() {
   try {
     const raw = localStorage.getItem(ROUND_AUTO_KEY);
@@ -79,13 +91,22 @@ function initRoundAutoPlayerPool() {
   const playerPool = document.getElementById('round-auto-player-pool');
   if (!playerPool) return;
 
+  let rankMap = {};
+  try {
+    rankMap = computeRanksByScoreOnly('score', 'wins', 'losses');
+  } catch (e) {
+    console.warn('[round-auto] computeRanksByScoreOnly failed:', e);
+  }
+
   const clubPlayers = Array.isArray(players)
     ? players
       .filter(p => !HIDDEN_PLAYERS.includes(p.name) && (!p.status || p.status === 'active'))
-      .map(p => p.name)
+      .map((p, idx) => ({ ...p, rank: rankMap[p.name] || p.rank || (idx + 1) }))
     : [];
 
-  roundAutoState.selectedPlayers = roundAutoState.selectedPlayers.filter(name => clubPlayers.includes(name));
+  const clubPlayerNames = clubPlayers.map(p => p.name);
+
+  roundAutoState.selectedPlayers = roundAutoState.selectedPlayers.filter(name => clubPlayerNames.includes(name));
 
   if (clubPlayers.length === 0) {
     playerPool.innerHTML = '<div style="font-size:12px; color:#999;">선수 데이터가 없습니다.</div>';
@@ -97,12 +118,28 @@ function initRoundAutoPlayerPool() {
 
   playerPool.innerHTML = `
     <div class="player-pool">
-      ${clubPlayers.map((name, idx) => {
+      ${clubPlayers.map((player, idx) => {
     const id = `round-auto-player-${idx}`;
-    const checked = roundAutoState.selectedPlayers.includes(name) ? 'checked' : '';
+    const labelText = `${roundAutoGenderIcon(player)}${roundAutoEscape(roundAutoPlayerLabel(player.name))}`;
+    if (typeof createPlayerOption === 'function') {
+      return createPlayerOption({
+        inputType: 'checkbox',
+        nameAttr: 'round-auto-player',
+        id,
+        value: player.name,
+        checked: roundAutoState.selectedPlayers.includes(player.name),
+        onClick: '',
+        labelText,
+        isGuest: !!player.isGuest,
+        showRank: true,
+        rankText: `${player.rank}위`
+      });
+    }
+    const fallbackText = `${player.gender === 'F' ? '♀' : '♂'} ${roundAutoEscape(roundAutoPlayerLabel(player.name))} (${player.rank}위)`;
+    const checked = roundAutoState.selectedPlayers.includes(player.name) ? 'checked' : '';
     return `
-          <input type="checkbox" id="${id}" class="p-chk" value="${roundAutoEscape(name)}" ${checked}>
-          <label for="${id}" class="p-label">${roundAutoEscape(roundAutoPlayerLabel(name))}</label>
+          <input type="checkbox" id="${id}" class="p-chk" value="${roundAutoEscape(player.name)}" ${checked}>
+          <label for="${id}" class="p-label">${fallbackText}</label>
         `;
   }).join('')}
     </div>
@@ -119,6 +156,95 @@ function initRoundAutoPlayerPool() {
   roundAutoRenderMatches();
   roundAutoRenderRanking();
   saveRoundAutoState();
+}
+
+function roundAutoToTournament() {
+  const standingsMap = {};
+  const teamStandingsMap = {};
+
+  const ensurePlayer = (name) => {
+    if (!standingsMap[name]) standingsMap[name] = { key: name, players: [name], wins: 0, losses: 0, matches: 0 };
+    return standingsMap[name];
+  };
+  const teamKeyOf = (team) => [...team].sort().join('|');
+  const ensureTeam = (team) => {
+    const key = teamKeyOf(team);
+    if (!teamStandingsMap[key]) teamStandingsMap[key] = { key, players: [...team], wins: 0, losses: 0, matches: 0 };
+    return teamStandingsMap[key];
+  };
+
+  roundAutoState.matches.forEach(match => {
+    if (!match || (match.winner !== 'home' && match.winner !== 'away')) return;
+
+    const homePlayers = Array.isArray(match.home) ? match.home : [match.home];
+    const awayPlayers = Array.isArray(match.away) ? match.away : [match.away];
+
+    if (roundAutoState.mode === 'double') {
+      const homeTeam = ensureTeam(homePlayers);
+      const awayTeam = ensureTeam(awayPlayers);
+      homeTeam.matches += 1;
+      awayTeam.matches += 1;
+      if (match.winner === 'home') {
+        homeTeam.wins += 1;
+        awayTeam.losses += 1;
+      } else {
+        awayTeam.wins += 1;
+        homeTeam.losses += 1;
+      }
+      return;
+    }
+
+    homePlayers.forEach(name => ensurePlayer(name).matches += 1);
+    awayPlayers.forEach(name => ensurePlayer(name).matches += 1);
+    if (match.winner === 'home') {
+      homePlayers.forEach(name => ensurePlayer(name).wins += 1);
+      awayPlayers.forEach(name => ensurePlayer(name).losses += 1);
+    } else {
+      awayPlayers.forEach(name => ensurePlayer(name).wins += 1);
+      homePlayers.forEach(name => ensurePlayer(name).losses += 1);
+    }
+  });
+
+  const rows = Object.values(roundAutoState.mode === 'double' ? teamStandingsMap : standingsMap)
+    .sort((a, b) => (b.wins - a.wins) || (a.losses - b.losses) || (b.matches - a.matches) || a.key.localeCompare(b.key));
+
+  if (!rows.length) {
+    gsAlert('토너먼트로 넘길 승/패 데이터가 없습니다. 먼저 승자를 선택해 주세요.');
+    return;
+  }
+
+  const bracketSize = roundAutoLargestPowerOfTwo(rows.length);
+  if (bracketSize < 2) {
+    gsAlert('토너먼트 참가 인원이 부족합니다.');
+    return;
+  }
+
+  const selectedEntities = rows.slice(0, bracketSize);
+  const selectedNames = roundAutoState.mode === 'double'
+    ? selectedEntities.flatMap(row => row.players)
+    : selectedEntities.map(row => row.players[0]);
+
+  showViewUI('tournament');
+
+  if (roundAutoState.mode === 'double') {
+    tType = 'double';
+    const doubleBtn = document.querySelector('#view-tournament .opt-row:nth-of-type(2) .opt-btn:last-child');
+    if (doubleBtn) setOpt('type', 'double', doubleBtn);
+    const manualBtn = document.querySelector('#view-tournament .opt-row:nth-of-type(1) .opt-btn:last-child');
+    if (manualBtn) setOpt('mode', 'manual', manualBtn);
+    manualPickOrder = [...selectedNames];
+  } else {
+    tType = 'single';
+    const singleBtn = document.querySelector('#view-tournament .opt-row:nth-of-type(2) .opt-btn:first-child');
+    if (singleBtn) setOpt('type', 'single', singleBtn);
+  }
+
+  document.querySelectorAll('#view-tournament .p-chk').forEach(chk => {
+    chk.checked = selectedNames.includes(chk.value);
+  });
+
+  upCnt();
+  renderManualTeamsPreview();
 }
 
 function roundAutoGenerateNextTurn() {
@@ -301,3 +427,4 @@ window.roundAutoRenderMatches = roundAutoRenderMatches;
 window.roundAutoRenderRanking = roundAutoRenderRanking;
 window.roundAutoReset = roundAutoReset;
 window.roundAutoViewOpen = roundAutoViewOpen;
+window.roundAutoToTournament = roundAutoToTournament;
