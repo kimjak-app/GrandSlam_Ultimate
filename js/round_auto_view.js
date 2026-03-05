@@ -1161,13 +1161,13 @@ async function roundAutoCommitTurnToGlobalLog(activeTurn) {
       };
     });
 
-    computeAll();
     const ok = await pushWithMatchLogAppend(newLogEntries);
     if (!ok) {
       players = playerSnapshot;
       computeAll();
       return;
     }
+    computeAll();
 
     decidedUncommitted.forEach((match, idx) => {
       match.committed = true;

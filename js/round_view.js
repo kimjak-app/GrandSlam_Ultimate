@@ -360,10 +360,8 @@ function roundViewSaveRoundResults() {
       }
     });
 
-    computeAll();
-
     pushWithMatchLogAppend(newLogEntries).then(ok => {
-      if (ok) { gsAlert('라운드 결과가 저장되었습니다!'); showView('game'); sync(); }
+      if (ok) { computeAll(); gsAlert('라운드 결과가 저장되었습니다!'); showView('game'); sync(); }
       else gsAlert('❌ 저장 실패! 네트워크 상태를 확인하고 다시 시도해주세요.');
     }).catch(e => {
       console.error('[round] saveRoundResults error:', e);
@@ -432,8 +430,8 @@ async function roundViewSaveRoundDataToLog(finishedMatches) {
     roundEngineApplyRoundScore(winner, loser, roundMode);
   });
 
-  computeAll();
   await pushWithMatchLogAppend(newLogEntries);
+  computeAll();
 }
 
 function roundViewOpenTournamentModal(rankedParticipants) {
@@ -642,13 +640,13 @@ function roundViewSetMiniTournamentWinner(matchId, side) {
 
       if (isPracticeMode !== 'practice') {
         const allLogEntries = miniTournamentMatches.filter(m => m._logEntry).map(m => m._logEntry);
-        computeAll();
         if (allLogEntries.length > 0) {
           pushWithMatchLogAppend(allLogEntries).then(ok => {
             if (!ok) console.warn('[round] mini-tournament log save failed');
-            else sync();
+            else { computeAll(); sync(); }
           });
         } else {
+          computeAll();
           pushDataOnly().then(() => sync());
         }
       }
