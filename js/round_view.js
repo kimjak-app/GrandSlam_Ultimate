@@ -81,7 +81,7 @@ function roundViewInitRoundPlayerPool() {
     html += createPlayerOption({
       inputType: 'checkbox', nameAttr: 'round-player', id: `round-p-${p.name}`,
       value: p.name, checked: false, onClick: 'updateRoundCount(); checkRoundGenButton();',
-      labelText: gIcon + displayName(p.name), isGuest: false, showRank: true, rankText: `${p.rank || (idx + 1)}위`
+      labelText: gIcon + displayNameWithLevel(p.name, p.level), isGuest: false, showRank: true, rankText: `${p.rank || (idx + 1)}위`
     });
   });
 
@@ -95,7 +95,7 @@ function roundViewInitRoundPlayerPool() {
       html += createPlayerOption({
         inputType: 'checkbox', nameAttr: 'round-player', id: `round-p-${p.name}`,
         value: p.name, checked: false, onClick: 'updateRoundCount(); checkRoundGenButton();',
-        labelText: displayName(p.name), isGuest: true, showRank: true, rankText: 'G'
+        labelText: displayNameWithLevel(p.name, p.level), isGuest: true, showRank: true, rankText: 'G'
       });
     });
   }
@@ -110,7 +110,7 @@ function roundViewInitRoundPlayerPool() {
       html += createPlayerOption({
         inputType: 'checkbox', nameAttr: 'round-player', id: `round-ot-${i}`,
         value: name, checked: false, onClick: 'updateRoundCount(); checkRoundGenButton();',
-        labelText: '[당일] ' + displayName(name), isGuest: true, showRank: false, rankText: ''
+        labelText: '[당일] ' + displayNameWithLevel(name, findPlayerLevel(name)), isGuest: true, showRank: false, rankText: ''
       });
     });
   }
@@ -425,8 +425,8 @@ function roundViewOpenTournamentModal(rankedParticipants) {
 
   list.innerHTML = rankedParticipants.map((participant, idx) => {
     const displayText = roundMode === 'single'
-      ? displayName(participant)
-      : `${displayName(participant[0])} & ${displayName(participant[1])}`;
+      ? displayNameWithLevel(participant, findPlayerLevel(participant))
+      : `${displayNameWithLevel(participant[0], findPlayerLevel(participant[0]))} & ${displayNameWithLevel(participant[1], findPlayerLevel(participant[1]))}`;
     const checked = idx < 4 ? 'checked' : '';
     return `
       <div class="modal-participant-item ${idx < 4 ? 'selected' : ''}" onclick="toggleModalParticipant(${idx})">
