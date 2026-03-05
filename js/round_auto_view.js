@@ -12,7 +12,7 @@ function roundAutoStorageKey(clubId) {
 function createRoundAutoInitialState() {
   return {
     mode: 'double',
-    eventType: 'doubles',
+    eventType: 'double',
     courtCount: 2,
     selectedPlayers: [],
     turns: [],
@@ -133,11 +133,25 @@ function roundAutoFlattenMatches({ includePreview = false } = {}) {
 }
 
 function roundAutoGetEventType() {
-  return roundAutoState.eventType === 'singles' ? 'singles' : 'doubles';
+  return roundAutoNormalizeEventType(roundAutoState.eventType);
 }
 
 function roundAutoIsSingles() {
-  return roundAutoGetEventType() === 'singles';
+  return roundAutoGetEventType() === 'single';
+}
+
+function roundAutoNormalizeEventType(type) {
+  if (type === 'single' || type === 'double') return type;
+  if (type === 'singles') return 'single';
+  if (type === 'doubles') return 'double';
+  return 'double';
+}
+
+function roundAutoWarnInvalidEventType(context, value) {
+  if (!DEBUG) return;
+  if (value !== 'single' && value !== 'double') {
+    console.warn(`[round-auto] invalid eventType at ${context}:`, value);
+  }
 }
 
 function roundAutoGetClubPlayers() {
@@ -200,15 +214,13 @@ function loadRoundAutoState() {
       return;
     }
 
-    const storedEventType = parsed.eventType === 'singles'
-      ? 'singles'
-      : (parsed.eventType === 'doubles' ? 'doubles' : (parsed.mode === 'single' ? 'singles' : 'doubles'));
+    const storedEventType = roundAutoNormalizeEventType(parsed.eventType || parsed.mode);
 
     roundAutoState = {
       ...initial,
       ...parsed,
       eventType: storedEventType,
-      mode: storedEventType === 'singles' ? 'single' : 'double',
+      mode: storedEventType,
       courtCount: Math.max(1, Number(parsed.courtCount) || initial.courtCount),
       selectedPlayers: Array.isArray(parsed.selectedPlayers) ? parsed.selectedPlayers : [],
       turns: Array.isArray(parsed.turns) ? parsed.turns : [],
@@ -655,13 +667,15 @@ function roundAutoRenderFilterUI() {
   });
 
   eventBtns.forEach(btn => {
-    const active = roundAutoGetEventType() === btn.dataset.eventType;
+    const buttonType = roundAutoNormalizeEventType(btn.dataset.eventType);
+    const active = roundAutoGetEventType() === buttonType;
     btn.style.background = active ? 'var(--wimbledon-sage)' : '#f3f4f6';
     btn.style.color = active ? '#fff' : '#333';
     btn.onclick = () => {
-      const eventType = btn.dataset.eventType === 'singles' ? 'singles' : 'doubles';
+      const eventType = roundAutoNormalizeEventType(btn.dataset.eventType);
+      roundAutoWarnInvalidEventType('event button click', btn.dataset.eventType);
       roundAutoState.eventType = eventType;
-      roundAutoState.mode = eventType === 'singles' ? 'single' : 'double';
+      roundAutoState.mode = eventType;
       saveRoundAutoState();
       roundAutoRenderFilterUI();
       roundAutoRenderMatches();
@@ -1090,7 +1104,8 @@ async function roundAutoCommitTurnToGlobalLog(activeTurn) {
   if (activeTurn.committedTurn) return;
   if (roundAutoState._commitInFlight) return;
 
-  const mode = roundAutoIsSingles() ? 'single' : 'double';
+  const mode = roundAutoNormalizeEventType(roundAutoState.eventType || roundAutoState.mode);
+  roundAutoWarnInvalidEventType('commit/applyScore', roundAutoState.eventType || roundAutoState.mode);
   const decidedUncommitted = activeTurn.matches.filter(m => {
     const decided = m && (m.winner === 'home' || m.winner === 'away');
     return decided && !m.committed;
@@ -1118,13 +1133,20 @@ async function roundAutoCommitTurnToGlobalLog(activeTurn) {
 
       roundEngineApplyRoundScore(winner, loser, mode);
 
+      const winnerTeam = mode === 'single'
+        ? [Array.isArray(winner) ? winner[0] : winner]
+        : (Array.isArray(winner) ? winner : [winner]);
+      const loserTeam = mode === 'single'
+        ? [Array.isArray(loser) ? loser[0] : loser]
+        : (Array.isArray(loser) ? loser : [loser]);
+
       return {
         id: logId,
         ts: now + idx,
         date: ds,
         type: mode,
-        home: Array.isArray(winner) ? winner : [winner],
-        away: Array.isArray(loser) ? loser : [loser],
+        home: winnerTeam,
+        away: loserTeam,
         winner: 'home',
         memo: 'round_auto',
       };
