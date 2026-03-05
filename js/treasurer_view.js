@@ -12,38 +12,68 @@
 // ----------------------------------------
 
 function addOneTimePlayer() {
-  const suggestions = players.filter(p => !p.isGuest && p.status !== 'inactive').map(p => p.name);
+  gsEditName('', ({ name, gender }) => {
+    const cleanName = (name || '').trim();
+    if (!cleanName) return;
+    if (oneTimePlayers.includes(cleanName)) { gsAlert('이미 있는 이름이에요!'); return; }
 
-  gsEditName('', name => {
-    name = (name || '').trim();
-    if (!name) return;
-    if (oneTimePlayers.includes(name)) { gsAlert('이미 있는 이름이에요!'); return; }
-
-    const existing = players.find(p => p.name === name);
+    const existing = players.find(p => p.name === cleanName);
     if (existing) {
       if (!existing.status || existing.status === 'active') {
         gsAlert('이미 정식 회원이에요! 풀에서 직접 선택해주세요.'); return;
       }
       if (existing.status === 'dormant') {
-        oneTimePlayers.push(name);
+        oneTimePlayers.push(cleanName);
         _refreshPools();
-        gsAlert(`💤 ${name} (휴면) 회원을 당일 참여자로 추가했어요.\n경기 기록은 정식 회원 기록에 반영됩니다.`);
+        gsAlert(`💤 ${cleanName} (휴면) 회원을 당일 참여자로 추가했어요.
+경기 기록은 정식 회원 기록에 반영됩니다.`);
         return;
       }
       if (existing.status === 'inactive') {
-        if (!players.find(p => p.name === name && p.isGuest)) {
-          players.push({ name, isGuest: true, gender: existing.gender || 'M', score: 0, wins: 0, losses: 0, _exMember: true });
+        if (!players.find(p => p.name === cleanName && p.isGuest)) {
+          players.push({ name: cleanName, isGuest: true, gender: existing.gender || gender || 'M', score: 0, wins: 0, losses: 0, _exMember: true });
         }
-        oneTimePlayers.push(name);
+        oneTimePlayers.push(cleanName);
         _refreshPools();
-        gsAlert(`🚪 ${name} (탈퇴) 회원을 당일 게스트로 추가했어요.\n게스트 참여 기록만 반영됩니다.`);
+        gsAlert(`🚪 ${cleanName} (탈퇴) 회원을 당일 게스트로 추가했어요.
+게스트 참여 기록만 반영됩니다.`);
         return;
       }
     }
 
-    oneTimePlayers.push(name);
+    const guestId = `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    players.push({
+      id: guestId,
+      name: cleanName,
+      isGuest: true,
+      isOneTime: true,
+      gender: gender || 'M',
+      level: 'A',
+      score: 0,
+      wins: 0,
+      losses: 0,
+      dScore: 0,
+      dWins: 0,
+      dLosses: 0,
+      sScore: 0,
+      sWins: 0,
+      sLosses: 0,
+      last: 0,
+      lastD: 0,
+      lastS: 0,
+      createdAt: Date.now(),
+    });
+
+    oneTimePlayers.push(cleanName);
     _refreshPools();
-  }, { title: '당일 참여자 추가', placeholder: '이름을 입력하세요', suggestions });
+  }, {
+    title: '당일 게스트 추가',
+    placeholder: '게스트 이름 입력',
+    suggestions: [],
+    hideSuggestions: true,
+    showGender: true,
+    returnObject: true,
+  });
 }
 
 function removeOneTimePlayer(name) {

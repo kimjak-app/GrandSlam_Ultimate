@@ -102,6 +102,7 @@ const HIDDEN_PLAYERS = ['1대2용', '1대2대결용'];
 
 // 당일 게스트 (세션 내 존재, 순위/통계 제외)
 var oneTimePlayers = [];
+var mvpHistory = { monthly: {}, weekly: {} };
 
 // 가상 1대2대결용 플레이어 객체
 const VIRTUAL_1V2_PLAYER = { name: '1대2대결용', isGuest: true, isVirtual: true, score: 0, wins: 0, losses: 0, dScore: 0, dWins: 0, dLosses: 0, sScore: 0, sWins: 0, sLosses: 0, last: 0, lastD: 0, lastS: 0 };

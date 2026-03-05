@@ -190,6 +190,7 @@ async function _doSync(clubId) {
     setStatus('');
 
     fetchFeeData().catch(e => console.warn('sync fetchFeeData error:', e));
+    fetchMvpHistory().catch(e => console.warn('sync fetchMvpHistory error:', e));
     setTimeout(applyAutofitAllTables, 0);
 
     await _syncRestoreLoggedPlayer(clubId);
@@ -298,6 +299,7 @@ async function pushPayload(payload) {
       matchLog = Array.from(byId.values()).sort((a, b) => Number(b.ts) - Number(a.ts));
     }
 
+    await pushMvpHistory();
     setStatus('');
     setTimeout(applyAutofitAllTables, 0);
     return true;
@@ -326,6 +328,49 @@ async function pushWithMatchLogAppend(logEntries) {
 
 function getLocalCourtKey()        { return 'grandslam_court_notices_' + getActiveClubId(); }
 function getLocalAnnouncementKey() { return 'grandslam_announcements_' + getActiveClubId(); }
+function getLocalMvpHistoryKey()   { return 'grandslam_mvp_history_' + getActiveClubId(); }
+
+function persistMvpHistoryLocal() {
+  try { localStorage.setItem(getLocalMvpHistoryKey(), JSON.stringify(mvpHistory || { monthly: {}, weekly: {} })); } catch (e) {}
+}
+
+async function fetchMvpHistory() {
+  if (!currentClub) return;
+  const cid = getActiveClubId();
+  try {
+    const doc = await _clubRef(cid).collection('settings').doc('mvpHistory').get();
+    if (doc.exists) {
+      const data = doc.data() || {};
+      mvpHistory = {
+        monthly: (data.monthly && typeof data.monthly === 'object') ? data.monthly : {},
+        weekly: (data.weekly && typeof data.weekly === 'object') ? data.weekly : {},
+      };
+      persistMvpHistoryLocal();
+      try { if (typeof renderStatsPlayerList === 'function') renderStatsPlayerList(); } catch (e) {}
+      return;
+    }
+  } catch (e) { console.warn('fetchMvpHistory error:', e); }
+  try {
+    mvpHistory = JSON.parse(localStorage.getItem(getLocalMvpHistoryKey())) || { monthly: {}, weekly: {} };
+  } catch (e) { mvpHistory = { monthly: {}, weekly: {} }; }
+  try { if (typeof renderStatsPlayerList === 'function') renderStatsPlayerList(); } catch (e) {}
+}
+
+async function pushMvpHistory() {
+  const cid = getActiveClubId();
+  if (!currentClub || !cid) return false;
+  try {
+    await _clubRef(cid).collection('settings').doc('mvpHistory').set({
+      monthly: (mvpHistory && mvpHistory.monthly) ? mvpHistory.monthly : {},
+      weekly: (mvpHistory && mvpHistory.weekly) ? mvpHistory.weekly : {},
+    });
+    persistMvpHistoryLocal();
+    return true;
+  } catch (e) {
+    console.warn('pushMvpHistory error:', e);
+    return false;
+  }
+}
 
 function persistCourtNoticesLocal() {
   try { localStorage.setItem(getLocalCourtKey(), JSON.stringify(courtNotices)); } catch (e) {}
@@ -482,13 +527,14 @@ async function exportBackup() {
     const clubId   = getActiveClubId() || 'default';
     const clubName = currentClub?.name || clubId;
 
-    const [playerSnap, logSnap, noticeDoc, feeDoc, financeDoc, exchangeSnap] = await Promise.all([
+    const [playerSnap, logSnap, noticeDoc, feeDoc, financeDoc, exchangeSnap, mvpDoc] = await Promise.all([
       _clubRef(clubId).collection('players').get(),
       _clubRef(clubId).collection('matchLog').orderBy('ts', 'desc').limit(500).get(),
       _clubRef(clubId).collection('settings').doc('notices').get(),
       _clubRef(clubId).collection('settings').doc('feeData').get(),
       _clubRef(clubId).collection('settings').doc('financeData').get(),
       _clubRef(clubId).collection('exchanges').get(),
+      _clubRef(clubId).collection('settings').doc('mvpHistory').get(),
     ]);
 
     const backupData = {
@@ -501,6 +547,7 @@ async function exportBackup() {
       monthlyFeeAmount: feeDoc.exists    ? (feeDoc.data().monthlyFeeAmount  || 0)  : 0,
       financeData:      financeDoc.exists ? (financeDoc.data().financeData  || []) : [],
       exchanges:        exchangeSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+      mvpHistory:       mvpDoc.exists ? (mvpDoc.data() || { monthly: {}, weekly: {} }) : { monthly: {}, weekly: {} },
     };
 
     const blob    = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
@@ -580,6 +627,16 @@ async function _doRestore(data) {
     const manualFinance = (data.financeData || []).filter(f => !f.auto);
     await _clubRef(clubId).collection('settings').doc('financeData').set({ financeData: manualFinance });
     financeData = manualFinance;
+
+    // mvpHistory 복원
+    await _clubRef(clubId).collection('settings').doc('mvpHistory').set({
+      monthly: data.mvpHistory?.monthly || {},
+      weekly: data.mvpHistory?.weekly || {},
+    });
+    mvpHistory = {
+      monthly: data.mvpHistory?.monthly || {},
+      weekly: data.mvpHistory?.weekly || {},
+    };
 
     // exchanges 복원
     if (Array.isArray(data.exchanges) && data.exchanges.length > 0) {

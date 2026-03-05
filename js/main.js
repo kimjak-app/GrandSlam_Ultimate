@@ -214,6 +214,57 @@ function _renderLockerRoom() {
   }
 }
 
+
+function _ensureMvpHistoryShape() {
+  if (!mvpHistory || typeof mvpHistory !== 'object') mvpHistory = {};
+  if (!mvpHistory.monthly || typeof mvpHistory.monthly !== 'object') mvpHistory.monthly = {};
+  if (!mvpHistory.weekly || typeof mvpHistory.weekly !== 'object') mvpHistory.weekly = {};
+}
+
+function _recordMonthlyMvp(monthKey, playerName) {
+  if (!monthKey || !playerName) return;
+  _ensureMvpHistoryShape();
+  const p = players.find(x => x.name === playerName) || {};
+  const prev = mvpHistory.monthly[monthKey];
+  const next = { key: monthKey, playerName, level: p.level || 'A', updatedAt: Date.now() };
+  if (prev && prev.playerName === next.playerName && prev.level === next.level) return;
+  mvpHistory.monthly[monthKey] = next;
+  if (typeof pushMvpHistory === 'function') pushMvpHistory();
+}
+
+function _weekOfMonthLabel(dateObj) {
+  const firstDay = new Date(dateObj.getFullYear(), dateObj.getMonth(), 1);
+  const offset = (firstDay.getDay() + 6) % 7;
+  const weekNo = Math.floor((dateObj.getDate() + offset - 1) / 7) + 1;
+  return `${dateObj.getMonth() + 1}월 ${weekNo}주`;
+}
+
+function _recordWeeklyMvp(refDateStr, playerName) {
+  if (!refDateStr || !playerName) return;
+  const d = new Date(refDateStr + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return;
+  const day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const weekKey = `${y}-${m}-${dd}`;
+
+  _ensureMvpHistoryShape();
+  const p = players.find(x => x.name === playerName) || {};
+  const next = {
+    key: weekKey,
+    playerName,
+    level: p.level || 'A',
+    label: _weekOfMonthLabel(d),
+    updatedAt: Date.now(),
+  };
+  const prev = mvpHistory.weekly[weekKey];
+  if (prev && prev.playerName === next.playerName && prev.level === next.level && prev.label === next.label) return;
+  mvpHistory.weekly[weekKey] = next;
+  if (typeof pushMvpHistory === 'function') pushMvpHistory();
+}
+
 function _renderClubStatus() {
   const el = id => document.getElementById(id);
   if (!Array.isArray(matchLog) || !Array.isArray(players)) return;
@@ -290,6 +341,7 @@ function _renderClubStatus() {
       const rate  = (ts.w+ts.l) > 0 ? Math.round(ts.w/(ts.w+ts.l)*100) : 0;
       el('clubTopPlayer').innerHTML = `<span class="material-symbols-outlined" style="font-size:28px; vertical-align:middle; margin-right:4px; color:#8B6914;">stars</span>${dname}<div style="font-size:13px;font-weight:600;color:#888;margin-top:4px;">${ts.w}승 ${ts.l}패 &nbsp;${rate}%</div>`;
       el('clubTopPlayerRow').style.display = 'block';
+      _recordMonthlyMvp(thisMonthStr, top[0]);
     }
   }
 
@@ -310,6 +362,8 @@ function _renderClubStatus() {
       const wLabelEl = el('clubWeekendPlayerRow').querySelector('div');
       if (wLabelEl) wLabelEl.textContent = `BEST PLAYER ${isThisWeek ? 'THIS WEEKEND' : 'LAST WEEKEND'}`;
       el('clubWeekendPlayerRow').style.display = 'block';
+      const weekRefDate = (isThisWeek ? mondayStr : lastMondayStr);
+      _recordWeeklyMvp(weekRefDate, wTop[0]);
       if (el('clubTopPlayerRow')) el('clubTopPlayerRow').style.display = 'block';
     }
   }
