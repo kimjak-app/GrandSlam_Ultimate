@@ -9,9 +9,15 @@ function createRoundAutoInitialState() {
     mode: 'double',
     courtCount: 2,
     selectedPlayers: [],
-    matches: [],
+    turns: [],
     history: { partners: {}, opponents: {}, playedCount: {} },
     turnNo: 0,
+    config: {
+      levels: ['A', 'B', 'C'],
+      gender: 'all',
+      allowMixed: true,
+    },
+    oneTimeGuests: [],
   };
 }
 
@@ -43,6 +49,40 @@ function roundAutoLargestPowerOfTwo(n) {
   return p;
 }
 
+function roundAutoFlattenMatches() {
+  return (roundAutoState.turns || []).flatMap(turn => Array.isArray(turn.matches) ? turn.matches : []);
+}
+
+function roundAutoGetClubPlayers() {
+  let rankMap = {};
+  try {
+    rankMap = computeRanksByScoreOnly('score', 'wins', 'losses');
+  } catch (e) {
+    console.warn('[round-auto] computeRanksByScoreOnly failed:', e);
+  }
+
+  return Array.isArray(players)
+    ? players
+      .filter(p => !HIDDEN_PLAYERS.includes(p.name) && (!p.status || p.status === 'active'))
+      .map((p, idx) => ({ ...p, rank: rankMap[p.name] || p.rank || (idx + 1) }))
+    : [];
+}
+
+function roundAutoGetFilteredClubPlayers() {
+  const cfg = roundAutoState.config || {};
+  return roundAutoGetClubPlayers().filter(p => {
+    const levelOk = Array.isArray(cfg.levels) ? cfg.levels.includes((p.level || 'A')) : true;
+    const genderOk = cfg.gender === 'all' || p.gender === cfg.gender;
+    return levelOk && genderOk;
+  });
+}
+
+function roundAutoGetFilteredGuests() {
+  const cfg = roundAutoState.config || {};
+  const guests = Array.isArray(roundAutoState.oneTimeGuests) ? roundAutoState.oneTimeGuests : [];
+  return guests.filter(g => cfg.gender === 'all' || g.gender === cfg.gender);
+}
+
 function loadRoundAutoState() {
   try {
     const raw = localStorage.getItem(ROUND_AUTO_KEY);
@@ -56,10 +96,31 @@ function loadRoundAutoState() {
       ...parsed,
       courtCount: Math.max(1, Number(parsed.courtCount) || initial.courtCount),
       selectedPlayers: Array.isArray(parsed.selectedPlayers) ? parsed.selectedPlayers : [],
-      matches: Array.isArray(parsed.matches) ? parsed.matches : [],
+      turns: Array.isArray(parsed.turns) ? parsed.turns : [],
       history: parsed.history && typeof parsed.history === 'object' ? parsed.history : initial.history,
       turnNo: Number(parsed.turnNo) || 0,
+      config: { ...initial.config, ...(parsed.config || {}) },
+      oneTimeGuests: Array.isArray(parsed.oneTimeGuests) ? parsed.oneTimeGuests : [],
     };
+
+    if (!roundAutoState.turns.length && Array.isArray(parsed.matches) && parsed.matches.length) {
+      const grouped = parsed.matches.reduce((acc, m) => {
+        if (!acc[m.turnNo]) acc[m.turnNo] = [];
+        acc[m.turnNo].push(m);
+        return acc;
+      }, {});
+      const turnNos = Object.keys(grouped).map(Number).sort((a, b) => a - b);
+      roundAutoState.turns = turnNos.map((turnNo, idx) => ({
+        turnNo,
+        matches: grouped[turnNo],
+        status: idx === turnNos.length - 1 ? 'active' : 'done',
+      }));
+      if (roundAutoState.turns.length === 1) {
+        roundAutoState.turnNo = Math.max(roundAutoState.turnNo, roundAutoState.turns[0].turnNo);
+        roundAutoState.turns.push(roundAutoBuildTurn(roundAutoState.turnNo + 1, 'preview'));
+        roundAutoState.turnNo += 1;
+      }
+    }
   } catch (e) {
     console.warn('[round-auto] state load failed:', e);
     roundAutoState = createRoundAutoInitialState();
@@ -72,6 +133,109 @@ function saveRoundAutoState() {
   } catch (e) {
     console.warn('[round-auto] state save failed:', e);
   }
+}
+
+function roundAutoBuildTurn(turnNo, status) {
+  const requiredPerCourt = roundAutoState.mode === 'single' ? 2 : 4;
+  const pool = shuffleArray([...roundAutoState.selectedPlayers]);
+  const matches = [];
+
+  for (let i = 0; i < roundAutoState.courtCount; i += 1) {
+    const start = i * requiredPerCourt;
+    const picked = pool.slice(start, start + requiredPerCourt);
+    if (picked.length < requiredPerCourt) break;
+
+    if (roundAutoState.mode === 'double') {
+      const [a, b, c, d] = picked;
+      if (!roundAutoState.config.allowMixed) {
+        const genders = [a, b, c, d].map(name => {
+          const member = roundAutoGetClubPlayers().find(p => p.name === name);
+          const guest = (roundAutoState.oneTimeGuests || []).find(g => g.name === name);
+          return member?.gender || guest?.gender || 'M';
+        });
+        const valid = (genders[0] === genders[2]) && (genders[1] === genders[3]);
+        if (!valid) {
+          continue;
+        }
+      }
+      matches.push({
+        id: `ra-${turnNo}-${i + 1}`,
+        turnNo,
+        courtNo: i + 1,
+        home: [a, c],
+        away: [b, d],
+        winner: null,
+      });
+    } else {
+      const [a, b] = picked;
+      matches.push({ id: `ra-${turnNo}-${i + 1}`, turnNo, courtNo: i + 1, home: a, away: b, winner: null });
+    }
+  }
+
+  return { turnNo, matches, status };
+}
+
+function roundAutoRenderFilterUI() {
+  const levelsWrap = document.getElementById('round-auto-level-filters');
+  const genderBtns = document.querySelectorAll('#round-auto-gender-filters button[data-gender]');
+  const mixedBtn = document.getElementById('round-auto-mixed-toggle');
+  if (!levelsWrap) return;
+
+  levelsWrap.querySelectorAll('input[type="checkbox"]').forEach(chk => {
+    chk.checked = (roundAutoState.config.levels || []).includes(chk.value);
+    chk.onchange = () => {
+      const selected = Array.from(levelsWrap.querySelectorAll('input[type="checkbox"]:checked')).map(el => el.value);
+      roundAutoState.config.levels = selected.length ? selected : ['A', 'B', 'C'];
+      initRoundAutoPlayerPool();
+    };
+  });
+
+  genderBtns.forEach(btn => {
+    const active = (roundAutoState.config.gender || 'all') === btn.dataset.gender;
+    btn.style.background = active ? 'var(--wimbledon-sage)' : '#f3f4f6';
+    btn.style.color = active ? '#fff' : '#333';
+    btn.onclick = () => {
+      roundAutoState.config.gender = btn.dataset.gender;
+      initRoundAutoPlayerPool();
+    };
+  });
+
+  if (mixedBtn) {
+    mixedBtn.textContent = `혼복 허용: ${(roundAutoState.config.allowMixed ? 'ON' : 'OFF')}`;
+    mixedBtn.style.background = roundAutoState.config.allowMixed ? 'var(--wimbledon-sage)' : '#8E8E93';
+    mixedBtn.onclick = () => {
+      roundAutoState.config.allowMixed = !roundAutoState.config.allowMixed;
+      roundAutoRenderFilterUI();
+      saveRoundAutoState();
+    };
+  }
+}
+
+function roundAutoOpenAddGuestModal() {
+  gsEditName('', ({ name, gender }) => {
+    const cleanName = (name || '').trim();
+    if (!cleanName) return;
+    const clubNames = roundAutoGetClubPlayers().map(p => p.name);
+    const guestNames = (roundAutoState.oneTimeGuests || []).map(g => g.name);
+    if (clubNames.includes(cleanName)) {
+      gsAlert('이미 정식 회원입니다. 참가자 풀에서 선택해 주세요.');
+      return;
+    }
+    if (guestNames.includes(cleanName)) {
+      gsAlert('이미 추가된 게스트입니다.');
+      return;
+    }
+    roundAutoState.oneTimeGuests.push({ name: cleanName, gender: gender || 'M', createdAt: Date.now() });
+    roundAutoState.selectedPlayers.push(cleanName);
+    initRoundAutoPlayerPool();
+  }, {
+    title: '당일 게스트 추가',
+    placeholder: '게스트 이름 입력',
+    suggestions: [],
+    hideSuggestions: true,
+    showGender: true,
+    returnObject: true,
+  });
 }
 
 function initRoundAutoPlayerPool() {
@@ -88,28 +252,18 @@ function initRoundAutoPlayerPool() {
     };
   }
 
+  roundAutoRenderFilterUI();
+
+  const filteredClubPlayers = roundAutoGetFilteredClubPlayers();
+  const filteredGuests = roundAutoGetFilteredGuests();
+  const availableNames = [...filteredClubPlayers.map(p => p.name), ...filteredGuests.map(g => g.name)];
+  roundAutoState.selectedPlayers = roundAutoState.selectedPlayers.filter(name => availableNames.includes(name));
+
   const playerPool = document.getElementById('round-auto-player-pool');
   if (!playerPool) return;
 
-  let rankMap = {};
-  try {
-    rankMap = computeRanksByScoreOnly('score', 'wins', 'losses');
-  } catch (e) {
-    console.warn('[round-auto] computeRanksByScoreOnly failed:', e);
-  }
-
-  const clubPlayers = Array.isArray(players)
-    ? players
-      .filter(p => !HIDDEN_PLAYERS.includes(p.name) && (!p.status || p.status === 'active'))
-      .map((p, idx) => ({ ...p, rank: rankMap[p.name] || p.rank || (idx + 1) }))
-    : [];
-
-  const clubPlayerNames = clubPlayers.map(p => p.name);
-
-  roundAutoState.selectedPlayers = roundAutoState.selectedPlayers.filter(name => clubPlayerNames.includes(name));
-
-  if (clubPlayers.length === 0) {
-    playerPool.innerHTML = '<div style="font-size:12px; color:#999;">선수 데이터가 없습니다.</div>';
+  if (availableNames.length === 0) {
+    playerPool.innerHTML = '<div style="font-size:12px; color:#999;">조건에 맞는 참가자가 없습니다.</div>';
     roundAutoRenderMatches();
     roundAutoRenderRanking();
     saveRoundAutoState();
@@ -118,7 +272,7 @@ function initRoundAutoPlayerPool() {
 
   playerPool.innerHTML = `
     <div class="player-pool">
-      ${clubPlayers.map((player, idx) => {
+      ${filteredClubPlayers.map((player, idx) => {
     const id = `round-auto-player-${idx}`;
     const labelText = `${roundAutoGenderIcon(player)}${roundAutoEscape(roundAutoPlayerLabel(player.name))}`;
     if (typeof createPlayerOption === 'function') {
@@ -130,18 +284,30 @@ function initRoundAutoPlayerPool() {
         checked: roundAutoState.selectedPlayers.includes(player.name),
         onClick: '',
         labelText,
-        isGuest: !!player.isGuest,
+        isGuest: false,
         showRank: true,
         rankText: `${player.rank}위`
       });
     }
-    const fallbackText = `${player.gender === 'F' ? '♀' : '♂'} ${roundAutoEscape(roundAutoPlayerLabel(player.name))} (${player.rank}위)`;
-    const checked = roundAutoState.selectedPlayers.includes(player.name) ? 'checked' : '';
-    return `
-          <input type="checkbox" id="${id}" class="p-chk" value="${roundAutoEscape(player.name)}" ${checked}>
-          <label for="${id}" class="p-label">${fallbackText}</label>
-        `;
+    return '';
   }).join('')}
+    </div>
+    <div id="round-auto-guests-wrap" style="margin-top:12px; border-top:1px dashed #ddd; padding-top:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <div style="font-size:13px; font-weight:700; color:#666;">당일 게스트</div>
+        <button type="button" class="opt-btn" onclick="roundAutoOpenAddGuestModal()" style="margin:0;">+ 게스트 추가</button>
+      </div>
+      <div class="player-pool" id="round-auto-guest-pool">
+        ${filteredGuests.length ? filteredGuests.map((guest, idx) => {
+    const id = `round-auto-guest-${idx}`;
+    const checked = roundAutoState.selectedPlayers.includes(guest.name);
+    return createPlayerOption({
+      inputType: 'checkbox', nameAttr: 'round-auto-player', id, value: guest.name,
+      checked, onClick: '', labelText: `${roundAutoGenderIcon(guest)}[당일] ${roundAutoEscape(guest.name)}`,
+      isGuest: true, showRank: false, rankText: ''
+    });
+  }).join('') : '<div style="font-size:12px; color:#999;">당일 게스트가 없습니다.</div>'}
+      </div>
     </div>
   `;
 
@@ -173,7 +339,7 @@ function roundAutoToTournament() {
     return teamStandingsMap[key];
   };
 
-  roundAutoState.matches.forEach(match => {
+  roundAutoFlattenMatches().forEach(match => {
     if (!match || (match.winner !== 'home' && match.winner !== 'away')) return;
 
     const homePlayers = Array.isArray(match.home) ? match.home : [match.home];
@@ -256,36 +422,33 @@ function roundAutoGenerateNextTurn() {
     return;
   }
 
-  roundAutoState.turnNo += 1;
-  const shuffled = shuffleArray([...roundAutoState.selectedPlayers]);
-
-  for (let i = 0; i < roundAutoState.courtCount; i += 1) {
-    const start = i * requiredPerCourt;
-    const picked = shuffled.slice(start, start + requiredPerCourt);
-
-    if (roundAutoState.mode === 'double') {
-      const [a, b, c, d] = picked;
-      const match = {
-        id: `ra-${roundAutoState.turnNo}-${i + 1}`,
-        turnNo: roundAutoState.turnNo,
-        courtNo: i + 1,
-        home: [a, c],
-        away: [b, d],
-        winner: null,
-      };
-      roundAutoState.matches.push(match);
-    } else {
-      const [a, b] = picked;
-      const match = {
-        id: `ra-${roundAutoState.turnNo}-${i + 1}`,
-        turnNo: roundAutoState.turnNo,
-        courtNo: i + 1,
-        home: a,
-        away: b,
-        winner: null,
-      };
-      roundAutoState.matches.push(match);
+  if (!roundAutoState.turns.length) {
+    const activeTurnNo = roundAutoState.turnNo + 1;
+    const previewTurnNo = activeTurnNo + 1;
+    roundAutoState.turns = [
+      roundAutoBuildTurn(activeTurnNo, 'active'),
+      roundAutoBuildTurn(previewTurnNo, 'preview')
+    ];
+    roundAutoState.turnNo = previewTurnNo;
+  } else {
+    const activeTurn = roundAutoState.turns.find(t => t.status === 'active');
+    if (!activeTurn) {
+      gsAlert('활성 턴 정보가 없습니다. 초기화 후 다시 시도해 주세요.');
+      return;
     }
+    const allDone = (activeTurn.matches || []).every(m => m.winner === 'home' || m.winner === 'away');
+    if (!allDone) {
+      gsAlert('승자 먼저 체크');
+      return;
+    }
+
+    activeTurn.status = 'done';
+    const previewTurn = roundAutoState.turns.find(t => t.status === 'preview');
+    if (previewTurn) previewTurn.status = 'active';
+
+    const newTurnNo = roundAutoState.turnNo + 1;
+    roundAutoState.turns.push(roundAutoBuildTurn(newTurnNo, 'preview'));
+    roundAutoState.turnNo = newTurnNo;
   }
 
   roundAutoRenderMatches();
@@ -294,9 +457,13 @@ function roundAutoGenerateNextTurn() {
 }
 
 function roundAutoSetWinner(matchId, side) {
-  const match = roundAutoState.matches.find(m => m.id === matchId);
-  if (!match) return;
-  match.winner = match.winner === side ? null : side;
+  for (const turn of roundAutoState.turns || []) {
+    const match = (turn.matches || []).find(m => m.id === matchId);
+    if (match) {
+      match.winner = match.winner === side ? null : side;
+      break;
+    }
+  }
   roundAutoRenderMatches();
   roundAutoRenderRanking();
   saveRoundAutoState();
@@ -306,29 +473,30 @@ function roundAutoRenderMatches() {
   const list = document.getElementById('round-auto-match-list');
   if (!list) return;
 
-  if (!roundAutoState.matches.length) {
+  const turns = (roundAutoState.turns || []).filter(t => t.status === 'active' || t.status === 'preview');
+
+  if (!turns.length) {
     list.innerHTML = '<div style="font-size:12px; color:#999; text-align:center; padding:10px;">생성된 매치가 없습니다.</div>';
     return;
   }
 
-  const grouped = roundAutoState.matches.reduce((acc, match) => {
-    if (!acc[match.turnNo]) acc[match.turnNo] = [];
-    acc[match.turnNo].push(match);
-    return acc;
-  }, {});
-
-  const turns = Object.keys(grouped).map(Number).sort((a, b) => a - b);
-
-  list.innerHTML = turns.map(turnNo => {
-    const matches = grouped[turnNo].sort((a, b) => a.courtNo - b.courtNo);
+  list.innerHTML = turns.map(turn => {
+    const matches = (turn.matches || []).sort((a, b) => a.courtNo - b.courtNo);
+    const turnBadge = turn.status === 'active' ? '진행중' : '미리보기';
+    const badgeBg = turn.status === 'active' ? 'var(--wimbledon-sage)' : '#6b7280';
     return `
       <div style="margin-bottom:16px;">
-        <div style="font-weight:700; font-size:13px; color:var(--wimbledon-sage); margin-bottom:8px;">TURN ${turnNo}</div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+          <div style="font-weight:700; font-size:13px; color:var(--wimbledon-sage);">TURN ${turn.turnNo}</div>
+          <span style="font-size:11px; color:#fff; background:${badgeBg}; border-radius:999px; padding:3px 8px;">${turnBadge}</span>
+        </div>
         ${matches.map(match => {
       const home = Array.isArray(match.home) ? match.home.map(roundAutoPlayerLabel).join(' & ') : roundAutoPlayerLabel(match.home);
       const away = Array.isArray(match.away) ? match.away.map(roundAutoPlayerLabel).join(' & ') : roundAutoPlayerLabel(match.away);
+      const disabled = turn.status === 'preview' ? 'opacity:0.8;' : '';
+      const disableAttr = turn.status === 'preview' ? 'disabled' : '';
       return `
-            <div class="team-box" style="padding:12px; margin-bottom:8px;">
+            <div class="team-box" style="padding:12px; margin-bottom:8px; ${disabled}">
               <div style="font-size:11px; color:#888; margin-bottom:8px;">코트 ${match.courtNo}</div>
               <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
                 <div style="flex:1; font-size:13px;">${roundAutoEscape(home)}</div>
@@ -336,9 +504,9 @@ function roundAutoRenderMatches() {
                 <div style="flex:1; font-size:13px; text-align:right;">${roundAutoEscape(away)}</div>
               </div>
               <div style="display:flex; gap:8px;">
-                <button class="opt-btn" onclick="roundAutoSetWinner('${match.id}','home')"
+                <button class="opt-btn" onclick="roundAutoSetWinner('${match.id}','home')" ${disableAttr}
                   style="flex:1; ${match.winner === 'home' ? 'background:var(--wimbledon-sage); color:white;' : ''}">HOME 승</button>
-                <button class="opt-btn" onclick="roundAutoSetWinner('${match.id}','away')"
+                <button class="opt-btn" onclick="roundAutoSetWinner('${match.id}','away')" ${disableAttr}
                   style="flex:1; ${match.winner === 'away' ? 'background:var(--wimbledon-sage); color:white;' : ''}">AWAY 승</button>
               </div>
             </div>
@@ -359,7 +527,7 @@ function roundAutoRenderRanking() {
     return standingsMap[name];
   };
 
-  roundAutoState.matches
+  roundAutoFlattenMatches()
     .filter(match => match.winner === 'home' || match.winner === 'away')
     .forEach(match => {
       const homePlayers = Array.isArray(match.home) ? match.home : [match.home];
@@ -428,3 +596,4 @@ window.roundAutoRenderRanking = roundAutoRenderRanking;
 window.roundAutoReset = roundAutoReset;
 window.roundAutoViewOpen = roundAutoViewOpen;
 window.roundAutoToTournament = roundAutoToTournament;
+window.roundAutoOpenAddGuestModal = roundAutoOpenAddGuestModal;

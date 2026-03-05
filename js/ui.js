@@ -128,13 +128,38 @@ function gsEditName(defaultVal, cb, options) {
   const inputEl = $('gsEditNameInput');
   inputEl.value = defaultVal || '';
   if (options && options.placeholder) inputEl.placeholder = options.placeholder;
-  // ✅ v4.80: title 옵션 지원
   const titleEl = document.getElementById('gsEditNameTitle');
   if (titleEl) titleEl.textContent = (options && options.title) ? options.title : '실명 대조';
-  $('gsEditNameModal').style.display = 'flex';
-  _gsEditNameCallback = cb || null;
 
-  // ✅ v4.23: 실시간 추천 리스트
+  const genderRow = $('gsEditNameGenderRow');
+  const genderM = $('gsEditNameGenderM');
+  const genderF = $('gsEditNameGenderF');
+  let selectedGender = (options && options.defaultGender) || 'M';
+  const setGenderBtn = (btn, active) => {
+    if (!btn) return;
+    btn.style.background = active ? 'var(--wimbledon-sage)' : '#f3f4f6';
+    btn.style.color = active ? '#fff' : '#333';
+    btn.style.borderColor = active ? 'var(--wimbledon-sage)' : '#ddd';
+  };
+  if (genderRow) {
+    genderRow.style.display = (options && options.showGender) ? 'flex' : 'none';
+    if (options && options.showGender) {
+      setGenderBtn(genderM, selectedGender === 'M');
+      setGenderBtn(genderF, selectedGender === 'F');
+      if (genderM) genderM.onclick = () => { selectedGender = 'M'; setGenderBtn(genderM, true); setGenderBtn(genderF, false); };
+      if (genderF) genderF.onclick = () => { selectedGender = 'F'; setGenderBtn(genderM, false); setGenderBtn(genderF, true); };
+    }
+  }
+
+  $('gsEditNameModal').style.display = 'flex';
+
+  _gsEditNameCallback = (val) => {
+    if (cb) {
+      if (options && options.returnObject) cb({ name: val, gender: selectedGender });
+      else cb(val);
+    }
+  };
+
   let suggestionsEl = $('gsEditNameSuggestions');
   if (!suggestionsEl) {
     suggestionsEl = document.createElement('div');
@@ -142,15 +167,19 @@ function gsEditName(defaultVal, cb, options) {
     suggestionsEl.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; max-height:120px; overflow-y:auto;';
     inputEl.parentNode.insertBefore(suggestionsEl, inputEl.nextSibling);
   }
+
+  const hideSuggestions = !!(options && options.hideSuggestions);
+  suggestionsEl.style.display = hideSuggestions ? 'none' : 'flex';
   suggestionsEl.innerHTML = '';
 
   const names = (options && options.suggestions) ? options.suggestions : [];
   function renderSuggestions(query) {
+    if (hideSuggestions) return;
     const filtered = query
       ? names.filter(n => n.includes(query))
       : names;
     suggestionsEl.innerHTML = filtered.map(n =>
-      `<button type="button" onclick="document.getElementById('gsEditNameInput').value='${n.replace(/'/g, "\\'")}'; document.getElementById('gsEditNameSuggestions').querySelectorAll('button').forEach(b=>b.style.background='#f0f0f0'); this.style.background='#d0e8ff';"
+      `<button type="button" onclick="document.getElementById('gsEditNameInput').value='${n.replace(/'/g, "\'")}'; document.getElementById('gsEditNameSuggestions').querySelectorAll('button').forEach(b=>b.style.background='#f0f0f0'); this.style.background='#d0e8ff';"
           style="padding:5px 10px; border:1px solid #ddd; border-radius:20px; background:#f0f0f0; font-size:12px; cursor:pointer; white-space:nowrap;">${n}</button>`
     ).join('');
   }
