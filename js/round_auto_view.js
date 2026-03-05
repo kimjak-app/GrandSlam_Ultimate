@@ -37,7 +37,9 @@ function roundAutoEscape(text) {
     .replace(/'/g, '&#39;');
 }
 
-function roundAutoPlayerLabel(name) {
+function roundAutoPlayerLabel(name, level) {
+  const normalizedLevel = typeof level === 'string' ? level : '';
+  if (typeof displayNameWithLevel === 'function') return displayNameWithLevel(name, normalizedLevel);
   if (typeof displayName === 'function') return displayName(name);
   return name;
 }
@@ -428,7 +430,7 @@ function initRoundAutoPlayerPool() {
     <div class="player-pool">
       ${filteredClubPlayers.map((player, idx) => {
     const id = `round-auto-player-${idx}`;
-    const labelText = `${roundAutoGenderIcon(player)}${roundAutoEscape(roundAutoPlayerLabel(player.name))}`;
+    const labelText = `${roundAutoGenderIcon(player)}${roundAutoPlayerLabel(player.name, player.level)}`;
     if (typeof createPlayerOption === 'function') {
       return createPlayerOption({
         inputType: 'checkbox',
@@ -457,7 +459,7 @@ function initRoundAutoPlayerPool() {
     const checked = roundAutoState.selectedPlayers.includes(guest.name);
     return createPlayerOption({
       inputType: 'checkbox', nameAttr: 'round-auto-player', id, value: guest.name,
-      checked, onClick: '', labelText: `${roundAutoGenderIcon(guest)}[당일] ${roundAutoEscape(guest.name)}`,
+      checked, onClick: '', labelText: `${roundAutoGenderIcon(guest)}[당일] ${roundAutoPlayerLabel(guest.name, guest.level)}`,
       isGuest: true, showRank: false, rankText: ''
     });
   }).join('') : '<div style="font-size:12px; color:#999;">당일 게스트가 없습니다.</div>'}
@@ -482,8 +484,8 @@ function initRoundAutoPlayerPool() {
 function roundAutoDisplayParticipant(participant) {
   const names = Array.isArray(participant) ? participant : [participant];
   return roundAutoState.mode === 'single'
-    ? roundAutoPlayerLabel(names[0])
-    : `${roundAutoPlayerLabel(names[0])} & ${roundAutoPlayerLabel(names[1])}`;
+    ? roundAutoPlayerLabel(names[0], findPlayerLevel(names[0]))
+    : `${roundAutoPlayerLabel(names[0], findPlayerLevel(names[0]))} & ${roundAutoPlayerLabel(names[1], findPlayerLevel(names[1]))}`;
 }
 
 function roundAutoTeamKey(playersList) {

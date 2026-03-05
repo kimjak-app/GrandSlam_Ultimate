@@ -115,6 +115,19 @@ function displayName(name) {
   return escapeHtml(name);
 }
 
+function displayNameWithLevel(name, level) {
+  const safeName = displayName(name);
+  const lv = (typeof level === 'string' ? level : String(level || '')).trim();
+  return lv ? `${safeName}(${escapeHtml(lv)})` : safeName;
+}
+
+function findPlayerLevel(name) {
+  if (!Array.isArray(players)) return '';
+  const player = players.find(p => p && p.name === name);
+  if (!player || player.level == null) return '';
+  return String(player.level).trim();
+}
+
 function shuffleArray(array) {
   const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
