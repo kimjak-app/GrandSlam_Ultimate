@@ -216,19 +216,38 @@ function roundAutoRenderFilterUI() {
 function roundAutoOpenAddGuestModal() {
   gsEditName('', ({ name, gender }) => {
     const cleanName = (name || '').trim();
-    if (!cleanName) return;
+    if (!cleanName) {
+      alert('이름을 입력해줘');
+      return;
+    }
+
     const clubNames = roundAutoGetClubPlayers().map(p => p.name);
-    const guestNames = (roundAutoState.oneTimeGuests || []).map(g => g.name);
     if (clubNames.includes(cleanName)) {
-      gsAlert('이미 정식 회원입니다. 참가자 풀에서 선택해 주세요.');
+      alert('기존 회원과 이름이 같아. 다른 이름으로 해줘');
       return;
     }
+
+    const guestNames = (roundAutoState.oneTimeGuests || []).map(g => g.name);
     if (guestNames.includes(cleanName)) {
-      gsAlert('이미 추가된 게스트입니다.');
+      alert('이미 추가된 게스트야');
       return;
     }
-    roundAutoState.oneTimeGuests.push({ name: cleanName, gender: gender || 'M', createdAt: Date.now() });
-    roundAutoState.selectedPlayers.push(cleanName);
+
+    const guestId = `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    roundAutoState.oneTimeGuests.push({
+      id: guestId,
+      name: cleanName,
+      gender: gender || 'M',
+      isGuest: true,
+      source: 'guest',
+      createdAt: Date.now(),
+    });
+
+    if (!roundAutoState.selectedPlayers.includes(cleanName)) {
+      roundAutoState.selectedPlayers.push(cleanName);
+    }
+
+    saveRoundAutoState();
     initRoundAutoPlayerPool();
   }, {
     title: '당일 게스트 추가',
@@ -239,6 +258,7 @@ function roundAutoOpenAddGuestModal() {
     returnObject: true,
   });
 }
+
 
 function initRoundAutoPlayerPool() {
   loadRoundAutoState();
@@ -522,48 +542,6 @@ function roundAutoSetMiniTournamentWinner(matchId, side) {
   });
 }
 
-function roundAutoToTournament() {
-  const rows = roundAutoComputeSessionStandings();
-
-  if (!rows.length) {
-    gsAlert('토너먼트로 넘길 승/패 데이터가 없습니다. 먼저 승자를 선택해 주세요.');
-    return;
-  }
-
-  const bracketSize = roundAutoLargestPowerOfTwo(rows.length);
-  if (bracketSize < 2) {
-    gsAlert('토너먼트 참가 인원이 부족합니다.');
-    return;
-  }
-
-  const selectedEntities = rows.slice(0, bracketSize);
-  const selectedNames = roundAutoState.mode === 'double'
-    ? selectedEntities.flatMap(row => row.players)
-    : selectedEntities.map(row => row.players[0]);
-
-  showViewUI('tournament');
-
-  if (roundAutoState.mode === 'double') {
-    tType = 'double';
-    const doubleBtn = document.querySelector('#view-tournament .opt-row:nth-of-type(2) .opt-btn:last-child');
-    if (doubleBtn) setOpt('type', 'double', doubleBtn);
-    const manualBtn = document.querySelector('#view-tournament .opt-row:nth-of-type(1) .opt-btn:last-child');
-    if (manualBtn) setOpt('mode', 'manual', manualBtn);
-    manualPickOrder = [...selectedNames];
-  } else {
-    tType = 'single';
-    const singleBtn = document.querySelector('#view-tournament .opt-row:nth-of-type(2) .opt-btn:first-child');
-    if (singleBtn) setOpt('type', 'single', singleBtn);
-  }
-
-  document.querySelectorAll('#view-tournament .p-chk').forEach(chk => {
-    chk.checked = selectedNames.includes(chk.value);
-  });
-
-  upCnt();
-  renderManualTeamsPreview();
-}
-
 function roundAutoGenerateNextTurn() {
   const requiredPerCourt = roundAutoState.mode === 'single' ? 2 : 4;
   const needed = roundAutoState.courtCount * requiredPerCourt;
@@ -699,16 +677,11 @@ function roundAutoRenderMatches() {
       return `
             <div class="team-box" style="padding:12px; margin-bottom:8px; ${disabled}">
               <div style="font-size:11px; color:#888; margin-bottom:8px;">코트 ${match.courtNo}</div>
-              <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-                <div style="flex:1; font-size:13px;">${roundAutoEscape(home)}</div>
-                <div style="font-size:11px; color:#888;">vs</div>
-                <div style="flex:1; font-size:13px; text-align:right;">${roundAutoEscape(away)}</div>
-              </div>
               <div style="display:flex; gap:8px;">
                 <button class="opt-btn" onclick="roundAutoSetWinner('${match.id}','home')" ${disableAttr}
-                  style="flex:1; ${match.winner === 'home' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${roundAutoEscape(home)} 승</button>
+                  style="flex:1; ${match.winner === 'home' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${roundAutoEscape(home)}</button>
                 <button class="opt-btn" onclick="roundAutoSetWinner('${match.id}','away')" ${disableAttr}
-                  style="flex:1; ${match.winner === 'away' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${roundAutoEscape(away)} 승</button>
+                  style="flex:1; ${match.winner === 'away' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${roundAutoEscape(away)}</button>
               </div>
             </div>
           `;
@@ -773,7 +746,6 @@ window.roundAutoRenderMatches = roundAutoRenderMatches;
 window.roundAutoRenderRanking = roundAutoRenderRanking;
 window.roundAutoReset = roundAutoReset;
 window.roundAutoViewOpen = roundAutoViewOpen;
-window.roundAutoToTournament = roundAutoToTournament;
 window.roundAutoOpenAddGuestModal = roundAutoOpenAddGuestModal;
 window.roundAutoComputeSessionStandings = roundAutoComputeSessionStandings;
 window.roundAutoOpenMiniTournamentModal = roundAutoOpenMiniTournamentModal;
