@@ -217,5 +217,20 @@ function compareLegacyVsEngine() {
 }
 
 window.computeStats = computeStats;
+
+function getStatsEngine(opts = {}) {
+  const engine = computeStats(window.matchLog, window.players, opts);
+  window.statsEngine = engine;
+  return engine;
+}
+
+function getPlayerStats(name, opts = {}) {
+  if (!name) return _statsInitPlayer();
+  const engine = getStatsEngine(opts);
+  return (engine.players && engine.players[name]) || _statsInitPlayer();
+}
+
+window.getStatsEngine = getStatsEngine;
+window.getPlayerStats = getPlayerStats;
 window.compareLegacyVsEngine = compareLegacyVsEngine;
 window._debugCompareStats = compareLegacyVsEngine;
