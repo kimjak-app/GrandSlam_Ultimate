@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.94</title>
+  <title>GrandSlam Ultimate v4.95</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -521,7 +521,7 @@
     </div>
 
     <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">
-      v4.94</div>
+      v4.95</div>
   </div>
 
   <div id="view-tennis" class="app-screen">
@@ -1333,6 +1333,11 @@
             <input id="round-auto-court-count" type="number" min="1" value="2"
               style="width:70px; border:1px solid #ddd; border-radius:8px; padding:6px 8px; font-size:13px;" />
           </div>
+          <div style="font-size:13px; color:#555; font-weight:600; margin-bottom:6px;">이벤트 타입</div>
+          <div id="round-auto-event-type-toggle" style="display:flex; gap:8px; margin-bottom:10px;">
+            <button type="button" class="opt-btn" data-event-type="double" style="margin:0;">복식</button>
+            <button type="button" class="opt-btn" data-event-type="single" style="margin:0;">단식</button>
+          </div>
           <div style="font-size:13px; color:#555; font-weight:600; margin-bottom:6px;">등급 필터</div>
           <div id="round-auto-level-filters" style="display:flex; gap:10px; margin-bottom:10px;">
             <label style="font-size:13px;"><input type="checkbox" value="A"> A</label>
@@ -1567,6 +1572,7 @@
           <div>- ✅ <b>v4.8</b>: 재정 데이터 Firestore 저장, 월간 운영 리포트, 회원 이력 관리(휴면/탈퇴/복귀), 각종 버그 수정</div>
           <div>- ✅ <b>v4.929</b>: 홈화면 개편 완료, 개인라카룸과 소속클럽 간력정보,날씨,코트,공지사항</div>
           <div>- ✅ <b>v4.94</b>: 리팩토링&쪼개기 완성. 단일 HTML → CSS/JS 모듈 분리 구조 완성</div>
+          <div>- ✅ <b>v4.95</b>: 자동생성 라운드 단식 경기 결과가 시즌 랭킹에 반영되지 않던 버그 수정 (winner/loser 배열 처리)</div>
 
         </div>
       </div>

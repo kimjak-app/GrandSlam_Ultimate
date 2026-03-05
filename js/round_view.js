@@ -279,6 +279,13 @@ function roundViewSaveRoundResults() {
   gsConfirm(`${finishedMatches.length}경기의 결과를 저장하시겠습니까?`, ok => {
     if (!ok) return;
 
+    let didSnapshot = false;
+    const ensureSnapshotLastRanks = () => {
+      if (didSnapshot) return;
+      snapshotLastRanks();
+      didSnapshot = true;
+    };
+
     const standings = {};
     roundParticipants.forEach(p => {
       const key = roundMode === 'single' ? p : p.join('&');
@@ -317,6 +324,8 @@ function roundViewSaveRoundResults() {
       s.points = 1 + (s.wins * winPoint) + (s.losses * losePoint) + bonus;
     });
 
+    ensureSnapshotLastRanks();
+
     const newLogEntries = [];
     finishedMatches.forEach(m => {
       const winner = m.winner === 'home' ? m.home : m.away;
@@ -351,9 +360,8 @@ function roundViewSaveRoundResults() {
       }
     });
 
-    computeAll();
-
     pushWithMatchLogAppend(newLogEntries).then(ok => {
+      computeAll();
       if (ok) { gsAlert('라운드 결과가 저장되었습니다!'); showView('game'); sync(); }
       else gsAlert('❌ 저장 실패! 네트워크 상태를 확인하고 다시 시도해주세요.');
     }).catch(e => {
@@ -397,6 +405,15 @@ async function roundViewConvertRoundToTournament() {
 }
 
 async function roundViewSaveRoundDataToLog(finishedMatches) {
+  let didSnapshot = false;
+  const ensureSnapshotLastRanks = () => {
+    if (didSnapshot) return;
+    snapshotLastRanks();
+    didSnapshot = true;
+  };
+
+  ensureSnapshotLastRanks();
+
   const newLogEntries = [];
 
   finishedMatches.forEach(m => {
@@ -414,8 +431,8 @@ async function roundViewSaveRoundDataToLog(finishedMatches) {
     roundEngineApplyRoundScore(winner, loser, roundMode);
   });
 
-  computeAll();
   await pushWithMatchLogAppend(newLogEntries);
+  computeAll();
 }
 
 function roundViewOpenTournamentModal(rankedParticipants) {
@@ -624,13 +641,14 @@ function roundViewSetMiniTournamentWinner(matchId, side) {
 
       if (isPracticeMode !== 'practice') {
         const allLogEntries = miniTournamentMatches.filter(m => m._logEntry).map(m => m._logEntry);
-        computeAll();
         if (allLogEntries.length > 0) {
           pushWithMatchLogAppend(allLogEntries).then(ok => {
+            computeAll();
             if (!ok) console.warn('[round] mini-tournament log save failed');
             else sync();
           });
         } else {
+          computeAll();
           pushDataOnly().then(() => sync());
         }
       }
