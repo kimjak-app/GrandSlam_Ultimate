@@ -3,6 +3,11 @@
 // ========================================
 
 const ROUND_AUTO_KEY = 'grandslam_round_auto_state_v1';
+const DEBUG = false;
+
+function roundAutoStorageKey(clubId) {
+  return `grandslam_round_auto_v1_${clubId || 'default'}`;
+}
 
 function createRoundAutoInitialState() {
   return {
@@ -27,6 +32,11 @@ function createRoundAutoInitialState() {
 }
 
 let roundAutoState = createRoundAutoInitialState();
+let roundAutoLoadedClubId = null;
+
+function roundAutoGetSelectedClubId() {
+  return typeof selectedClubId !== 'undefined' ? selectedClubId : null;
+}
 
 function roundAutoEscape(text) {
   return String(text || '')
@@ -61,44 +71,60 @@ function roundAutoGetTurns({ includePreview = false } = {}) {
   return includePreview ? turns : turns.filter(turn => turn?.status !== 'preview');
 }
 
-function roundAutoNormalizeTurnsState() {
-  const turns = Array.isArray(roundAutoState.turns) ? roundAutoState.turns : [];
-  const previews = turns.filter(turn => turn?.status === 'preview');
-  const activeTurns = turns.filter(turn => turn?.status === 'active');
+function roundAutoNormalizeTurnsState(inputState = roundAutoState) {
+  const state = inputState && typeof inputState === 'object'
+    ? inputState
+    : createRoundAutoInitialState();
+  const turns = Array.isArray(state.turns) ? [...state.turns] : [];
+  const reasons = [];
 
-  if (previews.length > 1) {
-    console.warn('[round-auto] invalid state: multiple preview turns detected. keeping latest preview only.');
-    const latestPreview = previews.sort((a, b) => (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0)).pop();
-    roundAutoState.turns = turns.filter(turn => turn?.status !== 'preview');
-    if (latestPreview) roundAutoState.turns.push(latestPreview);
-  }
-
-  if (activeTurns.length > 1) {
-    console.warn('[round-auto] invalid state: multiple active turns detected. keeping latest active only.');
-    const latestActive = activeTurns.sort((a, b) => (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0)).pop();
-    roundAutoState.turns = (roundAutoState.turns || []).map(turn => {
-      if (turn?.status !== 'active') return turn;
-      return turn === latestActive ? turn : { ...turn, status: 'done' };
-    });
-  }
-
-  let activeTurn = (roundAutoState.turns || [])
-    .filter(turn => turn?.status === 'active')
-    .sort((a, b) => (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0))
-    .pop();
-
-  if (!activeTurn) {
-    const latestRealTurn = roundAutoGetTurns({ includePreview: false })
-      .sort((a, b) => (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0))
-      .pop();
-    if (latestRealTurn) {
-      console.warn('[round-auto] invalid state: active turn missing. promoting latest real turn to active.');
-      latestRealTurn.status = 'active';
-      activeTurn = latestRealTurn;
+  let previewTurn = null;
+  const realTurns = [];
+  turns.forEach(turn => {
+    if (!turn) return;
+    if (turn.status === 'preview') {
+      if (!previewTurn || (Number(turn.turnNo) || 0) >= (Number(previewTurn.turnNo) || 0)) {
+        if (previewTurn) reasons.push('removed extra preview');
+        previewTurn = turn;
+      } else {
+        reasons.push('removed extra preview');
+      }
+      return;
     }
-  }
+    realTurns.push(turn);
+  });
 
-  if (activeTurn) roundAutoState.turnNo = Number(activeTurn.turnNo) || 0;
+  realTurns.sort((a, b) => (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0));
+  const latestRealTurn = realTurns.length ? realTurns[realTurns.length - 1] : null;
+
+  let hasStatusFix = false;
+  realTurns.forEach(turn => {
+    const targetStatus = latestRealTurn && turn === latestRealTurn ? 'active' : 'done';
+    if (turn.status !== targetStatus) {
+      hasStatusFix = true;
+      turn.status = targetStatus;
+    }
+  });
+  if (hasStatusFix) reasons.push('fixed active/done ordering');
+
+  const normalizedTurns = previewTurn ? [...realTurns, previewTurn] : realTurns;
+  const prevTurnNo = Number(state.turnNo) || 0;
+  const nextTurnNo = latestRealTurn ? (Number(latestRealTurn.turnNo) || 0) : prevTurnNo;
+  if (nextTurnNo !== prevTurnNo) reasons.push('synced turnNo with active turn');
+
+  const didChange = reasons.length > 0
+    || normalizedTurns.length !== turns.length
+    || normalizedTurns.some((turn, idx) => turn !== turns[idx]);
+
+  return {
+    state: {
+      ...state,
+      turns: normalizedTurns,
+      turnNo: nextTurnNo,
+    },
+    didChange,
+    reasons,
+  };
 }
 
 function roundAutoFlattenMatches({ includePreview = false } = {}) {
@@ -149,12 +175,22 @@ function roundAutoGetFilteredGuests() {
 
 function loadRoundAutoState() {
   try {
-    const raw = localStorage.getItem(ROUND_AUTO_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return;
-
+    const clubId = roundAutoGetSelectedClubId();
+    const storageKey = roundAutoStorageKey(clubId);
     const initial = createRoundAutoInitialState();
+    roundAutoLoadedClubId = clubId;
+
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) {
+      roundAutoState = initial;
+      return;
+    }
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') {
+      roundAutoState = initial;
+      return;
+    }
+
     roundAutoState = {
       ...initial,
       ...parsed,
@@ -176,6 +212,8 @@ function loadRoundAutoState() {
     }
     roundAutoState.config.previewTurns = 1;
 
+    let shouldSave = false;
+
     if (!roundAutoState.turns.length && Array.isArray(parsed.matches) && parsed.matches.length) {
       const grouped = parsed.matches.reduce((acc, m) => {
         if (!acc[m.turnNo]) acc[m.turnNo] = [];
@@ -188,26 +226,17 @@ function loadRoundAutoState() {
         matches: grouped[turnNo],
         status: idx === turnNos.length - 1 ? 'active' : 'done',
       }));
-      if (roundAutoState.turns.length === 1) {
-        const activeTurnNo = Number(roundAutoState.turns[0].turnNo) || 0;
-        roundAutoState.turns[0].status = 'active';
-        roundAutoState.turnNo = activeTurnNo;
-        roundAutoState.turns = roundAutoState.turns.filter(turn => turn.status !== 'preview');
-        roundAutoState.turns.push(roundAutoBuildTurn(activeTurnNo + 1, 'preview'));
-      }
+      shouldSave = true;
     }
 
-    roundAutoNormalizeTurnsState();
-
-    const activeTurn = (roundAutoState.turns || []).find(turn => turn?.status === 'active');
-    const latestPreview = (roundAutoState.turns || [])
-      .filter(turn => turn?.status === 'preview')
-      .sort((a, b) => (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0))
-      .pop();
-    if (activeTurn && latestPreview && Number(latestPreview.turnNo) !== (Number(activeTurn.turnNo) + 1)) {
-      roundAutoState.turns = roundAutoState.turns.filter(turn => turn?.status !== 'preview');
-      roundAutoState.turns.push(roundAutoBuildTurn((Number(activeTurn.turnNo) || 0) + 1, 'preview'));
+    const normalized = roundAutoNormalizeTurnsState(roundAutoState);
+    roundAutoState = normalized.state;
+    if (normalized.didChange) {
+      shouldSave = true;
+      if (DEBUG) console.debug('[round-auto] normalize on load:', normalized.reasons.join(', '));
     }
+
+    if (shouldSave) saveRoundAutoState();
   } catch (e) {
     console.warn('[round-auto] state load failed:', e);
     roundAutoState = createRoundAutoInitialState();
@@ -216,7 +245,8 @@ function loadRoundAutoState() {
 
 function saveRoundAutoState() {
   try {
-    localStorage.setItem(ROUND_AUTO_KEY, JSON.stringify(roundAutoState));
+    const clubId = roundAutoGetSelectedClubId();
+    localStorage.setItem(roundAutoStorageKey(clubId), JSON.stringify(roundAutoState));
   } catch (e) {
     console.warn('[round-auto] state save failed:', e);
   }
@@ -563,6 +593,10 @@ function roundAutoOpenAddGuestModal() {
 
 
 function initRoundAutoPlayerPool() {
+  const currentClubId = roundAutoGetSelectedClubId();
+  if (roundAutoLoadedClubId !== currentClubId) {
+    roundAutoState = createRoundAutoInitialState();
+  }
   loadRoundAutoState();
 
   const courtInput = document.getElementById('round-auto-court-count');
@@ -581,7 +615,9 @@ function initRoundAutoPlayerPool() {
   const filteredClubPlayers = roundAutoGetFilteredClubPlayers();
   const filteredGuests = roundAutoGetFilteredGuests();
   const availableNames = [...filteredClubPlayers.map(p => p.name), ...filteredGuests.map(g => g.name)];
-  roundAutoState.selectedPlayers = roundAutoState.selectedPlayers.filter(name => availableNames.includes(name));
+  const filteredSelectedPlayers = roundAutoState.selectedPlayers.filter(name => availableNames.includes(name));
+  const selectionChanged = filteredSelectedPlayers.length !== roundAutoState.selectedPlayers.length;
+  if (selectionChanged) roundAutoState.selectedPlayers = filteredSelectedPlayers;
 
   const playerPool = document.getElementById('round-auto-player-pool');
   if (!playerPool) return;
@@ -590,7 +626,7 @@ function initRoundAutoPlayerPool() {
     playerPool.innerHTML = '<div style="font-size:12px; color:#999;">조건에 맞는 참가자가 없습니다.</div>';
     roundAutoRenderMatches();
     roundAutoRenderRanking();
-    saveRoundAutoState();
+    if (selectionChanged) saveRoundAutoState();
     return;
   }
 
@@ -642,7 +678,7 @@ function initRoundAutoPlayerPool() {
 
   roundAutoRenderMatches();
   roundAutoRenderRanking();
-  saveRoundAutoState();
+  if (selectionChanged) saveRoundAutoState();
 }
 
 
@@ -883,7 +919,11 @@ async function roundAutoGenerateNextTurn() {
     roundAutoState.turnNo = newActiveTurnNo;
   }
 
-  roundAutoNormalizeTurnsState();
+  const normalized = roundAutoNormalizeTurnsState(roundAutoState);
+  roundAutoState = normalized.state;
+  if (normalized.didChange && DEBUG) {
+    console.debug('[round-auto] normalize on next turn:', normalized.reasons.join(', '));
+  }
   roundAutoRenderMatches();
   roundAutoRenderRanking();
   saveRoundAutoState();
@@ -911,6 +951,7 @@ function roundAutoSetWinner(matchId, side) {
 
 async function roundAutoCommitTurnToGlobalLog(activeTurn) {
   if (!activeTurn || !Array.isArray(activeTurn.matches)) return;
+  if (activeTurn.committedTurn) return;
   if (roundAutoState._commitInFlight) return;
 
   const mode = roundAutoState.mode === 'single' ? 'single' : 'double';
@@ -918,7 +959,14 @@ async function roundAutoCommitTurnToGlobalLog(activeTurn) {
     const decided = m && (m.winner === 'home' || m.winner === 'away');
     return decided && !m.committed;
   });
-  if (!decidedUncommitted.length) return;
+  if (!decidedUncommitted.length) {
+    const decidedMatches = activeTurn.matches.filter(m => m && (m.winner === 'home' || m.winner === 'away'));
+    if (decidedMatches.length && decidedMatches.every(m => m.committed)) {
+      activeTurn.committedTurn = true;
+      saveRoundAutoState();
+    }
+    return;
+  }
 
   roundAutoState._commitInFlight = true;
 
@@ -958,6 +1006,10 @@ async function roundAutoCommitTurnToGlobalLog(activeTurn) {
       match.committed = true;
       match.logId = newLogEntries[idx].id;
     });
+    const decidedMatches = activeTurn.matches.filter(m => m && (m.winner === 'home' || m.winner === 'away'));
+    if (decidedMatches.length && decidedMatches.every(m => m.committed)) {
+      activeTurn.committedTurn = true;
+    }
     saveRoundAutoState();
   } catch (e) {
     players = playerSnapshot;
@@ -1097,7 +1149,7 @@ function roundAutoRenderRanking() {
 function roundAutoReset() {
   roundAutoState = createRoundAutoInitialState();
   try {
-    localStorage.removeItem(ROUND_AUTO_KEY);
+    localStorage.removeItem(roundAutoStorageKey(roundAutoGetSelectedClubId()));
   } catch (e) {
     console.warn('[round-auto] state clear failed:', e);
   }
@@ -1109,6 +1161,7 @@ function roundAutoViewOpen() {
 }
 
 window.ROUND_AUTO_KEY = ROUND_AUTO_KEY;
+window.roundAutoStorageKey = roundAutoStorageKey;
 window.initRoundAutoPlayerPool = initRoundAutoPlayerPool;
 window.roundAutoGenerateNextTurn = roundAutoGenerateNextTurn;
 window.roundAutoSetWinner = roundAutoSetWinner;
