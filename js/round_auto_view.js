@@ -1167,7 +1167,6 @@ async function roundAutoCommitTurnToGlobalLog(activeTurn) {
       computeAll();
       return;
     }
-    computeAll();
 
     computeAll();
 
