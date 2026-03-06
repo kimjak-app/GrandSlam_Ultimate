@@ -11,7 +11,7 @@ function updateRoundCount() { return roundViewUpdateRoundCount(); }
 function updateRoundManualTeamPreview() { return roundViewUpdateRoundManualTeamPreview(); }
 function checkRoundGenButton() { return roundViewCheckRoundGenButton(); }
 function generateRoundSchedule() { return roundViewGenerateRoundSchedule(); }
-function generateRoundRobinMatches(participants) { return roundEngineGenerateRoundRobinMatches(participants); }
+function generateRoundRobinMatches(participants, options) { return roundEngineGenerateRoundRobinMatches(participants, options); }
 function renderRoundMatches() { return roundViewRenderRoundMatches(); }
 function setRoundWinner(matchId, side) { return roundViewSetRoundWinner(matchId, side); }
 function updateRoundRanking() { return roundViewUpdateRoundRanking(); }

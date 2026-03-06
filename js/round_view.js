@@ -14,6 +14,26 @@ function roundViewOpenRound() {
   roundViewInitRoundPlayerPool();
 }
 
+function roundViewEnsureGenderBattleOption() {
+  const genBtn = $('round-gen-btn');
+  if (!genBtn || !genBtn.parentNode) return;
+
+  let wrap = $('round-gender-battle-wrap');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.id = 'round-gender-battle-wrap';
+    wrap.style.cssText = 'margin-top:10px; padding:10px 12px; border:1px solid #E5E5EA; border-radius:12px; background:#FAFAFA;';
+    wrap.innerHTML = `
+      <label for="round-allow-gender-battle" style="display:flex; align-items:center; gap:8px; font-size:13px; color:#333; font-weight:600; cursor:pointer;">
+        <input id="round-allow-gender-battle" type="checkbox" />
+        남 vs 여 매치 허용
+      </label>
+      <div style="font-size:12px; color:#666; margin-top:4px;">(남자팀 vs 여자팀 경기 가능)</div>
+    `;
+    genBtn.parentNode.insertBefore(wrap, genBtn);
+  }
+}
+
 function roundViewSetRoundOpt(opt) {
   roundOpt = opt;
   ['rank', 'random', 'manual'].forEach(o => {
@@ -26,6 +46,7 @@ function roundViewSetRoundOpt(opt) {
 }
 
 function roundViewSetRoundMode(mode) {
+  roundViewEnsureGenderBattleOption();
   roundMode = mode;
   ['single', 'double'].forEach(m => {
     const btn = $(`round-mode-${m}`);
@@ -42,12 +63,21 @@ function roundViewSetRoundMode(mode) {
     btn.style.cursor = isSingle ? 'not-allowed' : 'pointer';
   });
 
+  const genderBattleWrap = $('round-gender-battle-wrap');
+  const genderBattleChk = $('round-allow-gender-battle');
+  if (genderBattleWrap) genderBattleWrap.style.opacity = isSingle ? '0.5' : '1';
+  if (genderBattleChk) {
+    genderBattleChk.disabled = isSingle;
+    genderBattleChk.style.cursor = isSingle ? 'not-allowed' : 'pointer';
+  }
+
   if (roundOpt === 'manual' && mode === 'double') roundViewUpdateRoundManualTeamPreview();
   else $('round-manual-team-box').style.display = 'none';
   roundViewCheckRoundGenButton();
 }
 
 function roundViewInitRoundPlayerPool() {
+  roundViewEnsureGenderBattleOption();
   const pList = $('round-pList');
   if (!pList) return;
 
@@ -186,7 +216,16 @@ function roundViewGenerateRoundSchedule() {
     roundParticipants = teams;
   }
 
-  roundMatches = roundEngineGenerateRoundRobinMatches(roundParticipants);
+  const allowGenderBattle = roundMode === 'double'
+    ? !!($('round-allow-gender-battle')?.checked)
+    : true;
+
+  roundMatches = roundEngineGenerateRoundRobinMatches(roundParticipants, { allowGenderBattle });
+  if (!roundMatches.length) {
+    gsAlert('현재 옵션에서는 생성 가능한 대진이 없습니다. 선수/팀 구성을 조정하거나 [남 vs 여 매치 허용]을 켜주세요.');
+    return;
+  }
+
   $('round-setup-area').style.display = 'none';
   $('round-match-area').style.display = 'block';
   roundViewRenderRoundMatches();

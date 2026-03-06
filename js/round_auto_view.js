@@ -22,12 +22,17 @@ function createRoundAutoInitialState() {
       levelFilter: ['A', 'B', 'C'],
       gender: 'all',
       allowMixed: true,
+      allowGenderBattle: false,
       previewTurns: 1,
     },
     sessionStats: {},
     partnerHistory: {},
+    cyclePhase: 'same',
+    mixedRemaining: 0,
+    mixedStreak: 0,
+    matchupHistory: {},
     oneTimeGuests: [],
-    miniTournament: { matches: [], round: 0 },
+    miniTournament: { matches: [], round: 0, matchupHistory: {} },
     modalRankedParticipants: [],
   };
 }
@@ -136,6 +141,18 @@ function roundAutoGetEventType() {
   return roundAutoNormalizeEventType(roundAutoState.eventType);
 }
 
+function roundAutoAllowGenderBattle() {
+  return roundAutoState?.config?.allowGenderBattle === true;
+}
+
+function roundAutoCanScheduleGenderMatch(homeTeam, awayTeam) {
+  if (typeof roundEngineGenerateRoundRobinMatches !== 'function') return true;
+  const probe = roundEngineGenerateRoundRobinMatches([homeTeam, awayTeam], {
+    allowGenderBattle: roundAutoAllowGenderBattle(),
+  });
+  return Array.isArray(probe) && probe.length > 0;
+}
+
 function roundAutoIsSingles() {
   return roundAutoGetEventType() === 'single';
 }
@@ -229,6 +246,10 @@ function loadRoundAutoState() {
       config: { ...initial.config, ...(parsed.config || {}) },
       sessionStats: parsed.sessionStats && typeof parsed.sessionStats === 'object' ? parsed.sessionStats : {},
       partnerHistory: parsed.partnerHistory && typeof parsed.partnerHistory === 'object' ? parsed.partnerHistory : {},
+      cyclePhase: parsed.cyclePhase === 'mixed' ? 'mixed' : 'same',
+      mixedRemaining: Math.max(0, Number(parsed.mixedRemaining) || 0),
+      mixedStreak: Math.max(0, Number(parsed.mixedStreak) || 0),
+      matchupHistory: parsed.matchupHistory && typeof parsed.matchupHistory === 'object' ? parsed.matchupHistory : {},
       oneTimeGuests: Array.isArray(parsed.oneTimeGuests) ? parsed.oneTimeGuests : [],
     };
 
@@ -236,6 +257,9 @@ function loadRoundAutoState() {
       roundAutoState.config.levelFilter = Array.isArray(roundAutoState.config.levels)
         ? roundAutoState.config.levels
         : ['A', 'B', 'C'];
+    }
+    if (typeof roundAutoState.config.allowGenderBattle !== 'boolean') {
+      roundAutoState.config.allowGenderBattle = false;
     }
     roundAutoState.config.previewTurns = 1;
 
@@ -385,6 +409,10 @@ function roundAutoChooseFairSingleCourtSetup(eligiblePool, turnNo, statsRef) {
 
     let bestPairing = null;
     pairings.forEach(p => {
+      const homeNames = p.home.map(x => x.name);
+      const awayNames = p.away.map(x => x.name);
+      if (!roundAutoCanScheduleGenderMatch(homeNames, awayNames)) return;
+
       const partnerRepeat = (partnerMap.get(pairKey(p.home[0].name, p.home[1].name)) || 0)
         + (partnerMap.get(pairKey(p.away[0].name, p.away[1].name)) || 0);
       const opponentRepeat = p.home.reduce((sum, hp) => (
@@ -398,10 +426,10 @@ function roundAutoChooseFairSingleCourtSetup(eligiblePool, turnNo, statsRef) {
       }
     });
 
-    return { combo, atMinCount, spread, restedLastTurn, bestPairing };
+    return bestPairing ? { combo, atMinCount, spread, restedLastTurn, bestPairing } : null;
   };
 
-  const scored = combos.map(scoreCombo);
+  const scored = combos.map(scoreCombo).filter(Boolean);
   scored.sort((x, y) => {
     if (y.atMinCount !== x.atMinCount) return y.atMinCount - x.atMinCount;
     if (x.spread !== y.spread) return x.spread - y.spread;
@@ -464,6 +492,7 @@ function roundAutoGenerateSinglesTurn(eligiblePool, courtCount, turnNo, statsRef
       const first = remaining[0];
       for (let i = 1; i < remaining.length; i += 1) {
         const second = remaining[i];
+        if (!roundAutoCanScheduleGenderMatch(first.name, second.name)) continue;
         const pairPenalty = roundAutoOpponentRepeatCount(first.name, second.name);
         const nextPenalty = penalty + pairPenalty;
         if (best && nextPenalty > best.penalty) continue;
@@ -543,16 +572,12 @@ function roundAutoPairByGender(playersList) {
   const men = shuffleArray(playersList.filter(p => p.gender === 'M'));
   const women = shuffleArray(playersList.filter(p => p.gender === 'F'));
   const unknown = shuffleArray(playersList.filter(p => p.gender !== 'M' && p.gender !== 'F'));
-  men.push(...unknown);
-
   const pairs = [];
-  if (roundAutoState.config.allowMixed) {
-    while (men.length && women.length) {
-      pairs.push([men.shift(), women.shift()]);
-    }
-  }
+  while (men.length >= 2) pairs.push([men.shift(), men.shift()]);
+  while (women.length >= 2) pairs.push([women.shift(), women.shift()]);
+  if (roundAutoState.config.allowMixed) while (men.length && women.length) pairs.push([men.shift(), women.shift()]);
 
-  const remain = shuffleArray([...men, ...women]);
+  const remain = shuffleArray([...men, ...women, ...unknown]);
   while (remain.length >= 2) pairs.push([remain.shift(), remain.shift()]);
   return pairs;
 }
@@ -589,36 +614,72 @@ function roundAutoBuildTurnWithStats(turnNo, status, statsRef, mutateRealStats) 
   if (isSingles) {
     matches = roundAutoGenerateSinglesTurn(eligiblePool, roundAutoState.courtCount, turnNo, statsRef) || [];
     if (!matches.length) return null;
-  } else if (roundAutoState.courtCount === 1) {
-    const fairPick = roundAutoChooseFairSingleCourtSetup(eligiblePool, turnNo, statsRef);
-    if (!fairPick) return null;
-    roundAutoApplyTurnParticipation(fairPick.activePlayers, eligiblePool, turnNo, statsRef);
-    matches = [{
-      id: `ra-${turnNo}-1`,
-      turnNo,
-      courtNo: 1,
-      home: fairPick.pairing.home.map(p => p.name),
-      away: fairPick.pairing.away.map(p => p.name),
-      winner: null,
-    }];
   } else {
-    const activePlayers = roundAutoPickActivePlayers(eligiblePool, requiredPlayers, turnNo, statsRef);
-    const pairs = roundAutoPairByGender(activePlayers);
-    roundAutoApplyPartnerSwap(pairs);
-
-    for (let i = 0; i < roundAutoState.courtCount; i += 1) {
-      const teamHome = pairs[i * 2];
-      const teamAway = pairs[i * 2 + 1];
-      if (!teamHome || !teamAway) break;
-      matches.push({
-        id: `ra-${turnNo}-${i + 1}`,
+    if (typeof roundEngineBuildAutoDoubleMatches === 'function') {
+      const cycleOptions = {
+        allowMixed: roundAutoState.config.allowMixed,
+        allowGenderBattle: roundAutoAllowGenderBattle(),
+        phase: roundAutoState.cyclePhase || 'same',
+        mixedRemaining: Number(roundAutoState.mixedRemaining) || 0,
+        mixedStreak: Number(roundAutoState.mixedStreak) || 0,
+        history: roundAutoState.matchupHistory || {},
+        femaleCount: eligiblePool.filter(p => p?.gender === 'F').length,
+        statsRef,
         turnNo,
-        courtNo: i + 1,
-        home: [teamHome[0].name, teamHome[1].name],
-        away: [teamAway[0].name, teamAway[1].name],
+      };
+      const planned = roundEngineBuildAutoDoubleMatches(eligiblePool, roundAutoState.courtCount, cycleOptions);
+      matches = planned.map((m, idx) => ({
+        id: `ra-${turnNo}-${idx + 1}`,
+        turnNo,
+        courtNo: m.courtNo || (idx + 1),
+        home: [m.home[0], m.home[1]],
+        away: [m.away[0], m.away[1]],
         winner: null,
-      });
+      }));
+      if (mutateRealStats) {
+        roundAutoState.cyclePhase = cycleOptions.phase === 'mixed' ? 'mixed' : 'same';
+        roundAutoState.mixedRemaining = Math.max(0, Number(cycleOptions.mixedRemaining) || 0);
+        roundAutoState.mixedStreak = Math.max(0, Number(cycleOptions.mixedStreak) || 0);
+        roundAutoState.matchupHistory = cycleOptions.history && typeof cycleOptions.history === 'object'
+          ? cycleOptions.history
+          : {};
+      }
+    } else {
+      const activePlayers = roundAutoPickActivePlayers(eligiblePool, requiredPlayers, turnNo, statsRef);
+      const pairs = roundAutoPairByGender(activePlayers);
+      roundAutoApplyPartnerSwap(pairs);
+      for (let i = 0; i < roundAutoState.courtCount; i += 1) {
+        const teamHome = pairs[i * 2];
+        const teamAway = pairs[i * 2 + 1];
+        if (!teamHome || !teamAway) break;
+        const home = [teamHome[0].name, teamHome[1].name];
+        const away = [teamAway[0].name, teamAway[1].name];
+        if (!roundAutoCanScheduleGenderMatch(home, away)) continue;
+        matches.push({
+          id: `ra-${turnNo}-${i + 1}`,
+          turnNo,
+          courtNo: i + 1,
+          home,
+          away,
+          winner: null,
+        });
+      }
     }
+
+    if (matches.length) {
+      const activeNames = new Set();
+      matches.forEach(m => {
+        (Array.isArray(m.home) ? m.home : [m.home]).forEach(n => activeNames.add(n));
+        (Array.isArray(m.away) ? m.away : [m.away]).forEach(n => activeNames.add(n));
+      });
+      const activePlayers = eligiblePool.filter(p => activeNames.has(p.name));
+      roundAutoApplyTurnParticipation(activePlayers, eligiblePool, turnNo, statsRef);
+    }
+  }
+
+  if (!matches.length) {
+    alert('현재 옵션으로 생성 가능한 대진이 없습니다. 선수/팀 구성을 조정하거나 [남 vs 여 매치 허용]을 켜주세요.');
+    return null;
   }
 
   if (mutateRealStats) {
@@ -692,8 +753,33 @@ function roundAutoRenderFilterUI() {
       saveRoundAutoState();
     };
   }
-}
 
+  if (mixedBtn) {
+    let wrap = document.getElementById('round-auto-gender-battle-wrap');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = 'round-auto-gender-battle-wrap';
+      wrap.style.cssText = 'margin-top:8px; padding:10px 12px; border:1px solid #E5E5EA; border-radius:12px; background:#FAFAFA;';
+      wrap.innerHTML = `
+        <label for="round-auto-allow-gender-battle" style="display:flex; align-items:center; gap:8px; font-size:13px; color:#333; font-weight:600; cursor:pointer;">
+          <input id="round-auto-allow-gender-battle" type="checkbox" />
+          남 vs 여 매치 허용
+        </label>
+        <div style="font-size:12px; color:#666; margin-top:4px;">(남자팀 vs 여자팀 경기 가능)</div>
+      `;
+      mixedBtn.parentNode.insertAdjacentElement('afterend', wrap);
+    }
+
+    const chk = document.getElementById('round-auto-allow-gender-battle');
+    if (chk) {
+      chk.checked = roundAutoAllowGenderBattle();
+      chk.onchange = () => {
+        roundAutoState.config.allowGenderBattle = !!chk.checked;
+        saveRoundAutoState();
+      };
+    }
+  }
+}
 function roundAutoOpenAddGuestModal() {
   gsEditName('', ({ name, gender }) => {
     const cleanName = (name || '').trim();
@@ -740,8 +826,6 @@ function roundAutoOpenAddGuestModal() {
     returnObject: true,
   });
 }
-
-
 function initRoundAutoPlayerPool() {
   const currentClubId = roundAutoGetSelectedClubId();
   if (roundAutoLoadedClubId !== currentClubId) {
@@ -796,7 +880,7 @@ function initRoundAutoPlayerPool() {
         labelText,
         isGuest: false,
         showRank: true,
-        rankText: `${player.rank}위`
+        rankText: `${player.rank}`,
       });
     }
     return '';
@@ -830,8 +914,6 @@ function initRoundAutoPlayerPool() {
   roundAutoRenderRanking();
   if (selectionChanged) saveRoundAutoState();
 }
-
-
 function roundAutoDisplayParticipant(participant) {
   const names = Array.isArray(participant) ? participant : [participant];
   return roundAutoIsSingles()
@@ -875,6 +957,142 @@ function roundAutoComputeSessionStandings() {
 
   return Object.values(map)
     .sort((a, b) => (b.wins - a.wins) || (a.losses - b.losses) || (b.matches - a.matches) || a.key.localeCompare(b.key));
+}
+
+function roundAutoParticipantToPlayers(participant) {
+  const playersList = Array.isArray(participant) ? participant : [participant];
+  return playersList.filter(Boolean);
+}
+
+function roundAutoPlayerStableKey(playerRef) {
+  if (playerRef && typeof playerRef === 'object') {
+    if (playerRef.id !== undefined && playerRef.id !== null && String(playerRef.id).trim()) {
+      return `id:${String(playerRef.id).trim()}`;
+    }
+    if (playerRef.name && String(playerRef.name).trim()) {
+      return `name:${String(playerRef.name).trim()}`;
+    }
+    return '';
+  }
+  const name = String(playerRef || '').trim();
+  if (!name) return '';
+  const found = Array.isArray(players) ? players.find(p => p && p.name === name) : null;
+  if (found && found.id !== undefined && found.id !== null && String(found.id).trim()) {
+    return `id:${String(found.id).trim()}`;
+  }
+  return `name:${name}`;
+}
+
+function roundAutoParticipantKeyNormalized(participant) {
+  const keys = roundAutoParticipantToPlayers(participant)
+    .map(roundAutoPlayerStableKey)
+    .filter(Boolean)
+    .sort();
+  return keys.join('|');
+}
+
+function roundAutoParticipantsSharePlayer(a, b) {
+  const aKeys = new Set(
+    roundAutoParticipantToPlayers(a).map(roundAutoPlayerStableKey).filter(Boolean),
+  );
+  const bKeys = roundAutoParticipantToPlayers(b).map(roundAutoPlayerStableKey).filter(Boolean);
+  return bKeys.some(key => aKeys.has(key));
+}
+
+function roundAutoMiniMatchupKey(home, away) {
+  const homeKey = roundAutoParticipantKeyNormalized(home);
+  const awayKey = roundAutoParticipantKeyNormalized(away);
+  if (!homeKey || !awayKey) return '';
+  return [homeKey, awayKey].sort().join('::');
+}
+
+function roundAutoValidateMiniMatch(home, away, usedPlayerKeysSet) {
+  const homeKeys = roundAutoParticipantToPlayers(home).map(roundAutoPlayerStableKey).filter(Boolean);
+  const awayKeys = roundAutoParticipantToPlayers(away).map(roundAutoPlayerStableKey).filter(Boolean);
+  if (!homeKeys.length || !awayKeys.length) return false;
+
+  const homeUnique = new Set(homeKeys);
+  const awayUnique = new Set(awayKeys);
+  if (homeUnique.size !== homeKeys.length) return false;
+  if (awayUnique.size !== awayKeys.length) return false;
+  for (const key of awayUnique) {
+    if (homeUnique.has(key)) return false;
+  }
+
+  if (usedPlayerKeysSet && usedPlayerKeysSet.size) {
+    for (const key of homeUnique) {
+      if (usedPlayerKeysSet.has(key)) return false;
+    }
+    for (const key of awayUnique) {
+      if (usedPlayerKeysSet.has(key)) return false;
+    }
+  }
+  return true;
+}
+
+function roundAutoBuildMiniRoundMatches(rankedParticipants, matchupHistoryMap) {
+  const list = Array.isArray(rankedParticipants) ? rankedParticipants : [];
+  if (!list.length) return [];
+
+  const deduped = [];
+  const seenTeamKeys = new Set();
+  list.forEach(participant => {
+    const teamKey = roundAutoParticipantKeyNormalized(participant);
+    if (!teamKey || seenTeamKeys.has(teamKey)) return;
+    seenTeamKeys.add(teamKey);
+    deduped.push(participant);
+  });
+
+  const usedPlayerKeys = new Set();
+  const lockedIndex = new Set();
+  const pairs = [];
+  const history = matchupHistoryMap && typeof matchupHistoryMap === 'object' ? matchupHistoryMap : {};
+
+  for (let i = 0; i < deduped.length; i += 1) {
+    if (lockedIndex.has(i)) continue;
+    const home = deduped[i];
+    if (!roundAutoParticipantKeyNormalized(home)) continue;
+
+    let best = null;
+    for (let j = i + 1; j < deduped.length; j += 1) {
+      if (lockedIndex.has(j)) continue;
+      const away = deduped[j];
+      if (!roundAutoParticipantKeyNormalized(away)) continue;
+      if (roundAutoParticipantsSharePlayer(home, away)) continue;
+      if (!roundAutoValidateMiniMatch(home, away, usedPlayerKeys)) continue;
+
+      const matchupKey = roundAutoMiniMatchupKey(home, away);
+      const seenCount = Number(history[matchupKey] || 0);
+      const candidate = { i, j, home, away, seenCount };
+      if (!best) {
+        best = candidate;
+        continue;
+      }
+      if (candidate.j < best.j) {
+        best = candidate;
+        continue;
+      }
+      if (candidate.j === best.j && candidate.seenCount < best.seenCount) {
+        best = candidate;
+      }
+    }
+
+    if (!best) continue;
+    if (!roundAutoValidateMiniMatch(best.home, best.away, usedPlayerKeys)) continue;
+    pairs.push({ home: best.home, away: best.away });
+    lockedIndex.add(best.i);
+    lockedIndex.add(best.j);
+    roundAutoParticipantToPlayers(best.home).forEach(playerRef => {
+      const key = roundAutoPlayerStableKey(playerRef);
+      if (key) usedPlayerKeys.add(key);
+    });
+    roundAutoParticipantToPlayers(best.away).forEach(playerRef => {
+      const key = roundAutoPlayerStableKey(playerRef);
+      if (key) usedPlayerKeys.add(key);
+    });
+  }
+
+  return pairs;
 }
 
 function roundAutoCloseMiniTournamentModal() {
@@ -953,39 +1171,33 @@ function roundAutoStartMiniTournament(rankedParticipants) {
     return;
   }
 
-  const n = rankedParticipants.length;
-  let bracketSize = 2;
-  while (bracketSize < n) bracketSize *= 2;
-  const byeCount = bracketSize - n;
+  const matchupHistory = {};
+  const pairs = roundAutoBuildMiniRoundMatches(rankedParticipants, matchupHistory);
+  if (!pairs.length) {
+    gsAlert('토너먼트 1라운드에 유효한 대진을 만들 수 없습니다.');
+    return;
+  }
 
   const miniMatches = [];
-  let matchCount = 0;
+  pairs.forEach((pair, idx) => {
+    miniMatches.push({
+      id: `RA-T-R1-M${idx + 1}`,
+      round: 1,
+      home: pair.home,
+      away: pair.away,
+      winner: null,
+    });
+    const key = roundAutoMiniMatchupKey(pair.home, pair.away);
+    if (key) matchupHistory[key] = Number(matchupHistory[key] || 0) + 1;
+  });
 
-  for (let i = 0; i < bracketSize / 2; i += 1) {
-    const high = i < n ? rankedParticipants[i] : null;
-    const low = (bracketSize - 1 - i) < n ? rankedParticipants[bracketSize - 1 - i] : null;
-
-    if (high && low) {
-      matchCount += 1;
-      miniMatches.push({ id: `RA-T-R1-M${matchCount}`, round: 1, home: high, away: low, winner: null });
-    } else if (high && !low) {
-      matchCount += 1;
-      miniMatches.push({ id: `RA-T-R1-M${matchCount}`, round: 1, home: high, away: null, winner: 'home', isBye: true });
-    }
-  }
-
-  roundAutoState.miniTournament = { matches: miniMatches, round: 1 };
+  roundAutoState.miniTournament = { matches: miniMatches, round: 1, matchupHistory };
   roundAutoRenderMatches();
   saveRoundAutoState();
-
-  if (byeCount > 0) {
-    setTimeout(() => gsAlert(`💡 ${byeCount}명/팀이 부전승으로 다음 라운드에 자동 진출합니다.
-상위 랭커에게 부전승이 배정됩니다.`), 200);
-  }
 }
 
 function roundAutoSetMiniTournamentWinner(matchId, side) {
-  const mini = roundAutoState.miniTournament || { matches: [], round: 0 };
+  const mini = roundAutoState.miniTournament || { matches: [], round: 0, matchupHistory: {} };
   const match = (mini.matches || []).find(m => m.id === matchId);
   if (!match || match.winner !== null) return;
 
@@ -1000,25 +1212,35 @@ function roundAutoSetMiniTournamentWinner(matchId, side) {
     if (allFinished) {
       const winners = currentRound.map(m => m.winner === 'home' ? m.home : m.away);
       if (winners.length === 1) {
-        gsAlert(`🏆 우승: ${roundAutoDisplayParticipant(winners[0])}!
+        gsAlert(`최종 우승: ${roundAutoDisplayParticipant(winners[0])}!\n\n미니 토너먼트가 종료되었습니다.`);
+        roundAutoRenderMatches();
+        saveRoundAutoState();
+        return;
+      }
 
-미니 토너먼트가 종료되었습니다.`);
+      const history = mini.matchupHistory && typeof mini.matchupHistory === 'object' ? mini.matchupHistory : {};
+      mini.matchupHistory = history;
+      const nextPairs = roundAutoBuildMiniRoundMatches(winners, history);
+      if (!nextPairs.length) {
+        gsAlert('다음 라운드에 유효한 대진을 만들 수 없어 종료합니다.');
         roundAutoRenderMatches();
         saveRoundAutoState();
         return;
       }
 
       mini.round += 1;
-      const nextMatches = [];
-      for (let i = 0; i < winners.length; i += 2) {
-        nextMatches.push({
-          id: `RA-T-R${mini.round}-M${(i / 2) + 1}`,
-          round: mini.round,
-          home: winners[i],
-          away: winners[i + 1],
-          winner: null,
-        });
-      }
+      const nextMatches = nextPairs.map((pair, idx) => ({
+        id: `RA-T-R${mini.round}-M${idx + 1}`,
+        round: mini.round,
+        home: pair.home,
+        away: pair.away,
+        winner: null,
+      }));
+
+      nextMatches.forEach(m => {
+        const key = roundAutoMiniMatchupKey(m.home, m.away);
+        if (key) history[key] = Number(history[key] || 0) + 1;
+      });
       mini.matches.push(...nextMatches);
     }
 
@@ -1026,7 +1248,6 @@ function roundAutoSetMiniTournamentWinner(matchId, side) {
     saveRoundAutoState();
   });
 }
-
 async function roundAutoGenerateNextTurn() {
   roundAutoState.turns = (roundAutoState.turns || []).filter(turn => turn?.status !== 'preview');
 
@@ -1200,7 +1421,7 @@ function roundAutoRenderMatches() {
       return;
     }
 
-    let html = `<div style="text-align:center; margin-bottom:20px; padding:15px; background:var(--wimbledon-sage); color:white; border-radius:12px; font-size:16px; font-weight:bold;">🏆 라운드 자동생성 미니 토너먼트 - Round ${mini.round}</div>`;
+    let html = `<div style="text-align:center; margin-bottom:20px; padding:15px; background:var(--wimbledon-sage); color:white; border-radius:12px; font-size:16px; font-weight:bold;">라운드 자동생성 미니 토너먼트 - Round ${mini.round}</div>`;
     currentRound.forEach(m => {
       const isFinished = m.winner !== null;
       const homeDisplay = roundAutoDisplayParticipant(m.home);
@@ -1241,7 +1462,6 @@ function roundAutoRenderMatches() {
     return;
   }
 
-
   const turns = (roundAutoState.turns || []).filter(t => t.status === 'active' || t.status === 'preview');
 
   if (!turns.length) {
@@ -1281,7 +1501,6 @@ function roundAutoRenderMatches() {
     `;
   }).join('');
 }
-
 function roundAutoRenderRanking() {
   const table = document.getElementById('round-auto-rank-table');
   if (!table) return;
@@ -1313,8 +1532,6 @@ function roundAutoRenderRanking() {
     </table>
   `;
 }
-
-
 function roundAutoReset() {
   roundAutoState = createRoundAutoInitialState();
   try {

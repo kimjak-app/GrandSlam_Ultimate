@@ -2,7 +2,291 @@
 // ROUND_ENGINE.JS - 라운드 로직/데이터 처리
 // ========================================
 
-function roundEngineGenerateRoundRobinMatches(participants) {
+function roundEngineResolveGender(name) {
+  const p = players.find(pl => pl.name === name);
+  return p?.gender === 'M' || p?.gender === 'F' ? p.gender : 'UNKNOWN';
+}
+
+function roundEngineGetParticipantGenderType(participant) {
+  if (Array.isArray(participant)) {
+    const genders = participant.map(roundEngineResolveGender);
+    if (genders.length && genders.every(g => g === 'M')) return 'M';
+    if (genders.length && genders.every(g => g === 'F')) return 'F';
+    return 'MIXED_OR_UNKNOWN';
+  }
+  if (typeof participant === 'string') {
+    const g = roundEngineResolveGender(participant);
+    return g === 'M' || g === 'F' ? g : 'UNKNOWN';
+  }
+  return 'UNKNOWN';
+}
+
+function roundEngineIsBlockedGenderBattleMatch(home, away, allowGenderBattle) {
+  if (allowGenderBattle) return false;
+  const homeType = roundEngineGetParticipantGenderType(home);
+  const awayType = roundEngineGetParticipantGenderType(away);
+  return (homeType === 'M' && awayType === 'F') || (homeType === 'F' && awayType === 'M');
+}
+
+function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}) {
+  const allowMixed = options.allowMixed !== false;
+  const allowGenderBattle = options.allowGenderBattle === true;
+  const targetCourts = Math.max(0, Number(courtCount) || 0);
+  if (!Array.isArray(playersList) || playersList.length < 4 || targetCourts <= 0) return [];
+
+  const shuf = arr => (typeof shuffleArray === 'function' ? shuffleArray([...arr]) : [...arr].sort(() => Math.random() - 0.5));
+  const statsRef = options.statsRef && typeof options.statsRef === 'object' ? options.statsRef : {};
+  const turnNo = Number(options.turnNo) || 0;
+  const femaleCountBase = Math.max(0, Number(options.femaleCount) || playersList.filter(p => p?.gender === 'F').length);
+
+  const getStat = name => statsRef[name] || { played: 0, restStreak: 0, lastTurnPlayed: -9999 };
+  const restPriority = (a, b) => {
+    const sa = getStat(a.name);
+    const sb = getStat(b.name);
+    const aRestedPrev = sa.lastTurnPlayed !== (turnNo - 1);
+    const bRestedPrev = sb.lastTurnPlayed !== (turnNo - 1);
+    if (aRestedPrev !== bRestedPrev) return aRestedPrev ? -1 : 1;
+    if ((sa.played || 0) !== (sb.played || 0)) return (sa.played || 0) - (sb.played || 0);
+    if ((sa.restStreak || 0) !== (sb.restStreak || 0)) return (sb.restStreak || 0) - (sa.restStreak || 0);
+    return Math.random() - 0.5;
+  };
+
+  const men = shuf(playersList.filter(p => p?.gender === 'M')).sort(restPriority);
+  const women = shuf(playersList.filter(p => p?.gender === 'F')).sort(restPriority);
+  const unknown = shuf(playersList.filter(p => p?.gender !== 'M' && p?.gender !== 'F')).sort(restPriority);
+  if (unknown.length) men.push(...unknown);
+  const samePossibleFromPool = men.length >= 4 || women.length >= 4;
+
+  const normHistory = options.history && typeof options.history === 'object' ? options.history : {};
+  const maleMatchSet = new Set(Array.isArray(normHistory.sameMaleMatchKeys) ? normHistory.sameMaleMatchKeys : []);
+  const femaleMatchSet = new Set(Array.isArray(normHistory.sameFemaleMatchKeys) ? normHistory.sameFemaleMatchKeys : []);
+  const mixedMatchSet = new Set(Array.isArray(normHistory.mixedMatchKeys) ? normHistory.mixedMatchKeys : []);
+  const supportMatchSet = new Set(Array.isArray(normHistory.supportMatchKeys) ? normHistory.supportMatchKeys : []);
+  const maleTeamSet = new Set(Array.isArray(normHistory.sameMaleTeamKeys) ? normHistory.sameMaleTeamKeys : []);
+  const femaleTeamSet = new Set(Array.isArray(normHistory.sameFemaleTeamKeys) ? normHistory.sameFemaleTeamKeys : []);
+  const mixedTeamSet = new Set(Array.isArray(normHistory.mixedTeamKeys) ? normHistory.mixedTeamKeys : []);
+
+  let phase = options.phase === 'mixed' ? 'mixed' : 'same';
+  let mixedRemaining = Math.max(0, Number(options.mixedRemaining) || 0);
+  let mixedStreak = Math.max(0, Number(options.mixedStreak) || 0);
+  if (phase === 'mixed' && mixedRemaining <= 0) mixedRemaining = femaleCountBase;
+
+  const matches = [];
+
+  const pushMatch = (home, away) => {
+    if (!home || !away) return false;
+    if (roundEngineIsBlockedGenderBattleMatch(home, away, allowGenderBattle)) return false;
+    matches.push({ courtNo: matches.length + 1, home, away });
+    return true;
+  };
+  const teamKey = team => [...team].sort().join('|');
+  const matchKey = (a, b) => {
+    const t1 = teamKey(a);
+    const t2 = teamKey(b);
+    return [t1, t2].sort().join('||');
+  };
+  const makeTeam = bucket => {
+    if (bucket.length < 2) return null;
+    return [bucket.shift().name, bucket.shift().name];
+  };
+  const rankValue = p => {
+    const r = Number(p?.rank);
+    if (Number.isFinite(r)) return r;
+    const dr = Number(p?.dRank);
+    if (Number.isFinite(dr)) return dr;
+    return Number.POSITIVE_INFINITY;
+  };
+  const popWorstMale = () => {
+    if (!men.length) return null;
+    let idx = 0;
+    for (let i = 1; i < men.length; i += 1) {
+      const a = men[i];
+      const b = men[idx];
+      if (rankValue(a) > rankValue(b)) idx = i;
+      else if (rankValue(a) === rankValue(b) && (Number(a?.score) || 0) < (Number(b?.score) || 0)) idx = i;
+    }
+    return men.splice(idx, 1)[0];
+  };
+  const makeMixedTeam = () => {
+    if (!allowMixed) return null;
+    if (men.length && women.length) return [men.shift().name, women.shift().name];
+    return null;
+  };
+  const removeByNames = (bucket, names) => {
+    names.forEach(n => {
+      const idx = bucket.findIndex(x => x.name === n);
+      if (idx >= 0) bucket.splice(idx, 1);
+    });
+  };
+  const chooseBestSameMatch = (bucket, type) => {
+    if (bucket.length < 4) return null;
+    const maxCandidates = Math.min(bucket.length, 10);
+    const cands = bucket.slice(0, maxCandidates);
+    let best = null;
+
+    for (let i = 0; i < cands.length - 3; i += 1) {
+      for (let j = i + 1; j < cands.length - 2; j += 1) {
+        for (let k = j + 1; k < cands.length - 1; k += 1) {
+          for (let l = k + 1; l < cands.length; l += 1) {
+            const group = [cands[i], cands[j], cands[k], cands[l]];
+            const pairings = [
+              [[group[0].name, group[1].name], [group[2].name, group[3].name]],
+              [[group[0].name, group[2].name], [group[1].name, group[3].name]],
+              [[group[0].name, group[3].name], [group[1].name, group[2].name]],
+            ];
+            pairings.forEach(([home, away]) => {
+              const tkHome = teamKey(home);
+              const tkAway = teamKey(away);
+              const mk = matchKey(home, away);
+              const tSet = type === 'M' ? maleTeamSet : femaleTeamSet;
+              const mSet = type === 'M' ? maleMatchSet : femaleMatchSet;
+              const score =
+                (mSet.has(mk) ? 1000 : 0) +
+                (tSet.has(tkHome) ? 100 : 0) +
+                (tSet.has(tkAway) ? 100 : 0);
+              if (!best || score < best.score) best = { score, home, away, names: group.map(x => x.name) };
+            });
+          }
+        }
+      }
+    }
+    return best;
+  };
+  const chooseMixedPairMatch = () => {
+    if (!allowMixed || men.length < 2 || women.length < 2) return null;
+    const m1 = men[0], m2 = men[1], f1 = women[0], f2 = women[1];
+    const c1 = { home: [m1.name, f1.name], away: [m2.name, f2.name] };
+    const c2 = { home: [m1.name, f2.name], away: [m2.name, f1.name] };
+    const score = c => {
+      const mk = matchKey(c.home, c.away);
+      const th = teamKey(c.home), ta = teamKey(c.away);
+      return (mixedMatchSet.has(mk) ? 1000 : 0) + (mixedTeamSet.has(th) ? 100 : 0) + (mixedTeamSet.has(ta) ? 100 : 0);
+    };
+    const pick = score(c1) <= score(c2) ? c1 : c2;
+    removeByNames(men, [m1.name, m2.name]);
+    removeByNames(women, [f1.name, f2.name]);
+    return pick;
+  };
+
+  let localPhase = phase;
+  let phaseStall = 0;
+  while (matches.length < targetCourts) {
+    let created = false;
+
+    if (localPhase === 'same') {
+      // same 턴: 남복 우선, 다음 여복 (코트 수만큼 1매치씩 즉석 생성)
+      if (men.length >= 4) {
+        const pick = chooseBestSameMatch(men, 'M');
+        if (pick) {
+          removeByNames(men, pick.names);
+          created = !!pushMatch(pick.home, pick.away);
+          if (created) {
+            maleTeamSet.add(teamKey(pick.home));
+            maleTeamSet.add(teamKey(pick.away));
+            maleMatchSet.add(matchKey(pick.home, pick.away));
+          }
+        }
+      }
+      if (!created && women.length >= 4) {
+        const pick = chooseBestSameMatch(women, 'F');
+        if (pick) {
+          removeByNames(women, pick.names);
+          created = !!pushMatch(pick.home, pick.away);
+          if (created) {
+            femaleTeamSet.add(teamKey(pick.home));
+            femaleTeamSet.add(teamKey(pick.away));
+            femaleMatchSet.add(matchKey(pick.home, pick.away));
+          }
+        }
+      }
+      localPhase = 'mixed';
+      if (mixedRemaining <= 0) mixedRemaining = femaleCountBase;
+      if (created) mixedStreak = 0;
+    } else {
+      // mixed 턴: 혼복 vs 혼복 1매치, 실패 시 보완 혼복 예외 허용
+      if (mixedRemaining > 0 && allowMixed && men.length >= 2 && women.length >= 2) {
+        const pick = chooseMixedPairMatch();
+        if (pick) {
+          created = !!pushMatch(pick.home, pick.away);
+          if (created) {
+            mixedRemaining -= 1;
+            mixedStreak += 1;
+            mixedTeamSet.add(teamKey(pick.home));
+            mixedTeamSet.add(teamKey(pick.away));
+            mixedMatchSet.add(matchKey(pick.home, pick.away));
+          }
+        }
+      }
+
+      if (!created && mixedRemaining > 0 && women.length % 2 === 1 && women.length >= 1 && men.length >= 1) {
+        const w = women.shift();
+        const m = popWorstMale();
+        if (w && m) {
+          const supportMixed = [m.name, w.name];
+          let opp = null;
+          let oppType = null;
+          if (women.length >= 2) {
+            opp = [women.shift().name, women.shift().name];
+            oppType = 'F';
+          } else if (men.length >= 2) {
+            opp = [men.shift().name, men.shift().name];
+            oppType = 'M';
+          }
+          if (opp && pushMatch(opp, supportMixed)) {
+            created = true;
+            mixedRemaining -= 1;
+            mixedStreak += 1;
+            supportMatchSet.add(matchKey(opp, supportMixed));
+          } else {
+            women.unshift(w);
+            men.unshift(m);
+            if (opp) {
+              if (oppType === 'F') {
+                women.unshift({ name: opp[1], gender: 'F' });
+                women.unshift({ name: opp[0], gender: 'F' });
+              } else {
+                men.unshift({ name: opp[1], gender: 'M' });
+                men.unshift({ name: opp[0], gender: 'M' });
+              }
+            }
+          }
+        }
+      }
+
+      const canDoSameNow = samePossibleFromPool;
+      if (mixedRemaining <= 0) {
+        localPhase = 'same';
+        mixedRemaining = 0;
+      } else if (canDoSameNow && mixedStreak >= 2) {
+        // 혼복은 연속 최대 2경기, same 가능하면 즉시 복귀
+        localPhase = 'same';
+      } else {
+        localPhase = 'mixed';
+      }
+    }
+
+    if (created) phaseStall = 0;
+    else phaseStall += 1;
+    if (phaseStall >= 2) break;
+  }
+
+  options.phase = localPhase;
+  options.mixedRemaining = Math.max(0, mixedRemaining);
+  options.mixedStreak = Math.max(0, mixedStreak);
+  options.history = {
+    sameMaleMatchKeys: Array.from(maleMatchSet).slice(-200),
+    sameFemaleMatchKeys: Array.from(femaleMatchSet).slice(-200),
+    mixedMatchKeys: Array.from(mixedMatchSet).slice(-200),
+    supportMatchKeys: Array.from(supportMatchSet).slice(-200),
+    sameMaleTeamKeys: Array.from(maleTeamSet).slice(-200),
+    sameFemaleTeamKeys: Array.from(femaleTeamSet).slice(-200),
+    mixedTeamKeys: Array.from(mixedTeamSet).slice(-200),
+  };
+  return matches;
+}
+
+function roundEngineGenerateRoundRobinMatches(participants, options = {}) {
+  const allowGenderBattle = options.allowGenderBattle === true;
   let items = [...participants];
   if (items.length % 2 === 1) items.push('BYE');
 
@@ -17,6 +301,7 @@ function roundEngineGenerateRoundRobinMatches(participants) {
       const id = `${keyOf(a)}-${keyOf(b)}`;
       const idRev = `${keyOf(b)}-${keyOf(a)}`;
       if (seen.has(id) || seen.has(idRev)) continue;
+      if (roundEngineIsBlockedGenderBattleMatch(a, b, allowGenderBattle)) continue;
       seen.add(id);
       matches.push({ id, round: 1, home: a, away: b, winner: null });
     }
@@ -200,6 +485,7 @@ function roundEngineSortStandings(standings) {
 }
 
 window.roundEngineGenerateRoundRobinMatches = roundEngineGenerateRoundRobinMatches;
+window.roundEngineBuildAutoDoubleMatches = roundEngineBuildAutoDoubleMatches;
 window.roundEngineCalcRankingStandings = roundEngineCalcRankingStandings;
 window.roundEngineSortRankingStandings = roundEngineSortRankingStandings;
 window.roundEngineApplyRoundScore = roundEngineApplyRoundScore;
