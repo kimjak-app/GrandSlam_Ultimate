@@ -665,6 +665,7 @@ function roundAutoRenderFilterUI() {
       roundAutoRenderFilterUI();
       roundAutoRenderMatches();
       roundAutoRenderRanking();
+      roundAutoRenderPersonalRanking();
     };
   });
 
@@ -683,7 +684,6 @@ function roundAutoRenderFilterUI() {
     if (!wrap) {
       wrap = document.createElement('div');
       wrap.id = 'round-auto-gender-battle-wrap';
-      wrap.style.cssText = 'margin-top:16px; padding:10px 12px; border:1px solid #E5E5EA; border-radius:12px; background:#FAFAFA;';
       wrap.innerHTML = `
         <label for="round-auto-allow-gender-battle" style="display:flex; align-items:center; gap:8px; font-size:13px; color:#333; font-weight:600; cursor:pointer;">
           <input id="round-auto-allow-gender-battle" type="checkbox" />
@@ -693,6 +693,7 @@ function roundAutoRenderFilterUI() {
       `;
       mixedBtn.parentNode.insertAdjacentElement('afterend', wrap);
     }
+    wrap.style.cssText = 'margin-top:16px; margin-bottom:16px; padding:10px 12px; border:1px solid #E5E5EA; border-radius:12px; background:#FAFAFA;';
 
     const chk = document.getElementById('round-auto-allow-gender-battle');
     if (chk) {
@@ -784,6 +785,7 @@ function initRoundAutoPlayerPool() {
     playerPool.innerHTML = '<div style="font-size:12px; color:#999;">조건에 맞는 참가자가 없습니다.</div>';
     roundAutoRenderMatches();
     roundAutoRenderRanking();
+    roundAutoRenderPersonalRanking();
     if (selectionChanged) saveRoundAutoState();
     return;
   }
@@ -836,6 +838,7 @@ function initRoundAutoPlayerPool() {
 
   roundAutoRenderMatches();
   roundAutoRenderRanking();
+  roundAutoRenderPersonalRanking();
   if (selectionChanged) saveRoundAutoState();
 }
 function roundAutoDisplayParticipant(participant) {
@@ -1221,6 +1224,7 @@ async function roundAutoGenerateNextTurn() {
   }
   roundAutoRenderMatches();
   roundAutoRenderRanking();
+  roundAutoRenderPersonalRanking();
   saveRoundAutoState();
 }
 
@@ -1241,6 +1245,7 @@ function roundAutoSetWinner(matchId, side) {
 
   roundAutoRenderMatches();
   roundAutoRenderRanking();
+  roundAutoRenderPersonalRanking();
   saveRoundAutoState();
 }
 
@@ -1425,6 +1430,79 @@ function roundAutoRenderMatches() {
     `;
   }).join('');
 }
+
+function roundAutoComputePersonalStandings() {
+  const mode = roundAutoNormalizeEventType(roundAutoState.eventType || roundAutoState.mode);
+  const personalMap = {};
+
+  const ensure = name => {
+    if (!personalMap[name]) {
+      personalMap[name] = { name, wins: 0, losses: 0, matches: 0, score: 0 };
+    }
+    return personalMap[name];
+  };
+
+  roundAutoFlattenMatches({ includePreview: false }).forEach(match => {
+    if (!match || (match.winner !== 'home' && match.winner !== 'away')) return;
+    const homePlayers = Array.isArray(match.home) ? match.home : [match.home];
+    const awayPlayers = Array.isArray(match.away) ? match.away : [match.away];
+    const winners = match.winner === 'home' ? homePlayers : awayPlayers;
+    const losers = match.winner === 'home' ? awayPlayers : homePlayers;
+
+    const winEarn = TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring[mode === 'single' ? 'single' : 'double'].win;
+    const loseEarn = TENNIS_RULES.scoring.participate + TENNIS_RULES.scoring[mode === 'single' ? 'single' : 'double'].loss;
+
+    winners.forEach(name => {
+      const s = ensure(name);
+      s.wins += 1;
+      s.matches += 1;
+      s.score += winEarn;
+    });
+    losers.forEach(name => {
+      const s = ensure(name);
+      s.losses += 1;
+      s.matches += 1;
+      s.score += loseEarn;
+    });
+  });
+
+  return Object.values(personalMap)
+    .sort((a, b) => (b.wins - a.wins) || (a.losses - b.losses) || (b.score - a.score) || a.name.localeCompare(b.name));
+}
+
+function roundAutoRenderPersonalRanking() {
+  const table = document.getElementById('round-auto-personal-rank-table');
+  if (!table) return;
+
+  const standings = roundAutoComputePersonalStandings();
+  if (!standings.length) {
+    table.innerHTML = '<div style="font-size:12px; color:#999;">승자 선택 후 표시됩니다.</div>';
+    return;
+  }
+
+  table.innerHTML = `
+    <table class="tennis-table">
+      <thead>
+        <tr><th>순위</th><th>선수</th><th>승</th><th>패</th><th>경기</th><th>획득점수</th></tr>
+      </thead>
+      <tbody>
+        ${standings.map((s, idx) => {
+          const level = findPlayerLevel ? findPlayerLevel(s.name) : '';
+          return `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${roundAutoEscape(roundAutoPlayerLabel(s.name, level))}</td>
+            <td>${s.wins}</td>
+            <td>${s.losses}</td>
+            <td>${s.matches}</td>
+            <td>${s.score % 1 === 0 ? s.score : s.score.toFixed(1)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
 function roundAutoRenderRanking() {
   const table = document.getElementById('round-auto-rank-table');
   if (!table) return;
@@ -1476,6 +1554,8 @@ window.roundAutoGenerateNextTurn = roundAutoGenerateNextTurn;
 window.roundAutoSetWinner = roundAutoSetWinner;
 window.roundAutoRenderMatches = roundAutoRenderMatches;
 window.roundAutoRenderRanking = roundAutoRenderRanking;
+window.roundAutoRenderPersonalRanking = roundAutoRenderPersonalRanking;
+window.roundAutoComputePersonalStandings = roundAutoComputePersonalStandings;
 window.roundAutoReset = roundAutoReset;
 window.roundAutoViewOpen = roundAutoViewOpen;
 window.roundAutoOpenAddGuestModal = roundAutoOpenAddGuestModal;
