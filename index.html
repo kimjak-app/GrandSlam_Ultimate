@@ -1329,10 +1329,19 @@
         <div class="tour-section-title"><span class="material-symbols-outlined">settings</span>라운드 설정</div>
         <div
           style="border: 2px solid #E5E5EA; border-radius: 15px; padding: 14px; background: white; margin-bottom: 30px;">
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
-            <label for="round-auto-court-count" style="font-size:13px; color:#555; font-weight:600;">코트 수</label>
-            <input id="round-auto-court-count" type="number" min="1" value="2"
-              style="width:70px; border:1px solid #ddd; border-radius:8px; padding:6px 8px; font-size:13px;" />
+          <div style="margin-bottom:12px;">
+            <div style="font-size:13px; color:#555; font-weight:600; margin-bottom:6px;">코트 수</div>
+            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+              <div id="round-auto-court-tabs" style="display:flex; gap:6px;">
+                <button type="button" class="opt-btn court-tab-btn" data-court="1" style="margin:0; min-width:36px;">1</button>
+                <button type="button" class="opt-btn court-tab-btn" data-court="2" style="margin:0; min-width:36px;">2</button>
+                <button type="button" class="opt-btn court-tab-btn" data-court="3" style="margin:0; min-width:36px;">3</button>
+                <button type="button" class="opt-btn court-tab-btn" data-court="4" style="margin:0; min-width:36px;">4</button>
+                <button type="button" class="opt-btn court-tab-btn" data-court="5" style="margin:0; min-width:36px;">5</button>
+              </div>
+              <input id="round-auto-court-count" type="number" min="1" placeholder="직접입력"
+                style="width:72px; border:1px solid #ddd; border-radius:8px; padding:6px 8px; font-size:13px;" />
+            </div>
           </div>
           <div style="font-size:13px; color:#555; font-weight:600; margin-bottom:6px;">이벤트 타입</div>
           <div id="round-auto-event-type-toggle" style="display:flex; gap:8px; margin-bottom:10px;">

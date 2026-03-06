@@ -759,13 +759,33 @@ function initRoundAutoPlayerPool() {
   loadRoundAutoState();
 
   const courtInput = document.getElementById('round-auto-court-count');
+  const courtTabs = document.querySelectorAll('#round-auto-court-tabs .court-tab-btn');
+  const currentCount = roundAutoState.courtCount || 2;
+
+  const applyCourtCount = (value, fromTab) => {
+    roundAutoState.courtCount = value;
+    saveRoundAutoState();
+    // 탭 하이라이트 갱신
+    courtTabs.forEach(btn => {
+      const isActive = Number(btn.dataset.court) === value;
+      btn.style.background = isActive ? 'var(--wimbledon-sage)' : '#f3f4f6';
+      btn.style.color = isActive ? '#fff' : '#333';
+    });
+    // 직접입력 칸 — 탭에 없는 숫자면 표시, 탭 선택이면 비움
+    if (courtInput) courtInput.value = fromTab ? '' : String(value);
+  };
+
+  // 초기 상태 반영
+  applyCourtCount(currentCount, [1,2,3,4,5].includes(currentCount));
+
+  courtTabs.forEach(btn => {
+    btn.onclick = () => applyCourtCount(Number(btn.dataset.court), true);
+  });
+
   if (courtInput) {
-    courtInput.value = String(roundAutoState.courtCount || 2);
     courtInput.onchange = () => {
       const value = Math.max(1, Number(courtInput.value) || 1);
-      roundAutoState.courtCount = value;
-      courtInput.value = String(value);
-      saveRoundAutoState();
+      applyCourtCount(value, false);
     };
   }
 
