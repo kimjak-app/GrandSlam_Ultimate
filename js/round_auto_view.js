@@ -2,7 +2,6 @@
 // ROUND_AUTO_VIEW.JS - 라운드 자동생성 뷰
 // ========================================
 
-const ROUND_AUTO_KEY = 'grandslam_round_auto_state_v1';
 const DEBUG = false;
 
 function roundAutoStorageKey(clubId) {
@@ -145,11 +144,7 @@ function roundAutoAllowGenderBattle() {
 }
 
 function roundAutoCanScheduleGenderMatch(homeTeam, awayTeam) {
-  if (typeof roundEngineGenerateRoundRobinMatches !== 'function') return true;
-  const probe = roundEngineGenerateRoundRobinMatches([homeTeam, awayTeam], {
-    allowGenderBattle: roundAutoAllowGenderBattle(),
-  });
-  return Array.isArray(probe) && probe.length > 0;
+  return !roundEngineIsBlockedGenderBattleMatch(homeTeam, awayTeam, roundAutoAllowGenderBattle());
 }
 
 function roundAutoIsSingles() {
@@ -548,57 +543,6 @@ function roundAutoGenerateSinglesTurn(eligiblePool, courtCount, turnNo, statsRef
   }));
 }
 
-function roundAutoPickActivePlayers(eligiblePool, requiredPlayers, turnNo, statsRef) {
-  const sorted = [...eligiblePool].sort((a, b) => {
-    const sa = roundAutoEnsureSessionStats(a.name, statsRef);
-    const sb = roundAutoEnsureSessionStats(b.name, statsRef);
-    if (sa.played !== sb.played) return sa.played - sb.played;
-    if (sa.restStreak !== sb.restStreak) return sb.restStreak - sa.restStreak;
-    return Math.random() - 0.5;
-  });
-
-  const activePlayers = sorted.slice(0, requiredPlayers);
-  roundAutoApplyTurnParticipation(activePlayers, eligiblePool, turnNo, statsRef);
-  return activePlayers;
-}
-
-function roundAutoPartnerPenalty(a, b) {
-  const histA = roundAutoState.partnerHistory?.[a.name] || [];
-  const histB = roundAutoState.partnerHistory?.[b.name] || [];
-  return (histA.includes(b.name) ? 1 : 0) + (histB.includes(a.name) ? 1 : 0);
-}
-
-function roundAutoPairByGender(playersList) {
-  const men = shuffleArray(playersList.filter(p => p.gender === 'M'));
-  const women = shuffleArray(playersList.filter(p => p.gender === 'F'));
-  const unknown = shuffleArray(playersList.filter(p => p.gender !== 'M' && p.gender !== 'F'));
-  const pairs = [];
-  while (men.length >= 2) pairs.push([men.shift(), men.shift()]);
-  while (women.length >= 2) pairs.push([women.shift(), women.shift()]);
-  if (roundAutoState.config.allowMixed) while (men.length && women.length) pairs.push([men.shift(), women.shift()]);
-
-  const remain = shuffleArray([...men, ...women, ...unknown]);
-  while (remain.length >= 2) pairs.push([remain.shift(), remain.shift()]);
-  return pairs;
-}
-
-function roundAutoApplyPartnerSwap(pairs) {
-  for (let i = 0; i < pairs.length - 1; i += 1) {
-    for (let t = 0; t < 2; t += 1) {
-      const a = pairs[i][0];
-      const b = pairs[i][1];
-      const c = pairs[i + 1][0];
-      const d = pairs[i + 1][1];
-      const current = roundAutoPartnerPenalty(a, b) + roundAutoPartnerPenalty(c, d);
-      const swapped = roundAutoPartnerPenalty(a, d) + roundAutoPartnerPenalty(c, b);
-      if (swapped < current) {
-        pairs[i] = [a, d];
-        pairs[i + 1] = [c, b];
-      }
-    }
-  }
-}
-
 function roundAutoBuildTurnWithStats(turnNo, status, statsRef, mutateRealStats) {
   const isSingles = roundAutoIsSingles();
   const requiredPlayers = roundAutoState.courtCount * (isSingles ? 2 : 4);
@@ -615,57 +559,35 @@ function roundAutoBuildTurnWithStats(turnNo, status, statsRef, mutateRealStats) 
     matches = roundAutoGenerateSinglesTurn(eligiblePool, roundAutoState.courtCount, turnNo, statsRef) || [];
     if (!matches.length) return null;
   } else {
-    if (typeof roundEngineBuildAutoDoubleMatches === 'function') {
-      const cycleOptions = {
-        allowMixed: roundAutoState.config.allowMixed,
-        allowGenderBattle: roundAutoAllowGenderBattle(),
-        nextMatchType: (roundAutoState.nextMatchType === 'M' || roundAutoState.nextMatchType === 'F' || roundAutoState.nextMatchType === 'X')
-          ? roundAutoState.nextMatchType
-          : 'M',
-        mixedStreak: Number(roundAutoState.mixedStreak) || 0,
-        history: roundAutoState.matchupHistory || {},
-        femaleCount: eligiblePool.filter(p => p?.gender === 'F').length,
-        statsRef,
-        turnNo,
-      };
-      const planned = roundEngineBuildAutoDoubleMatches(eligiblePool, roundAutoState.courtCount, cycleOptions);
-      matches = planned.map((m, idx) => ({
-        id: `ra-${turnNo}-${idx + 1}`,
-        turnNo,
-        courtNo: m.courtNo || (idx + 1),
-        home: [m.home[0], m.home[1]],
-        away: [m.away[0], m.away[1]],
-        winner: null,
-      }));
-      if (mutateRealStats) {
-        roundAutoState.nextMatchType = (cycleOptions.nextMatchType === 'M' || cycleOptions.nextMatchType === 'F' || cycleOptions.nextMatchType === 'X')
-          ? cycleOptions.nextMatchType
-          : 'M';
-        roundAutoState.mixedStreak = Math.max(0, Number(cycleOptions.mixedStreak) || 0);
-        roundAutoState.matchupHistory = cycleOptions.history && typeof cycleOptions.history === 'object'
-          ? cycleOptions.history
-          : {};
-      }
-    } else {
-      const activePlayers = roundAutoPickActivePlayers(eligiblePool, requiredPlayers, turnNo, statsRef);
-      const pairs = roundAutoPairByGender(activePlayers);
-      roundAutoApplyPartnerSwap(pairs);
-      for (let i = 0; i < roundAutoState.courtCount; i += 1) {
-        const teamHome = pairs[i * 2];
-        const teamAway = pairs[i * 2 + 1];
-        if (!teamHome || !teamAway) break;
-        const home = [teamHome[0].name, teamHome[1].name];
-        const away = [teamAway[0].name, teamAway[1].name];
-        if (!roundAutoCanScheduleGenderMatch(home, away)) continue;
-        matches.push({
-          id: `ra-${turnNo}-${i + 1}`,
-          turnNo,
-          courtNo: i + 1,
-          home,
-          away,
-          winner: null,
-        });
-      }
+    const cycleOptions = {
+      allowMixed: roundAutoState.config.allowMixed,
+      allowGenderBattle: roundAutoAllowGenderBattle(),
+      nextMatchType: (roundAutoState.nextMatchType === 'M' || roundAutoState.nextMatchType === 'F' || roundAutoState.nextMatchType === 'X')
+        ? roundAutoState.nextMatchType
+        : 'M',
+      mixedStreak: Number(roundAutoState.mixedStreak) || 0,
+      history: roundAutoState.matchupHistory || {},
+      femaleCount: eligiblePool.filter(p => p?.gender === 'F').length,
+      statsRef,
+      turnNo,
+    };
+    const planned = roundEngineBuildAutoDoubleMatches(eligiblePool, roundAutoState.courtCount, cycleOptions);
+    matches = planned.map((m, idx) => ({
+      id: `ra-${turnNo}-${idx + 1}`,
+      turnNo,
+      courtNo: m.courtNo || (idx + 1),
+      home: [m.home[0], m.home[1]],
+      away: [m.away[0], m.away[1]],
+      winner: null,
+    }));
+    if (mutateRealStats) {
+      roundAutoState.nextMatchType = (cycleOptions.nextMatchType === 'M' || cycleOptions.nextMatchType === 'F' || cycleOptions.nextMatchType === 'X')
+        ? cycleOptions.nextMatchType
+        : 'M';
+      roundAutoState.mixedStreak = Math.max(0, Number(cycleOptions.mixedStreak) || 0);
+      roundAutoState.matchupHistory = cycleOptions.history && typeof cycleOptions.history === 'object'
+        ? cycleOptions.history
+        : {};
     }
 
     if (matches.length) {
@@ -761,7 +683,7 @@ function roundAutoRenderFilterUI() {
     if (!wrap) {
       wrap = document.createElement('div');
       wrap.id = 'round-auto-gender-battle-wrap';
-      wrap.style.cssText = 'margin-top:8px; padding:10px 12px; border:1px solid #E5E5EA; border-radius:12px; background:#FAFAFA;';
+      wrap.style.cssText = 'margin-top:16px; padding:10px 12px; border:1px solid #E5E5EA; border-radius:12px; background:#FAFAFA;';
       wrap.innerHTML = `
         <label for="round-auto-allow-gender-battle" style="display:flex; align-items:center; gap:8px; font-size:13px; color:#333; font-weight:600; cursor:pointer;">
           <input id="round-auto-allow-gender-battle" type="checkbox" />
@@ -899,7 +821,7 @@ function initRoundAutoPlayerPool() {
       checked, onClick: '', labelText: `${roundAutoGenderIcon(guest)}[당일] ${roundAutoPlayerLabel(guest.name, guest.level)}`,
       isGuest: true, showRank: false, rankText: ''
     });
-  }).join('') : '<div style="font-size:12px; color:#999;">당일 게스트가 없습니다.</div>'}
+  }).join('') : '<div style="font-size:12px; color:#999; white-space:nowrap;">당일 게스트가 없습니다.</div>'}
       </div>
     </div>
   `;
@@ -1548,7 +1470,6 @@ function roundAutoViewOpen() {
   return showViewUI('round-auto');
 }
 
-window.ROUND_AUTO_KEY = ROUND_AUTO_KEY;
 window.roundAutoStorageKey = roundAutoStorageKey;
 window.initRoundAutoPlayerPool = initRoundAutoPlayerPool;
 window.roundAutoGenerateNextTurn = roundAutoGenerateNextTurn;

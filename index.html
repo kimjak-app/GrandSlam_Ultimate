@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v4.95</title>
+  <title>GrandSlam Ultimate v4.961</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -521,7 +521,7 @@
     </div>
 
     <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">
-      v4.95</div>
+      v4.961</div>
   </div>
 
   <div id="view-tennis" class="app-screen">
@@ -1292,8 +1292,9 @@
             style="display:flex; align-items:center; justify-content:center; gap:8px;">
             <span class="material-symbols-outlined">tour</span> 토너먼트
           </button>
+          <!-- 라운드(자동생성)으로 대체됨 — v4.96에서 메뉴 숨김 -->
           <button class="btn-purple-main" onclick="openRound()"
-            style="display:flex; align-items:center; justify-content:center; gap:8px;">
+            style="display:none; align-items:center; justify-content:center; gap:8px;">
             <span class="material-symbols-outlined">cached</span> 라운드
           </button>
           <button class="btn-purple-main" onclick="openRoundAuto()"
@@ -1362,9 +1363,9 @@
           <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
             <button id="round-auto-gen-btn" class="btn-main" onclick="roundAutoGenerateNextTurn()"
               style="flex:1; margin-top:0; background:var(--aussie-blue); min-width:120px;">다음 턴 생성</button>
-            <button class="btn-main" onclick="roundAutoOpenMiniTournamentModal()"
-              style="flex:1; margin-top:0; background:#5f6caf; min-width:120px;">미니 토너먼트 Go</button>
             <button class="btn-main" onclick="roundAutoReset()" style="flex:1; margin-top:0; background:var(--roland-clay); min-width:120px;">초기화</button>
+            <button class="btn-main" onclick="roundAutoOpenMiniTournamentModal()"
+              style="flex:2; margin-top:0; background:#5f6caf; min-width:120px;">미니 토너먼트 Go</button>
           </div>
         </div>
 
@@ -1573,6 +1574,8 @@
           <div>- ✅ <b>v4.929</b>: 홈화면 개편 완료, 개인라카룸과 소속클럽 간력정보,날씨,코트,공지사항</div>
           <div>- ✅ <b>v4.94</b>: 리팩토링&쪼개기 완성. 단일 HTML → CSS/JS 모듈 분리 구조 완성</div>
           <div>- ✅ <b>v4.95</b>: 자동생성 라운드 단식 경기 결과가 시즌 랭킹에 반영되지 않던 버그 수정 (winner/loser 배열 처리)</div>
+          <div>- ✅ <b>v4.96</b>: 라운드(자동생성) UI 개선 — 버튼 레이아웃 재배치, 간격 조정, 라운드 메뉴 숨김</div>
+          <div>- ✅ <b>v4.961</b>: 코드 정리 — CRLF/LF 통일, 데드코드 제거, 성별 체크 함수 최적화</div>
 
         </div>
       </div>
