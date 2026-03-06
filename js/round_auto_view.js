@@ -27,8 +27,7 @@ function createRoundAutoInitialState() {
     },
     sessionStats: {},
     partnerHistory: {},
-    cyclePhase: 'same',
-    mixedRemaining: 0,
+    nextMatchType: 'M',
     mixedStreak: 0,
     matchupHistory: {},
     oneTimeGuests: [],
@@ -246,8 +245,9 @@ function loadRoundAutoState() {
       config: { ...initial.config, ...(parsed.config || {}) },
       sessionStats: parsed.sessionStats && typeof parsed.sessionStats === 'object' ? parsed.sessionStats : {},
       partnerHistory: parsed.partnerHistory && typeof parsed.partnerHistory === 'object' ? parsed.partnerHistory : {},
-      cyclePhase: parsed.cyclePhase === 'mixed' ? 'mixed' : 'same',
-      mixedRemaining: Math.max(0, Number(parsed.mixedRemaining) || 0),
+      nextMatchType: (parsed.nextMatchType === 'M' || parsed.nextMatchType === 'F' || parsed.nextMatchType === 'X')
+        ? parsed.nextMatchType
+        : (parsed.cyclePhase === 'mixed' ? 'X' : initial.nextMatchType),
       mixedStreak: Math.max(0, Number(parsed.mixedStreak) || 0),
       matchupHistory: parsed.matchupHistory && typeof parsed.matchupHistory === 'object' ? parsed.matchupHistory : {},
       oneTimeGuests: Array.isArray(parsed.oneTimeGuests) ? parsed.oneTimeGuests : [],
@@ -619,8 +619,9 @@ function roundAutoBuildTurnWithStats(turnNo, status, statsRef, mutateRealStats) 
       const cycleOptions = {
         allowMixed: roundAutoState.config.allowMixed,
         allowGenderBattle: roundAutoAllowGenderBattle(),
-        phase: roundAutoState.cyclePhase || 'same',
-        mixedRemaining: Number(roundAutoState.mixedRemaining) || 0,
+        nextMatchType: (roundAutoState.nextMatchType === 'M' || roundAutoState.nextMatchType === 'F' || roundAutoState.nextMatchType === 'X')
+          ? roundAutoState.nextMatchType
+          : 'M',
         mixedStreak: Number(roundAutoState.mixedStreak) || 0,
         history: roundAutoState.matchupHistory || {},
         femaleCount: eligiblePool.filter(p => p?.gender === 'F').length,
@@ -637,8 +638,9 @@ function roundAutoBuildTurnWithStats(turnNo, status, statsRef, mutateRealStats) 
         winner: null,
       }));
       if (mutateRealStats) {
-        roundAutoState.cyclePhase = cycleOptions.phase === 'mixed' ? 'mixed' : 'same';
-        roundAutoState.mixedRemaining = Math.max(0, Number(cycleOptions.mixedRemaining) || 0);
+        roundAutoState.nextMatchType = (cycleOptions.nextMatchType === 'M' || cycleOptions.nextMatchType === 'F' || cycleOptions.nextMatchType === 'X')
+          ? cycleOptions.nextMatchType
+          : 'M';
         roundAutoState.mixedStreak = Math.max(0, Number(cycleOptions.mixedStreak) || 0);
         roundAutoState.matchupHistory = cycleOptions.history && typeof cycleOptions.history === 'object'
           ? cycleOptions.history

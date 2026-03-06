@@ -1,5 +1,5 @@
 // ========================================
-// ROUND_ENGINE.JS - 라운드 로직/데이터 처리
+// ROUND_ENGINE.JS - round logic/data handling
 // ========================================
 
 function roundEngineResolveGender(name) {
@@ -34,12 +34,34 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
   const targetCourts = Math.max(0, Number(courtCount) || 0);
   if (!Array.isArray(playersList) || playersList.length < 4 || targetCourts <= 0) return [];
 
-  const shuf = arr => (typeof shuffleArray === 'function' ? shuffleArray([...arr]) : [...arr].sort(() => Math.random() - 0.5));
+  const shuf = arr => (typeof shuffleArray === 'function'
+    ? shuffleArray([...arr])
+    : [...arr].sort(() => Math.random() - 0.5));
   const statsRef = options.statsRef && typeof options.statsRef === 'object' ? options.statsRef : {};
   const turnNo = Number(options.turnNo) || 0;
-  const femaleCountBase = Math.max(0, Number(options.femaleCount) || playersList.filter(p => p?.gender === 'F').length);
-
+  const normHistory = options.history && typeof options.history === 'object' ? options.history : {};
   const getStat = name => statsRef[name] || { played: 0, restStreak: 0, lastTurnPlayed: -9999 };
+
+  const maleMatchSet = new Set(Array.isArray(normHistory.sameMaleMatchKeys) ? normHistory.sameMaleMatchKeys : []);
+  const femaleMatchSet = new Set(Array.isArray(normHistory.sameFemaleMatchKeys) ? normHistory.sameFemaleMatchKeys : []);
+  const mixedMatchSet = new Set(Array.isArray(normHistory.mixedMatchKeys) ? normHistory.mixedMatchKeys : []);
+  const supportMatchSet = new Set(Array.isArray(normHistory.supportMatchKeys) ? normHistory.supportMatchKeys : []);
+  const maleTeamSet = new Set(Array.isArray(normHistory.sameMaleTeamKeys) ? normHistory.sameMaleTeamKeys : []);
+  const femaleTeamSet = new Set(Array.isArray(normHistory.sameFemaleTeamKeys) ? normHistory.sameFemaleTeamKeys : []);
+  const mixedTeamSet = new Set(Array.isArray(normHistory.mixedTeamKeys) ? normHistory.mixedTeamKeys : []);
+
+  const isType = t => t === 'M' || t === 'F' || t === 'X';
+  let nextMatchType = isType(options.nextMatchType)
+    ? options.nextMatchType
+    : (options.phase === 'mixed' ? 'X' : 'M');
+  let mixedStreak = Math.max(0, Number(options.mixedStreak) || 0);
+  if (mixedStreak >= 2 && nextMatchType === 'X') nextMatchType = 'M';
+
+  const teamKey = team => [...team].sort().join('|');
+  const matchKey = (a, b) => [teamKey(a), teamKey(b)].sort().join('||');
+  const matches = [];
+  const usedNames = new Set();
+
   const restPriority = (a, b) => {
     const sa = getStat(a.name);
     const sb = getStat(b.name);
@@ -51,227 +73,231 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
     return Math.random() - 0.5;
   };
 
-  const men = shuf(playersList.filter(p => p?.gender === 'M')).sort(restPriority);
-  const women = shuf(playersList.filter(p => p?.gender === 'F')).sort(restPriority);
-  const unknown = shuf(playersList.filter(p => p?.gender !== 'M' && p?.gender !== 'F')).sort(restPriority);
-  if (unknown.length) men.push(...unknown);
-  const samePossibleFromPool = men.length >= 4 || women.length >= 4;
+  const sortedPool = shuf(playersList).sort(restPriority);
+  const getRemainingPool = () => sortedPool.filter(p => p && p.name && !usedNames.has(p.name));
 
-  const normHistory = options.history && typeof options.history === 'object' ? options.history : {};
-  const maleMatchSet = new Set(Array.isArray(normHistory.sameMaleMatchKeys) ? normHistory.sameMaleMatchKeys : []);
-  const femaleMatchSet = new Set(Array.isArray(normHistory.sameFemaleMatchKeys) ? normHistory.sameFemaleMatchKeys : []);
-  const mixedMatchSet = new Set(Array.isArray(normHistory.mixedMatchKeys) ? normHistory.mixedMatchKeys : []);
-  const supportMatchSet = new Set(Array.isArray(normHistory.supportMatchKeys) ? normHistory.supportMatchKeys : []);
-  const maleTeamSet = new Set(Array.isArray(normHistory.sameMaleTeamKeys) ? normHistory.sameMaleTeamKeys : []);
-  const femaleTeamSet = new Set(Array.isArray(normHistory.sameFemaleTeamKeys) ? normHistory.sameFemaleTeamKeys : []);
-  const mixedTeamSet = new Set(Array.isArray(normHistory.mixedTeamKeys) ? normHistory.mixedTeamKeys : []);
+  const buildEval = (home, away, type) => {
+    const names = [...home, ...away];
+    const uniq = new Set(names);
+    if (uniq.size !== 4) return null;
+    if (roundEngineIsBlockedGenderBattleMatch(home, away, allowGenderBattle)) return null;
 
-  let phase = options.phase === 'mixed' ? 'mixed' : 'same';
-  let mixedRemaining = Math.max(0, Number(options.mixedRemaining) || 0);
-  let mixedStreak = Math.max(0, Number(options.mixedStreak) || 0);
-  if (phase === 'mixed' && mixedRemaining <= 0) mixedRemaining = femaleCountBase;
+    const tSet = type === 'M' ? maleTeamSet : (type === 'F' ? femaleTeamSet : mixedTeamSet);
+    const mSet = type === 'M' ? maleMatchSet : (type === 'F' ? femaleMatchSet : mixedMatchSet);
+    const homeKey = teamKey(home);
+    const awayKey = teamKey(away);
+    const gameKey = matchKey(home, away);
 
-  const matches = [];
-
-  const pushMatch = (home, away) => {
-    if (!home || !away) return false;
-    if (roundEngineIsBlockedGenderBattleMatch(home, away, allowGenderBattle)) return false;
-    matches.push({ courtNo: matches.length + 1, home, away });
-    return true;
-  };
-  const teamKey = team => [...team].sort().join('|');
-  const matchKey = (a, b) => {
-    const t1 = teamKey(a);
-    const t2 = teamKey(b);
-    return [t1, t2].sort().join('||');
-  };
-  const makeTeam = bucket => {
-    if (bucket.length < 2) return null;
-    return [bucket.shift().name, bucket.shift().name];
-  };
-  const rankValue = p => {
-    const r = Number(p?.rank);
-    if (Number.isFinite(r)) return r;
-    const dr = Number(p?.dRank);
-    if (Number.isFinite(dr)) return dr;
-    return Number.POSITIVE_INFINITY;
-  };
-  const popWorstMale = () => {
-    if (!men.length) return null;
-    let idx = 0;
-    for (let i = 1; i < men.length; i += 1) {
-      const a = men[i];
-      const b = men[idx];
-      if (rankValue(a) > rankValue(b)) idx = i;
-      else if (rankValue(a) === rankValue(b) && (Number(a?.score) || 0) < (Number(b?.score) || 0)) idx = i;
-    }
-    return men.splice(idx, 1)[0];
-  };
-  const makeMixedTeam = () => {
-    if (!allowMixed) return null;
-    if (men.length && women.length) return [men.shift().name, women.shift().name];
-    return null;
-  };
-  const removeByNames = (bucket, names) => {
-    names.forEach(n => {
-      const idx = bucket.findIndex(x => x.name === n);
-      if (idx >= 0) bucket.splice(idx, 1);
+    let restedPrevCount = 0;
+    let restStreakSum = 0;
+    let playedSum = 0;
+    let playedMin = Number.POSITIVE_INFINITY;
+    let playedMax = Number.NEGATIVE_INFINITY;
+    names.forEach(name => {
+      const st = getStat(name);
+      const played = Number(st.played) || 0;
+      if (st.lastTurnPlayed !== (turnNo - 1)) restedPrevCount += 1;
+      restStreakSum += Number(st.restStreak) || 0;
+      playedSum += played;
+      playedMin = Math.min(playedMin, played);
+      playedMax = Math.max(playedMax, played);
     });
-  };
-  const chooseBestSameMatch = (bucket, type) => {
-    if (bucket.length < 4) return null;
-    const maxCandidates = Math.min(bucket.length, 10);
-    const cands = bucket.slice(0, maxCandidates);
-    let best = null;
 
-    for (let i = 0; i < cands.length - 3; i += 1) {
-      for (let j = i + 1; j < cands.length - 2; j += 1) {
-        for (let k = j + 1; k < cands.length - 1; k += 1) {
-          for (let l = k + 1; l < cands.length; l += 1) {
-            const group = [cands[i], cands[j], cands[k], cands[l]];
+    return {
+      type,
+      home,
+      away,
+      names,
+      homeKey,
+      awayKey,
+      gameKey,
+      teamRepeatCount: (tSet.has(homeKey) ? 1 : 0) + (tSet.has(awayKey) ? 1 : 0),
+      matchupRepeatCount: mSet.has(gameKey) ? 1 : 0,
+      restedPrevCount,
+      restStreakSum,
+      playedSum,
+      playedSpread: Number.isFinite(playedMin) && Number.isFinite(playedMax) ? (playedMax - playedMin) : 0,
+      noise: Math.random(),
+    };
+  };
+
+  const preferCandidate = (a, b) => {
+    if (!a) return b;
+    if (!b) return a;
+    if (a.restedPrevCount !== b.restedPrevCount) return a.restedPrevCount > b.restedPrevCount ? a : b;
+    if (a.restStreakSum !== b.restStreakSum) return a.restStreakSum > b.restStreakSum ? a : b;
+    if (a.playedSum !== b.playedSum) return a.playedSum < b.playedSum ? a : b;
+    if (a.playedSpread !== b.playedSpread) return a.playedSpread < b.playedSpread ? a : b;
+    if (a.teamRepeatCount !== b.teamRepeatCount) return a.teamRepeatCount < b.teamRepeatCount ? a : b;
+    if (a.matchupRepeatCount !== b.matchupRepeatCount) return a.matchupRepeatCount < b.matchupRepeatCount ? a : b;
+    return a.noise <= b.noise ? a : b;
+  };
+
+  const gatherTypeCandidates = (type, pool, strictNewTeams) => {
+    if (type === 'X' && !allowMixed) return [];
+    const cap = Math.min(pool.length, 12);
+    const candidates = [];
+
+    if (type === 'M' || type === 'F') {
+      const bucket = pool.filter(p => type === 'M' ? (p.gender !== 'F') : (p.gender === 'F')).slice(0, cap);
+      if (bucket.length < 4) return [];
+      const tSet = type === 'M' ? maleTeamSet : femaleTeamSet;
+      for (let i = 0; i < bucket.length - 3; i += 1) {
+        for (let j = i + 1; j < bucket.length - 2; j += 1) {
+          for (let k = j + 1; k < bucket.length - 1; k += 1) {
+            for (let l = k + 1; l < bucket.length; l += 1) {
+              const g = [bucket[i].name, bucket[j].name, bucket[k].name, bucket[l].name];
+              const pairings = [
+                [[g[0], g[1]], [g[2], g[3]]],
+                [[g[0], g[2]], [g[1], g[3]]],
+                [[g[0], g[3]], [g[1], g[2]]],
+              ];
+              pairings.forEach(([home, away]) => {
+                const hKey = teamKey(home);
+                const aKey = teamKey(away);
+                if (strictNewTeams && (tSet.has(hKey) || tSet.has(aKey))) return;
+                const evald = buildEval(home, away, type);
+                if (evald) candidates.push(evald);
+              });
+            }
+          }
+        }
+      }
+      return candidates;
+    }
+
+    const men = pool.filter(p => p.gender !== 'F').slice(0, cap);
+    const women = pool.filter(p => p.gender === 'F').slice(0, cap);
+    if (men.length < 2 || women.length < 2) return [];
+
+    for (let mi = 0; mi < men.length - 1; mi += 1) {
+      for (let mj = mi + 1; mj < men.length; mj += 1) {
+        for (let fi = 0; fi < women.length - 1; fi += 1) {
+          for (let fj = fi + 1; fj < women.length; fj += 1) {
+            const m1 = men[mi].name, m2 = men[mj].name;
+            const f1 = women[fi].name, f2 = women[fj].name;
             const pairings = [
-              [[group[0].name, group[1].name], [group[2].name, group[3].name]],
-              [[group[0].name, group[2].name], [group[1].name, group[3].name]],
-              [[group[0].name, group[3].name], [group[1].name, group[2].name]],
+              [[m1, f1], [m2, f2]],
+              [[m1, f2], [m2, f1]],
             ];
             pairings.forEach(([home, away]) => {
-              const tkHome = teamKey(home);
-              const tkAway = teamKey(away);
-              const mk = matchKey(home, away);
-              const tSet = type === 'M' ? maleTeamSet : femaleTeamSet;
-              const mSet = type === 'M' ? maleMatchSet : femaleMatchSet;
-              const score =
-                (mSet.has(mk) ? 1000 : 0) +
-                (tSet.has(tkHome) ? 100 : 0) +
-                (tSet.has(tkAway) ? 100 : 0);
-              if (!best || score < best.score) best = { score, home, away, names: group.map(x => x.name) };
+              const hKey = teamKey(home);
+              const aKey = teamKey(away);
+              if (strictNewTeams && (mixedTeamSet.has(hKey) || mixedTeamSet.has(aKey))) return;
+              const evald = buildEval(home, away, 'X');
+              if (evald) candidates.push(evald);
             });
           }
         }
       }
     }
+    return candidates;
+  };
+
+  const chooseCandidateForType = (type, pool, strictNewTeams) => {
+    const cands = gatherTypeCandidates(type, pool, strictNewTeams);
+    if (!cands.length) return null;
+    let best = null;
+    cands.forEach(c => { best = preferCandidate(best, c); });
     return best;
   };
-  const chooseMixedPairMatch = () => {
-    if (!allowMixed || men.length < 2 || women.length < 2) return null;
-    const m1 = men[0], m2 = men[1], f1 = women[0], f2 = women[1];
-    const c1 = { home: [m1.name, f1.name], away: [m2.name, f2.name] };
-    const c2 = { home: [m1.name, f2.name], away: [m2.name, f1.name] };
-    const score = c => {
-      const mk = matchKey(c.home, c.away);
-      const th = teamKey(c.home), ta = teamKey(c.away);
-      return (mixedMatchSet.has(mk) ? 1000 : 0) + (mixedTeamSet.has(th) ? 100 : 0) + (mixedTeamSet.has(ta) ? 100 : 0);
-    };
-    const pick = score(c1) <= score(c2) ? c1 : c2;
-    removeByNames(men, [m1.name, m2.name]);
-    removeByNames(women, [f1.name, f2.name]);
-    return pick;
+
+  const getTypeTryOrder = preferredType => {
+    const base = preferredType === 'F'
+      ? ['F', 'X', 'M']
+      : (preferredType === 'X' ? ['X', 'M', 'F'] : ['M', 'F', 'X']);
+    return base.filter((t, idx, arr) => arr.indexOf(t) === idx);
   };
 
-  let localPhase = phase;
-  let phaseStall = 0;
-  while (matches.length < targetCourts) {
-    let created = false;
+  const sanitizeTypeOrder = order => order.filter(t => {
+    if (t === 'X' && !allowMixed) return false;
+    if (t === 'X' && mixedStreak >= 2) return false;
+    return true;
+  });
 
-    if (localPhase === 'same') {
-      // same 턴: 남복 우선, 다음 여복 (코트 수만큼 1매치씩 즉석 생성)
-      if (men.length >= 4) {
-        const pick = chooseBestSameMatch(men, 'M');
-        if (pick) {
-          removeByNames(men, pick.names);
-          created = !!pushMatch(pick.home, pick.away);
-          if (created) {
-            maleTeamSet.add(teamKey(pick.home));
-            maleTeamSet.add(teamKey(pick.away));
-            maleMatchSet.add(matchKey(pick.home, pick.away));
-          }
-        }
-      }
-      if (!created && women.length >= 4) {
-        const pick = chooseBestSameMatch(women, 'F');
-        if (pick) {
-          removeByNames(women, pick.names);
-          created = !!pushMatch(pick.home, pick.away);
-          if (created) {
-            femaleTeamSet.add(teamKey(pick.home));
-            femaleTeamSet.add(teamKey(pick.away));
-            femaleMatchSet.add(matchKey(pick.home, pick.away));
-          }
-        }
-      }
-      localPhase = 'mixed';
-      if (mixedRemaining <= 0) mixedRemaining = femaleCountBase;
-      if (created) mixedStreak = 0;
+  const persistHistory = pick => {
+    if (!pick) return;
+    if (pick.type === 'M') {
+      maleTeamSet.add(pick.homeKey);
+      maleTeamSet.add(pick.awayKey);
+      maleMatchSet.add(pick.gameKey);
+    } else if (pick.type === 'F') {
+      femaleTeamSet.add(pick.homeKey);
+      femaleTeamSet.add(pick.awayKey);
+      femaleMatchSet.add(pick.gameKey);
     } else {
-      // mixed 턴: 혼복 vs 혼복 1매치, 실패 시 보완 혼복 예외 허용
-      if (mixedRemaining > 0 && allowMixed && men.length >= 2 && women.length >= 2) {
-        const pick = chooseMixedPairMatch();
-        if (pick) {
-          created = !!pushMatch(pick.home, pick.away);
-          if (created) {
-            mixedRemaining -= 1;
-            mixedStreak += 1;
-            mixedTeamSet.add(teamKey(pick.home));
-            mixedTeamSet.add(teamKey(pick.away));
-            mixedMatchSet.add(matchKey(pick.home, pick.away));
-          }
-        }
-      }
+      mixedTeamSet.add(pick.homeKey);
+      mixedTeamSet.add(pick.awayKey);
+      mixedMatchSet.add(pick.gameKey);
+    }
+  };
 
-      if (!created && mixedRemaining > 0 && women.length % 2 === 1 && women.length >= 1 && men.length >= 1) {
-        const w = women.shift();
-        const m = popWorstMale();
-        if (w && m) {
-          const supportMixed = [m.name, w.name];
-          let opp = null;
-          let oppType = null;
-          if (women.length >= 2) {
-            opp = [women.shift().name, women.shift().name];
-            oppType = 'F';
-          } else if (men.length >= 2) {
-            opp = [men.shift().name, men.shift().name];
-            oppType = 'M';
-          }
-          if (opp && pushMatch(opp, supportMixed)) {
-            created = true;
-            mixedRemaining -= 1;
-            mixedStreak += 1;
-            supportMatchSet.add(matchKey(opp, supportMixed));
-          } else {
-            women.unshift(w);
-            men.unshift(m);
-            if (opp) {
-              if (oppType === 'F') {
-                women.unshift({ name: opp[1], gender: 'F' });
-                women.unshift({ name: opp[0], gender: 'F' });
-              } else {
-                men.unshift({ name: opp[1], gender: 'M' });
-                men.unshift({ name: opp[0], gender: 'M' });
-              }
-            }
-          }
-        }
-      }
+  const updateRhythmState = createdType => {
+    if (createdType === 'M') {
+      nextMatchType = 'F';
+      mixedStreak = 0;
+      return;
+    }
+    if (createdType === 'F') {
+      nextMatchType = 'X';
+      mixedStreak = 0;
+      return;
+    }
+    if (mixedStreak <= 0) {
+      nextMatchType = 'X';
+      mixedStreak = 1;
+    } else {
+      nextMatchType = 'M';
+      mixedStreak = 2;
+    }
+  };
 
-      const canDoSameNow = samePossibleFromPool;
-      if (mixedRemaining <= 0) {
-        localPhase = 'same';
-        mixedRemaining = 0;
-      } else if (canDoSameNow && mixedStreak >= 2) {
-        // 혼복은 연속 최대 2경기, same 가능하면 즉시 복귀
-        localPhase = 'same';
-      } else {
-        localPhase = 'mixed';
+  for (let courtIdx = 0; courtIdx < targetCourts; courtIdx += 1) {
+    const pool = getRemainingPool();
+    if (pool.length < 4) break;
+
+    let tryOrder = sanitizeTypeOrder(getTypeTryOrder(nextMatchType));
+    if (!tryOrder.length) tryOrder = sanitizeTypeOrder(['M', 'F', 'X']);
+
+    let picked = null;
+    for (let i = 0; i < tryOrder.length; i += 1) {
+      picked = chooseCandidateForType(tryOrder[i], pool, true);
+      if (picked) break;
+    }
+
+    if (!picked) {
+      for (let i = 0; i < tryOrder.length; i += 1) {
+        picked = chooseCandidateForType(tryOrder[i], pool, false);
+        if (picked) break;
       }
     }
 
-    if (created) phaseStall = 0;
-    else phaseStall += 1;
-    if (phaseStall >= 2) break;
+    const isLastCourt = courtIdx === (targetCourts - 1);
+    if (!picked && isLastCourt) {
+      const finalOrder = sanitizeTypeOrder(['M', 'F', 'X']);
+      for (let i = 0; i < finalOrder.length; i += 1) {
+        picked = chooseCandidateForType(finalOrder[i], pool, false);
+        if (picked) break;
+      }
+    }
+
+    if (!picked) break;
+    if (roundEngineIsBlockedGenderBattleMatch(picked.home, picked.away, allowGenderBattle)) continue;
+
+    matches.push({
+      courtNo: matches.length + 1,
+      matchType: picked.type,
+      home: picked.home,
+      away: picked.away,
+    });
+    picked.names.forEach(name => usedNames.add(name));
+    persistHistory(picked);
+    updateRhythmState(picked.type);
   }
 
-  options.phase = localPhase;
-  options.mixedRemaining = Math.max(0, mixedRemaining);
+  options.nextMatchType = nextMatchType;
+  options.phase = nextMatchType === 'X' ? 'mixed' : 'same';
+  options.mixedRemaining = 0;
   options.mixedStreak = Math.max(0, mixedStreak);
   options.history = {
     sameMaleMatchKeys: Array.from(maleMatchSet).slice(-200),
