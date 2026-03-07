@@ -132,9 +132,19 @@ function autoMixedDoubleTeams() {
 }
 
 function resetAllScoresKeepPlayersData() {
+  const scoreFields = [
+    'score', 'wins', 'losses', 'last',
+    'dScore', 'dWins', 'dLosses', 'lastD',
+    'sScore', 'sWins', 'sLosses', 'lastS',
+    'weekly', 'wWins', 'wLosses',
+    'wdScore', 'wsScore', 'wdWins', 'wdLosses', 'wsWins', 'wsLosses',
+    'lastW', 'lastWD', 'lastWS',
+    'mScore', 'mWins', 'mLosses', 'lastM'
+  ];
+
   players.forEach(p => {
-    Object.keys(p).forEach(k => {
-      if (k !== 'name' && k !== 'isGuest') p[k] = 0;
+    scoreFields.forEach(field => {
+      p[field] = 0;
     });
   });
   matchLog = [];

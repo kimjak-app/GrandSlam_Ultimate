@@ -33,19 +33,15 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
   const allowGenderBattle = options.allowGenderBattle === true;
   const targetCourts = Math.max(0, Number(courtCount) || 0);
   if (!Array.isArray(playersList) || playersList.length < 4 || targetCourts <= 0) return [];
-
-  const shuf = arr => (typeof shuffleArray === 'function'
-    ? shuffleArray([...arr])
-    : [...arr].sort(() => Math.random() - 0.5));
   const statsRef = options.statsRef && typeof options.statsRef === 'object' ? options.statsRef : {};
   const turnNo = Number(options.turnNo) || 0;
   const normHistory = options.history && typeof options.history === 'object' ? options.history : {};
+  const variantIndex = Math.max(0, Number(options.variantIndex) || 0);
   const getStat = name => statsRef[name] || { played: 0, restStreak: 0, lastTurnPlayed: -9999 };
 
   const maleMatchSet = new Set(Array.isArray(normHistory.sameMaleMatchKeys) ? normHistory.sameMaleMatchKeys : []);
   const femaleMatchSet = new Set(Array.isArray(normHistory.sameFemaleMatchKeys) ? normHistory.sameFemaleMatchKeys : []);
   const mixedMatchSet = new Set(Array.isArray(normHistory.mixedMatchKeys) ? normHistory.mixedMatchKeys : []);
-  const supportMatchSet = new Set(Array.isArray(normHistory.supportMatchKeys) ? normHistory.supportMatchKeys : []);
   const maleTeamSet = new Set(Array.isArray(normHistory.sameMaleTeamKeys) ? normHistory.sameMaleTeamKeys : []);
   const femaleTeamSet = new Set(Array.isArray(normHistory.sameFemaleTeamKeys) ? normHistory.sameFemaleTeamKeys : []);
   const mixedTeamSet = new Set(Array.isArray(normHistory.mixedTeamKeys) ? normHistory.mixedTeamKeys : []);
@@ -59,48 +55,57 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
 
   const teamKey = team => [...team].sort().join('|');
   const matchKey = (a, b) => [teamKey(a), teamKey(b)].sort().join('||');
-  const matches = [];
-  const usedNames = new Set();
 
   const restPriority = (a, b) => {
     const sa = getStat(a.name);
     const sb = getStat(b.name);
-    const aRestedPrev = sa.lastTurnPlayed !== (turnNo - 1);
-    const bRestedPrev = sb.lastTurnPlayed !== (turnNo - 1);
-    if (aRestedPrev !== bRestedPrev) return aRestedPrev ? -1 : 1;
+    const aRestStreak = Number(sa.restStreak) || 0;
+    const bRestStreak = Number(sb.restStreak) || 0;
+    if (aRestStreak !== bRestStreak) return bRestStreak - aRestStreak;
+    const aRestedPrev = sa.lastTurnPlayed !== (turnNo - 1) ? 1 : 0;
+    const bRestedPrev = sb.lastTurnPlayed !== (turnNo - 1) ? 1 : 0;
+    if (aRestedPrev !== bRestedPrev) return bRestedPrev - aRestedPrev;
     if ((sa.played || 0) !== (sb.played || 0)) return (sa.played || 0) - (sb.played || 0);
-    if ((sa.restStreak || 0) !== (sb.restStreak || 0)) return (sb.restStreak || 0) - (sa.restStreak || 0);
-    return Math.random() - 0.5;
+    return String(a.name || '').localeCompare(String(b.name || ''));
   };
 
-  const sortedPool = shuf(playersList).sort(restPriority);
-  const getRemainingPool = () => sortedPool.filter(p => p && p.name && !usedNames.has(p.name));
-
-  const buildEval = (home, away, type) => {
+  const buildEval = (home, away, type, historyCtx) => {
     const names = [...home, ...away];
     const uniq = new Set(names);
     if (uniq.size !== 4) return null;
     if (roundEngineIsBlockedGenderBattleMatch(home, away, allowGenderBattle)) return null;
 
-    const tSet = type === 'M' ? maleTeamSet : (type === 'F' ? femaleTeamSet : mixedTeamSet);
-    const mSet = type === 'M' ? maleMatchSet : (type === 'F' ? femaleMatchSet : mixedMatchSet);
+    const tSet = type === 'M' ? historyCtx.maleTeamSet : (type === 'F' ? historyCtx.femaleTeamSet : historyCtx.mixedTeamSet);
+    const mSet = type === 'M' ? historyCtx.maleMatchSet : (type === 'F' ? historyCtx.femaleMatchSet : historyCtx.mixedMatchSet);
     const homeKey = teamKey(home);
     const awayKey = teamKey(away);
     const gameKey = matchKey(home, away);
 
+    let longRestScore = 0;
     let restedPrevCount = 0;
-    let restStreakSum = 0;
+    let consecutivePenalty = 0;
     let playedSum = 0;
-    let playedMin = Number.POSITIVE_INFINITY;
-    let playedMax = Number.NEGATIVE_INFINITY;
+    let rankGap = 0;
+
+    const avgRank = team => {
+      const rankSum = team.reduce((sum, name) => {
+        const p = players.find(pl => pl?.name === name);
+        const raw = Number(p?.dRank ?? p?.rank);
+        const fallback = Number(getStat(name).played) || 0;
+        return sum + (Number.isFinite(raw) && raw > 0 ? raw : fallback);
+      }, 0);
+      return rankSum / Math.max(1, team.length);
+    };
+    rankGap = Math.abs(avgRank(home) - avgRank(away));
+
     names.forEach(name => {
       const st = getStat(name);
+      const restStreak = Number(st.restStreak) || 0;
       const played = Number(st.played) || 0;
+      longRestScore += restStreak >= 2 ? (restStreak * 2) : restStreak;
       if (st.lastTurnPlayed !== (turnNo - 1)) restedPrevCount += 1;
-      restStreakSum += Number(st.restStreak) || 0;
+      if (st.lastTurnPlayed === (turnNo - 1)) consecutivePenalty += 1;
       playedSum += played;
-      playedMin = Math.min(playedMin, played);
-      playedMax = Math.max(playedMax, played);
     });
 
     return {
@@ -113,27 +118,29 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
       gameKey,
       teamRepeatCount: (tSet.has(homeKey) ? 1 : 0) + (tSet.has(awayKey) ? 1 : 0),
       matchupRepeatCount: mSet.has(gameKey) ? 1 : 0,
+      longRestScore,
       restedPrevCount,
-      restStreakSum,
+      consecutivePenalty,
       playedSum,
-      playedSpread: Number.isFinite(playedMin) && Number.isFinite(playedMax) ? (playedMax - playedMin) : 0,
-      noise: Math.random(),
+      rankGap,
+      lex: `${homeKey}||${awayKey}`,
     };
   };
 
   const preferCandidate = (a, b) => {
     if (!a) return b;
     if (!b) return a;
+    if (a.longRestScore !== b.longRestScore) return a.longRestScore > b.longRestScore ? a : b;
     if (a.restedPrevCount !== b.restedPrevCount) return a.restedPrevCount > b.restedPrevCount ? a : b;
-    if (a.restStreakSum !== b.restStreakSum) return a.restStreakSum > b.restStreakSum ? a : b;
-    if (a.playedSum !== b.playedSum) return a.playedSum < b.playedSum ? a : b;
-    if (a.playedSpread !== b.playedSpread) return a.playedSpread < b.playedSpread ? a : b;
+    if (a.consecutivePenalty !== b.consecutivePenalty) return a.consecutivePenalty < b.consecutivePenalty ? a : b;
     if (a.teamRepeatCount !== b.teamRepeatCount) return a.teamRepeatCount < b.teamRepeatCount ? a : b;
     if (a.matchupRepeatCount !== b.matchupRepeatCount) return a.matchupRepeatCount < b.matchupRepeatCount ? a : b;
-    return a.noise <= b.noise ? a : b;
+    if (a.rankGap !== b.rankGap) return a.rankGap < b.rankGap ? a : b;
+    if (a.playedSum !== b.playedSum) return a.playedSum < b.playedSum ? a : b;
+    return a.lex <= b.lex ? a : b;
   };
 
-  const gatherTypeCandidates = (type, pool, strictNewTeams) => {
+  const gatherTypeCandidates = (type, pool, strictNewTeams, historyCtx) => {
     if (type === 'X' && !allowMixed) return [];
     const cap = Math.min(pool.length, 12);
     const candidates = [];
@@ -141,7 +148,7 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
     if (type === 'M' || type === 'F') {
       const bucket = pool.filter(p => type === 'M' ? (p.gender !== 'F') : (p.gender === 'F')).slice(0, cap);
       if (bucket.length < 4) return [];
-      const tSet = type === 'M' ? maleTeamSet : femaleTeamSet;
+      const tSet = type === 'M' ? historyCtx.maleTeamSet : historyCtx.femaleTeamSet;
       for (let i = 0; i < bucket.length - 3; i += 1) {
         for (let j = i + 1; j < bucket.length - 2; j += 1) {
           for (let k = j + 1; k < bucket.length - 1; k += 1) {
@@ -156,7 +163,7 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
                 const hKey = teamKey(home);
                 const aKey = teamKey(away);
                 if (strictNewTeams && (tSet.has(hKey) || tSet.has(aKey))) return;
-                const evald = buildEval(home, away, type);
+                const evald = buildEval(home, away, type, historyCtx);
                 if (evald) candidates.push(evald);
               });
             }
@@ -183,8 +190,8 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
             pairings.forEach(([home, away]) => {
               const hKey = teamKey(home);
               const aKey = teamKey(away);
-              if (strictNewTeams && (mixedTeamSet.has(hKey) || mixedTeamSet.has(aKey))) return;
-              const evald = buildEval(home, away, 'X');
+              if (strictNewTeams && (historyCtx.mixedTeamSet.has(hKey) || historyCtx.mixedTeamSet.has(aKey))) return;
+              const evald = buildEval(home, away, 'X', historyCtx);
               if (evald) candidates.push(evald);
             });
           }
@@ -194,12 +201,13 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
     return candidates;
   };
 
-  const chooseCandidateForType = (type, pool, strictNewTeams) => {
-    const cands = gatherTypeCandidates(type, pool, strictNewTeams);
+  const chooseCandidateForType = (type, pool, strictNewTeams, variantOffset, historyCtx) => {
+    const cands = gatherTypeCandidates(type, pool, strictNewTeams, historyCtx);
     if (!cands.length) return null;
-    let best = null;
-    cands.forEach(c => { best = preferCandidate(best, c); });
-    return best;
+    const ranked = cands.sort((x, y) => (preferCandidate(x, y) === x ? -1 : 1));
+    const selectable = Math.min(5, ranked.length);
+    const idx = selectable ? (Math.max(0, Number(variantOffset) || 0) % selectable) : 0;
+    return ranked[idx] || ranked[0];
   };
 
   const getTypeTryOrder = preferredType => {
@@ -209,90 +217,145 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
     return base.filter((t, idx, arr) => arr.indexOf(t) === idx);
   };
 
-  const sanitizeTypeOrder = order => order.filter(t => {
+  const sanitizeTypeOrder = (order, currentMixedStreak) => order.filter(t => {
     if (t === 'X' && !allowMixed) return false;
-    if (t === 'X' && mixedStreak >= 2) return false;
+    if (t === 'X' && currentMixedStreak >= 2) return false;
     return true;
   });
 
-  const persistHistory = pick => {
+  const persistHistory = (pick, historyCtx) => {
     if (!pick) return;
+    const maleTeamRef = historyCtx.maleTeamSet;
+    const femaleTeamRef = historyCtx.femaleTeamSet;
+    const mixedTeamRef = historyCtx.mixedTeamSet;
+    const maleMatchRef = historyCtx.maleMatchSet;
+    const femaleMatchRef = historyCtx.femaleMatchSet;
+    const mixedMatchRef = historyCtx.mixedMatchSet;
+
     if (pick.type === 'M') {
-      maleTeamSet.add(pick.homeKey);
-      maleTeamSet.add(pick.awayKey);
-      maleMatchSet.add(pick.gameKey);
+      maleTeamRef.add(pick.homeKey);
+      maleTeamRef.add(pick.awayKey);
+      maleMatchRef.add(pick.gameKey);
     } else if (pick.type === 'F') {
-      femaleTeamSet.add(pick.homeKey);
-      femaleTeamSet.add(pick.awayKey);
-      femaleMatchSet.add(pick.gameKey);
+      femaleTeamRef.add(pick.homeKey);
+      femaleTeamRef.add(pick.awayKey);
+      femaleMatchRef.add(pick.gameKey);
     } else {
-      mixedTeamSet.add(pick.homeKey);
-      mixedTeamSet.add(pick.awayKey);
-      mixedMatchSet.add(pick.gameKey);
+      mixedTeamRef.add(pick.homeKey);
+      mixedTeamRef.add(pick.awayKey);
+      mixedMatchRef.add(pick.gameKey);
     }
   };
 
-  const updateRhythmState = createdType => {
+  const updateRhythmState = (createdType, rhythmState) => {
     if (createdType === 'M') {
-      nextMatchType = 'F';
-      mixedStreak = 0;
+      rhythmState.nextMatchType = 'F';
+      rhythmState.mixedStreak = 0;
       return;
     }
     if (createdType === 'F') {
-      nextMatchType = 'X';
-      mixedStreak = 0;
+      rhythmState.nextMatchType = 'X';
+      rhythmState.mixedStreak = 0;
       return;
     }
-    if (mixedStreak <= 0) {
-      nextMatchType = 'X';
-      mixedStreak = 1;
+    if (rhythmState.mixedStreak <= 0) {
+      rhythmState.nextMatchType = 'X';
+      rhythmState.mixedStreak = 1;
     } else {
-      nextMatchType = 'M';
-      mixedStreak = 2;
+      rhythmState.nextMatchType = 'M';
+      rhythmState.mixedStreak = 2;
     }
   };
 
-  for (let courtIdx = 0; courtIdx < targetCourts; courtIdx += 1) {
-    const pool = getRemainingPool();
-    if (pool.length < 4) break;
+  const buildReasonTags = (pick) => {
+    const tags = [];
+    if ((pick.longRestScore || 0) > 0 || (pick.restedPrevCount || 0) >= 2) tags.push('오래 쉰 선수 우선');
+    if ((pick.teamRepeatCount || 0) === 0) tags.push('파트너 반복 회피');
+    else if ((pick.matchupRepeatCount || 0) === 0) tags.push('상대 반복 회피');
+    if ((pick.rankGap || 0) <= 2) tags.push('랭크 균형');
+    if ((pick.consecutivePenalty || 0) <= 1) tags.push('연속 출전 제한');
+    if (!tags.length) tags.push('공정 출전 균형');
+    return tags.slice(0, 3);
+  };
 
-    let tryOrder = sanitizeTypeOrder(getTypeTryOrder(nextMatchType));
-    if (!tryOrder.length) tryOrder = sanitizeTypeOrder(['M', 'F', 'X']);
+  const planForCourtCount = (courtCountToUse) => {
+    const localHistory = {
+      maleMatchSet: new Set(maleMatchSet),
+      femaleMatchSet: new Set(femaleMatchSet),
+      mixedMatchSet: new Set(mixedMatchSet),
+      maleTeamSet: new Set(maleTeamSet),
+      femaleTeamSet: new Set(femaleTeamSet),
+      mixedTeamSet: new Set(mixedTeamSet),
+    };
+    const rhythm = { nextMatchType, mixedStreak };
+    const sortedPool = [...playersList].filter(p => p?.name).sort(restPriority);
+    const activePool = sortedPool.slice(0, Math.min(sortedPool.length, courtCountToUse * 4));
+    const usedNames = new Set();
+    const matches = [];
 
-    let picked = null;
-    for (let i = 0; i < tryOrder.length; i += 1) {
-      picked = chooseCandidateForType(tryOrder[i], pool, true);
-      if (picked) break;
-    }
+    const getRemainingPool = () => activePool.filter(p => !usedNames.has(p.name));
 
-    if (!picked) {
+    for (let courtIdx = 0; courtIdx < courtCountToUse; courtIdx += 1) {
+      const pool = getRemainingPool();
+      if (pool.length < 4) break;
+
+      const preferredType = rhythm.nextMatchType;
+      let tryOrder = sanitizeTypeOrder(getTypeTryOrder(preferredType), rhythm.mixedStreak);
+      if (!tryOrder.length) tryOrder = sanitizeTypeOrder(['M', 'F', 'X'], rhythm.mixedStreak);
+
+      let picked = null;
       for (let i = 0; i < tryOrder.length; i += 1) {
-        picked = chooseCandidateForType(tryOrder[i], pool, false);
+        picked = chooseCandidateForType(tryOrder[i], pool, true, variantIndex + courtIdx, localHistory);
         if (picked) break;
       }
-    }
-
-    const isLastCourt = courtIdx === (targetCourts - 1);
-    if (!picked && isLastCourt) {
-      const finalOrder = sanitizeTypeOrder(['M', 'F', 'X']);
-      for (let i = 0; i < finalOrder.length; i += 1) {
-        picked = chooseCandidateForType(finalOrder[i], pool, false);
-        if (picked) break;
+      if (!picked) {
+        for (let i = 0; i < tryOrder.length; i += 1) {
+          picked = chooseCandidateForType(tryOrder[i], pool, false, variantIndex + courtIdx, localHistory);
+          if (picked) break;
+        }
       }
+      if (!picked) break;
+      if (roundEngineIsBlockedGenderBattleMatch(picked.home, picked.away, allowGenderBattle)) continue;
+
+      matches.push({
+        courtNo: matches.length + 1,
+        matchType: picked.type,
+        home: picked.home,
+        away: picked.away,
+        reasonTags: buildReasonTags(picked),
+      });
+      picked.names.forEach(name => usedNames.add(name));
+      persistHistory(picked, localHistory);
+      updateRhythmState(picked.type, rhythm);
     }
 
-    if (!picked) break;
-    if (roundEngineIsBlockedGenderBattleMatch(picked.home, picked.away, allowGenderBattle)) continue;
+    return {
+      matches,
+      success: matches.length === courtCountToUse,
+      history: localHistory,
+      nextMatchType: rhythm.nextMatchType,
+      mixedStreak: rhythm.mixedStreak,
+    };
+  };
 
-    matches.push({
-      courtNo: matches.length + 1,
-      matchType: picked.type,
-      home: picked.home,
-      away: picked.away,
-    });
-    picked.names.forEach(name => usedNames.add(name));
-    persistHistory(picked);
-    updateRhythmState(picked.type);
+  let finalPlan = null;
+  for (let courts = targetCourts; courts >= 1; courts -= 1) {
+    const plan = planForCourtCount(courts);
+    if (!plan.matches.length) continue;
+    finalPlan = plan;
+    if (plan.success) break;
+  }
+
+  const matches = finalPlan ? finalPlan.matches : [];
+  if (finalPlan) {
+    nextMatchType = finalPlan.nextMatchType;
+    mixedStreak = finalPlan.mixedStreak;
+    maleMatchSet.clear(); finalPlan.history.maleMatchSet.forEach(v => maleMatchSet.add(v));
+    femaleMatchSet.clear(); finalPlan.history.femaleMatchSet.forEach(v => femaleMatchSet.add(v));
+    mixedMatchSet.clear(); finalPlan.history.mixedMatchSet.forEach(v => mixedMatchSet.add(v));
+    maleTeamSet.clear(); finalPlan.history.maleTeamSet.forEach(v => maleTeamSet.add(v));
+    femaleTeamSet.clear(); finalPlan.history.femaleTeamSet.forEach(v => femaleTeamSet.add(v));
+    mixedTeamSet.clear(); finalPlan.history.mixedTeamSet.forEach(v => mixedTeamSet.add(v));
   }
 
   options.nextMatchType = nextMatchType;
@@ -303,7 +366,6 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
     sameMaleMatchKeys: Array.from(maleMatchSet).slice(-200),
     sameFemaleMatchKeys: Array.from(femaleMatchSet).slice(-200),
     mixedMatchKeys: Array.from(mixedMatchSet).slice(-200),
-    supportMatchKeys: Array.from(supportMatchSet).slice(-200),
     sameMaleTeamKeys: Array.from(maleTeamSet).slice(-200),
     sameFemaleTeamKeys: Array.from(femaleTeamSet).slice(-200),
     mixedTeamKeys: Array.from(mixedTeamSet).slice(-200),

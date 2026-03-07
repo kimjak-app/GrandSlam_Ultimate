@@ -28,6 +28,7 @@ function createRoundAutoInitialState() {
     partnerHistory: {},
     nextMatchType: 'M',
     mixedStreak: 0,
+    previewVariant: 0,
     matchupHistory: {},
     oneTimeGuests: [],
     miniTournament: { matches: [], round: 0, matchupHistory: {} },
@@ -244,6 +245,7 @@ function loadRoundAutoState() {
         ? parsed.nextMatchType
         : (parsed.cyclePhase === 'mixed' ? 'X' : initial.nextMatchType),
       mixedStreak: Math.max(0, Number(parsed.mixedStreak) || 0),
+      previewVariant: Math.max(0, Number(parsed.previewVariant) || 0),
       matchupHistory: parsed.matchupHistory && typeof parsed.matchupHistory === 'object' ? parsed.matchupHistory : {},
       oneTimeGuests: Array.isArray(parsed.oneTimeGuests) ? parsed.oneTimeGuests : [],
     };
@@ -301,6 +303,20 @@ function saveRoundAutoState() {
 function roundAutoBuildTurn(turnNo, status) {
   const simulatedStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
   return roundAutoBuildTurnWithStats(turnNo, status, simulatedStats, false);
+}
+
+function roundAutoSyncStateFromCurrentUI() {
+  const playerPool = document.getElementById('round-auto-player-pool');
+  if (playerPool) {
+    const selected = Array.from(playerPool.querySelectorAll('input[type="checkbox"]:checked')).map(el => el.value);
+    roundAutoState.selectedPlayers = selected;
+  }
+
+  const courtInput = document.getElementById('round-auto-court-count');
+  const typedCourt = Number(courtInput?.value);
+  if (Number.isFinite(typedCourt) && typedCourt >= 1) {
+    roundAutoState.courtCount = typedCourt;
+  }
 }
 
 function roundAutoGetSelectedEligiblePool() {
@@ -566,6 +582,7 @@ function roundAutoBuildTurnWithStats(turnNo, status, statsRef, mutateRealStats) 
         ? roundAutoState.nextMatchType
         : 'M',
       mixedStreak: Number(roundAutoState.mixedStreak) || 0,
+      variantIndex: Math.max(0, Number(roundAutoState.previewVariant) || 0),
       history: roundAutoState.matchupHistory || {},
       femaleCount: eligiblePool.filter(p => p?.gender === 'F').length,
       statsRef,
@@ -578,6 +595,7 @@ function roundAutoBuildTurnWithStats(turnNo, status, statsRef, mutateRealStats) 
       courtNo: m.courtNo || (idx + 1),
       home: [m.home[0], m.home[1]],
       away: [m.away[0], m.away[1]],
+      reasonTags: Array.isArray(m.reasonTags) ? m.reasonTags.slice(0, 3) : [],
       winner: null,
     }));
     if (mutateRealStats) {
@@ -677,9 +695,7 @@ function roundAutoRenderFilterUI() {
       roundAutoRenderFilterUI();
       saveRoundAutoState();
     };
-  }
 
-  if (mixedBtn) {
     let wrap = document.getElementById('round-auto-gender-battle-wrap');
     if (!wrap) {
       wrap = document.createElement('div');
@@ -1195,10 +1211,45 @@ function roundAutoSetMiniTournamentWinner(matchId, side) {
     saveRoundAutoState();
   });
 }
+
+function roundAutoReasonText(match) {
+  const tags = Array.isArray(match?.reasonTags) ? match.reasonTags.filter(Boolean).slice(0, 3) : [];
+  if (!tags.length) return '';
+  return tags.join(' · ');
+}
+
+function roundAutoRegeneratePreview() {
+  roundAutoSyncStateFromCurrentUI();
+
+  const activeTurn = (roundAutoState.turns || []).find(t => t?.status === 'active');
+  if (!activeTurn) {
+    roundAutoGenerateNextTurn();
+    return;
+  }
+
+  roundAutoState.previewVariant = Math.max(0, Number(roundAutoState.previewVariant) || 0) + 1;
+  const previewTurnNo = Number(activeTurn.turnNo || 0) + 1;
+  const simulatedStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
+  const previewTurn = roundAutoBuildTurnWithStats(previewTurnNo, 'preview', simulatedStats, false);
+  if (!previewTurn) return;
+
+  const preservedTurns = (roundAutoState.turns || []).filter(t => t?.status !== 'preview');
+  roundAutoState.turns = [...preservedTurns, previewTurn];
+
+  const normalized = roundAutoNormalizeTurnsState(roundAutoState);
+  roundAutoState = normalized.state;
+  roundAutoRenderMatches();
+  roundAutoRenderRanking();
+  roundAutoRenderPersonalRanking();
+  saveRoundAutoState();
+}
+
 async function roundAutoGenerateNextTurn() {
+  roundAutoSyncStateFromCurrentUI();
   roundAutoState.turns = (roundAutoState.turns || []).filter(turn => turn?.status !== 'preview');
 
   if (!roundAutoState.turns.length) {
+    roundAutoState.previewVariant = 0;
     const activeTurnNo = roundAutoState.turnNo + 1;
     const realStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
     const activeTurn = roundAutoBuildTurnWithStats(activeTurnNo, 'active', realStats, true);
@@ -1217,6 +1268,18 @@ async function roundAutoGenerateNextTurn() {
     }
     const allDone = (activeTurn.matches || []).every(m => m.winner === 'home' || m.winner === 'away');
     if (!allDone) {
+      roundAutoState.previewVariant = Math.max(0, Number(roundAutoState.previewVariant) || 0) + 1;
+      const previewTurnNo = activeTurn.turnNo + 1;
+      const simulatedStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
+      const previewTurn = roundAutoBuildTurnWithStats(previewTurnNo, 'preview', simulatedStats, false);
+      if (previewTurn) {
+        roundAutoState.turns = [activeTurn, previewTurn];
+        roundAutoRenderMatches();
+        roundAutoRenderRanking();
+        roundAutoRenderPersonalRanking();
+        saveRoundAutoState();
+        return;
+      }
       gsAlert('승자 먼저 체크');
       return;
     }
@@ -1224,6 +1287,7 @@ async function roundAutoGenerateNextTurn() {
     await roundAutoCommitTurnToGlobalLog(activeTurn);
 
     activeTurn.status = 'done';
+    roundAutoState.previewVariant = 0;
     const newActiveTurnNo = roundAutoState.turnNo + 1;
     const realStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
     const newActiveTurn = roundAutoBuildTurnWithStats(newActiveTurnNo, 'active', realStats, true);
@@ -1255,12 +1319,6 @@ function roundAutoSetWinner(matchId, side) {
       match.winner = match.winner === side ? null : side;
       break;
     }
-  }
-
-  const activeTurn = (roundAutoState.turns || []).find(turn => turn?.status === 'active');
-  if (activeTurn) {
-    const isFullyDecided = (activeTurn.matches || []).every(m => m.winner === 'home' || m.winner === 'away');
-    if (isFullyDecided) roundAutoCommitTurnToGlobalLog(activeTurn);
   }
 
   roundAutoRenderMatches();
@@ -1432,6 +1490,10 @@ function roundAutoRenderMatches() {
       const teamSeparator = roundAutoIsSingles() ? ' vs ' : ' & ';
       const home = Array.isArray(match.home) ? match.home.map(roundAutoPlayerLabel).join(teamSeparator) : roundAutoPlayerLabel(match.home);
       const away = Array.isArray(match.away) ? match.away.map(roundAutoPlayerLabel).join(teamSeparator) : roundAutoPlayerLabel(match.away);
+      const reasonText = turn.status === 'preview' ? roundAutoReasonText(match) : '';
+      const reasonHtml = reasonText
+        ? `<div style="margin-top:7px; font-size:11px; color:#6b7280;">생성 이유: ${roundAutoEscape(reasonText)}</div>`
+        : '';
       const disabled = turn.status === 'preview' ? 'opacity:0.8;' : '';
       const disableAttr = turn.status === 'preview' ? 'disabled' : '';
       return `
@@ -1443,9 +1505,16 @@ function roundAutoRenderMatches() {
                 <button class="opt-btn" onclick="roundAutoSetWinner('${match.id}','away')" ${disableAttr}
                   style="flex:1; ${match.winner === 'away' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${roundAutoEscape(away)}</button>
               </div>
+              ${reasonHtml}
             </div>
           `;
     }).join('')}
+        ${turn.status === 'preview' ? `
+          <button type="button" class="btn-main" onclick="roundAutoRegeneratePreview()"
+            style="width:100%; margin-top:4px; background:#4f6786; font-size:13px; padding:10px 12px;">
+            다음 대진 재생성
+          </button>
+        ` : ''}
       </div>
     `;
   }).join('');
@@ -1571,6 +1640,7 @@ function roundAutoViewOpen() {
 window.roundAutoStorageKey = roundAutoStorageKey;
 window.initRoundAutoPlayerPool = initRoundAutoPlayerPool;
 window.roundAutoGenerateNextTurn = roundAutoGenerateNextTurn;
+window.roundAutoRegeneratePreview = roundAutoRegeneratePreview;
 window.roundAutoSetWinner = roundAutoSetWinner;
 window.roundAutoRenderMatches = roundAutoRenderMatches;
 window.roundAutoRenderRanking = roundAutoRenderRanking;
