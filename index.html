@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v5.1</title>
+  <title>GrandSlam Ultimate v5.11</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -433,8 +433,8 @@
       </div>
     </div>
 
-    <!-- ✅ v5.1: 클럽회계확인 버튼 -->
-    <div style="margin: 10px 12px 16px;">
+    <!-- ✅ v5.11: 클럽회계확인 버튼 -->
+    <div style="margin: 10px 12px 0px;">
       <button onclick="openClubFinanceModal()" style="
         width:100%; height:54px; border:none; border-radius:14px;
         background:#C17A5A; color:#fff; font-size:15px; font-weight:700;
@@ -443,6 +443,19 @@
         letter-spacing:0.3px;
       ">
         <span class="material-symbols-outlined" style="font-size:20px;">account_balance_wallet</span> 클럽 회계 확인
+      </button>
+    </div>
+
+    <!-- ✅ v4.923: 날씨 링크 버튼 -->
+    <div style="margin: 10px 12px 16px;">
+      <button onclick="openNaverWeather()" style="
+        width:100%; height:54px; border:none; border-radius:14px;
+        background:var(--wimbledon-sage); color:#fff; font-size:15px; font-weight:700;
+        display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer;
+        box-shadow: 0 6px 16px rgba(93,156,118,0.35);
+        letter-spacing:0.3px;
+      ">
+        <span class="material-symbols-outlined" style="font-size:20px;">open_in_new</span> 네이버 날씨 확인
       </button>
     </div>
 
@@ -520,21 +533,8 @@
       </div>
     </div>
 
-    <!-- ✅ v5.1: 날씨 버튼 — 공지사항 아래로 이동 -->
-    <div style="margin: 10px 12px 16px;">
-      <button onclick="openNaverWeather()" style="
-        width:100%; height:54px; border:none; border-radius:14px;
-        background:var(--wimbledon-sage); color:#fff; font-size:15px; font-weight:700;
-        display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer;
-        box-shadow: 0 6px 16px rgba(93,156,118,0.35);
-        letter-spacing:0.3px;
-      ">
-        <span class="material-symbols-outlined" style="font-size:20px;">open_in_new</span> 네이버 날씨 확인
-      </button>
-    </div>
-
     <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">
-      v5.1</div>
+      v5.11</div>
   </div>
 
   <div id="view-tennis" class="app-screen">
@@ -1214,12 +1214,12 @@
         <div class="tour-section-title" style="margin-top: 30px;"><span
             class="material-symbols-outlined">shuffle</span>배치 방식</div>
         <div class="opt-row">
-          <button id="round-opt-manual" class="opt-btn" onclick="setRoundOpt('manual')"><span
-              class="material-symbols-outlined">touch_app</span>지정선택</button>
           <button id="round-opt-rank" class="opt-btn active" onclick="setRoundOpt('rank')"><span
               class="material-symbols-outlined">leaderboard</span>랭킹순</button>
           <button id="round-opt-random" class="opt-btn" onclick="setRoundOpt('random')"><span
               class="material-symbols-outlined">shuffle</span>무작위</button>
+          <button id="round-opt-manual" class="opt-btn" onclick="setRoundOpt('manual')"><span
+              class="material-symbols-outlined">touch_app</span>지정선택</button>
         </div>
 
         <div class="tour-section-title"><span class="material-symbols-outlined">sports_tennis</span>경기 종목</div>
@@ -1305,10 +1305,10 @@
             style="display:flex; align-items:center; justify-content:center; gap:8px;">
             <span class="material-symbols-outlined">tour</span> 토너먼트
           </button>
-          <!-- ✅ v5.1: 라운드(수동) 복원 -->
+          <!-- 라운드(자동생성)으로 대체됨 — v4.96에서 메뉴 숨김 -->
           <button class="btn-purple-main" onclick="openRound()"
-            style="display:flex; align-items:center; justify-content:center; gap:8px;">
-            <span class="material-symbols-outlined">cached</span> 라운드(수동)
+            style="display:none; align-items:center; justify-content:center; gap:8px;">
+            <span class="material-symbols-outlined">cached</span> 라운드
           </button>
           <button class="btn-purple-main" onclick="openRoundAuto()"
             style="display:flex; align-items:center; justify-content:center; gap:8px;">
@@ -1597,8 +1597,7 @@
           <div>- ✅ <b>v2.0</b>: 단/복식 게임 로직·랭킹 완성, 토너먼트 모드 도입</div>
           <div>- ✅ <b>v3.0</b>: 사다리게임·라운드 모드·다중 클럽·클라우드·성별/혼복 시스템</div>
           <div>- ✅ <b>v4.0</b>: 다종목 구조·급수·Firestore 마이그레이션·백업/복원·지역 필터</div>
-          <div>- ✅ <b>v5.0</b>: 대기열 자동매칭 엔진 도입 — M→F→X 리듬 사이클, 휴식/연속출전 우선순위, 팀·대진 중복 최소화 / 이중 commit 구조 버그 수정 (단일 경로 통일) / 죽은 코드 정리 (supportMatchSet 제거)</div>
-          <div>- ✅ <b>v5.1</b>: 홈화면 클럽 회계 확인 기능 추가 (투명 회계 공개) / 라운드(수동) 게임 메뉴 복원 / 날씨 버튼 공지사항 아래로 재배치</div>
+          <div>- ✅ <b>v5.11</b>: 홈화면 클럽 회계 확인 기능 추가 (투명 회계 공개) / 점수초기화 시 gender·level 필드 보호 버그 수정<br>- ✅ <b>v5.0</b>: 대기열 자동매칭 엔진 도입 — M→F→X 리듬 사이클, 휴식/연속출전 우선순위, 팀·대진 중복 최소화 / 이중 commit 구조 버그 수정 (단일 경로 통일) / 죽은 코드 정리 (supportMatchSet 제거)</div>
 
         </div>
       </div>
@@ -2450,7 +2449,11 @@
     // (showView 재정의 방식은 호이스팅 충돌로 제거)
   </script>
 
-  <!-- ✅ v5.1: 클럽회계확인 모달 -->
+  <!-- ✅ v4.6: 관리자 권한 분리 + PIN 루프 수정 + 클럽ID 누락 강제 연결 -->
+  <script src="js/admin.js"></script>
+
+
+  <!-- ✅ v5.11: 클럽 회계 확인 모달 -->
   <div id="club-finance-modal" style="
     display:none; position:fixed; inset:0;
     background:rgba(0,0,0,0.5); z-index:22000;
@@ -2463,7 +2466,7 @@
       box-shadow:0 -4px 32px rgba(0,0,0,0.18);
       margin-bottom:70px;
     ">
-      <!-- 헤더 — 클럽색 배경, 흰글자 -->
+      <!-- 헤더 -->
       <div style="
         padding:18px 20px 16px;
         background:#C17A5A;
@@ -2482,7 +2485,7 @@
         ">✕</button>
       </div>
 
-      <!-- 누계 요약 (고정) — 라벨 위, 숫자 아래 -->
+      <!-- 누계 요약 -->
       <div id="club-finance-summary" style="
         padding:16px 20px 14px;
         background:#FDF0E8;
@@ -2490,7 +2493,7 @@
         flex-shrink:0;
       "></div>
 
-      <!-- 월 탭 — 2줄 6개씩 그리드 -->
+      <!-- 월 탭 -->
       <div id="club-finance-month-tabs" style="
         display:grid; grid-template-columns:repeat(6,1fr);
         gap:6px; padding:10px 14px;
@@ -2498,7 +2501,7 @@
         border-bottom:1px solid #f0f0f0;
       "></div>
 
-      <!-- 월별 내용 (세로 스크롤) -->
+      <!-- 월별 내용 -->
       <div id="club-finance-detail" style="
         padding:16px 20px 24px;
         overflow-y:auto;
@@ -2529,18 +2532,15 @@
         return;
       }
 
-      // 클럽명 타이틀
       const clubName = (typeof currentClub !== 'undefined' && currentClub?.name) ? currentClub.name : '클럽';
       const thisYear = new Date().getFullYear();
       titleEl.textContent = `${clubName} ${thisYear}년 회계`;
 
-      // 누계 계산
       const fd = typeof financeData !== 'undefined' ? financeData : [];
       const allIncome  = fd.filter(f => f.type === 'income' ).reduce((s,f) => s + (f.amount||0), 0);
       const allExpense = fd.filter(f => f.type === 'expense').reduce((s,f) => s + (f.amount||0), 0);
       const allBalance = allIncome - allExpense;
 
-      // 누계: 라벨 위, 숫자 아래, 구분선
       summary.innerHTML = `
         <div style="font-size:11px; color:#C17A5A; font-weight:700; letter-spacing:1px; margin-bottom:10px;">누계 (전체)</div>
         <div style="display:flex; justify-content:space-around; text-align:center;">
@@ -2561,7 +2561,6 @@
         </div>
       `;
 
-      // 월 탭 — 2줄 6개씩 그리드
       const now = new Date();
       const currentMonth = now.getMonth() + 1;
       tabs.innerHTML = '';
@@ -2605,7 +2604,6 @@
 
       let html = `<div style="font-size:14px; font-weight:800; color:#C17A5A; margin-bottom:14px;">💳 수입/지출 내역 (${parseInt(month)}월)</div>`;
 
-      // 수입
       html += `<div style="font-weight:700; color:#3A7BD5; margin-bottom:8px;">📥 수입 내역</div>`;
       if (!monthIncomes.length) {
         html += `<div style="color:#bbb; margin-bottom:12px; font-size:12px;">  (내역 없음)</div>`;
@@ -2626,7 +2624,6 @@
         ">소계: ${mIncome.toLocaleString()}원</div>`;
       }
 
-      // 지출
       html += `<div style="font-weight:700; color:#e74c3c; margin-bottom:8px;">📤 지출 내역</div>`;
       if (!monthExpenses.length) {
         html += `<div style="color:#bbb; margin-bottom:12px; font-size:12px;">  (내역 없음)</div>`;
@@ -2647,7 +2644,6 @@
         ">소계: ${mExpense.toLocaleString()}원</div>`;
       }
 
-      // 월 잔액
       html += `<div style="
         margin-top:4px; padding:14px 16px; border-radius:12px;
         background:${mBalance >= 0 ? '#27ae60' : '#e74c3c'};
@@ -2662,14 +2658,10 @@
       document.getElementById('club-finance-modal').style.display = 'none';
     }
 
-    // 모달 바깥 터치 시 닫기
     document.getElementById('club-finance-modal').addEventListener('click', function(e) {
       if (e.target === this) closeClubFinanceModal();
     });
   </script>
-
-  <!-- ✅ v4.6: 관리자 권한 분리 + PIN 루프 수정 + 클럽ID 누락 강제 연결 -->
-  <script src="js/admin.js"></script>
 
 </body>
 

@@ -28,131 +28,235 @@ function roundEngineIsBlockedGenderBattleMatch(home, away, allowGenderBattle) {
   return (homeType === 'M' && awayType === 'F') || (homeType === 'F' && awayType === 'M');
 }
 
+/**
+ * roundEngineBuildAutoDoubleMatches — 김작엔진 1.0
+ *
+ * @param {Array}  playersList  { name, gender, level, isGuest, rank? } 객체 배열
+ * @param {number} courtCount   코트 수
+ * @param {object} options      nextMatchType, mixedStreak, history, statsRef, turnNo, variantIndex,
+ *                              allowMixed, allowGenderBattle
+ * @returns {Array} [{ courtNo, matchType, home:[name,name], away:[name,name], reasonTags }]
+ */
 function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}) {
-  const allowMixed = options.allowMixed !== false;
+
+  // ── 0. 입력 정규화 ──────────────────────────────────────────────────────────
+  const allowMixed        = options.allowMixed !== false;
   const allowGenderBattle = options.allowGenderBattle === true;
-  const targetCourts = Math.max(0, Number(courtCount) || 0);
+  const targetCourts      = Math.max(0, Number(courtCount) || 0);
+
   if (!Array.isArray(playersList) || playersList.length < 4 || targetCourts <= 0) return [];
-  const statsRef = options.statsRef && typeof options.statsRef === 'object' ? options.statsRef : {};
-  const turnNo = Number(options.turnNo) || 0;
-  const normHistory = options.history && typeof options.history === 'object' ? options.history : {};
+
+  const statsRef     = (options.statsRef && typeof options.statsRef === 'object') ? options.statsRef : {};
+  const turnNo       = Number(options.turnNo) || 0;
   const variantIndex = Math.max(0, Number(options.variantIndex) || 0);
-  const getStat = name => statsRef[name] || { played: 0, restStreak: 0, lastTurnPlayed: -9999 };
 
-  const maleMatchSet = new Set(Array.isArray(normHistory.sameMaleMatchKeys) ? normHistory.sameMaleMatchKeys : []);
+  // history: 누적 팀/경기 조합 기록
+  const normHistory    = (options.history && typeof options.history === 'object') ? options.history : {};
+  const maleTeamSet    = new Set(Array.isArray(normHistory.sameMaleTeamKeys)    ? normHistory.sameMaleTeamKeys    : []);
+  const femaleTeamSet  = new Set(Array.isArray(normHistory.sameFemaleTeamKeys)  ? normHistory.sameFemaleTeamKeys  : []);
+  const mixedTeamSet   = new Set(Array.isArray(normHistory.mixedTeamKeys)       ? normHistory.mixedTeamKeys       : []);
+  const maleMatchSet   = new Set(Array.isArray(normHistory.sameMaleMatchKeys)   ? normHistory.sameMaleMatchKeys   : []);
   const femaleMatchSet = new Set(Array.isArray(normHistory.sameFemaleMatchKeys) ? normHistory.sameFemaleMatchKeys : []);
-  const mixedMatchSet = new Set(Array.isArray(normHistory.mixedMatchKeys) ? normHistory.mixedMatchKeys : []);
-  const maleTeamSet = new Set(Array.isArray(normHistory.sameMaleTeamKeys) ? normHistory.sameMaleTeamKeys : []);
-  const femaleTeamSet = new Set(Array.isArray(normHistory.sameFemaleTeamKeys) ? normHistory.sameFemaleTeamKeys : []);
-  const mixedTeamSet = new Set(Array.isArray(normHistory.mixedTeamKeys) ? normHistory.mixedTeamKeys : []);
+  const mixedMatchSet  = new Set(Array.isArray(normHistory.mixedMatchKeys)      ? normHistory.mixedMatchKeys      : []);
 
-  const isType = t => t === 'M' || t === 'F' || t === 'X';
-  let nextMatchType = isType(options.nextMatchType)
-    ? options.nextMatchType
-    : (options.phase === 'mixed' ? 'X' : 'M');
-  let mixedStreak = Math.max(0, Number(options.mixedStreak) || 0);
-  if (mixedStreak >= 2 && nextMatchType === 'X') nextMatchType = 'M';
+  // 규칙 1-12/1-13: "세션 기준 첫 생성" 판단
+  // turnNo <= 1 만으로는 세션 누적 구조에서 첫 턴을 잘못 건너뛸 수 있으므로,
+  // history 6개 키가 모두 비어있는지를 기준으로 삼는다.
+  const isFirstTurn = (
+    maleTeamSet.size === 0 &&
+    femaleTeamSet.size === 0 &&
+    mixedTeamSet.size === 0 &&
+    maleMatchSet.size === 0 &&
+    femaleMatchSet.size === 0 &&
+    mixedMatchSet.size === 0
+  );
 
-  const teamKey = team => [...team].sort().join('|');
-  const matchKey = (a, b) => [teamKey(a), teamKey(b)].sort().join('||');
+  const validType = t => t === 'M' || t === 'F' || t === 'X';
+  let nextMatchType = validType(options.nextMatchType) ? options.nextMatchType : 'M';
+  let mixedStreak   = Math.max(0, Number(options.mixedStreak) || 0);
 
-  const restPriority = (a, b) => {
-    const sa = getStat(a.name);
-    const sb = getStat(b.name);
-    const aRestStreak = Number(sa.restStreak) || 0;
-    const bRestStreak = Number(sb.restStreak) || 0;
-    if (aRestStreak !== bRestStreak) return bRestStreak - aRestStreak;
-    const aRestedPrev = sa.lastTurnPlayed !== (turnNo - 1) ? 1 : 0;
-    const bRestedPrev = sb.lastTurnPlayed !== (turnNo - 1) ? 1 : 0;
-    if (aRestedPrev !== bRestedPrev) return bRestedPrev - aRestedPrev;
-    if ((sa.played || 0) !== (sb.played || 0)) return (sa.played || 0) - (sb.played || 0);
-    return String(a.name || '').localeCompare(String(b.name || ''));
+  // ── 1. 헬퍼: 성별 조회 ────────────────────────────────────────────────────
+  const getGender = (name) => {
+    const inPool = playersList.find(p => p.name === name);
+    if (inPool) return inPool.gender === 'F' ? 'F' : 'M';
+    if (typeof players !== 'undefined') {
+      const gp = (players || []).find(p => p.name === name);
+      if (gp) return gp.gender === 'F' ? 'F' : 'M';
+    }
+    return 'M';
   };
 
-  const buildEval = (home, away, type, historyCtx) => {
+  // ── 2. 헬퍼: 랭킹 조회 ───────────────────────────────────────────────────
+  // 지난주 랭킹 우선 → 이번주 랭킹 → Infinity
+  const getRank = (name) => {
+    const sources = [];
+    const inPool = playersList.find(p => p.name === name);
+    if (inPool) sources.push(inPool);
+    if (typeof players !== 'undefined') {
+      const gp = (players || []).find(p => p.name === name);
+      if (gp) sources.push(gp);
+    }
+    for (const src of sources) {
+      const lw = Number(src.lastRank ?? src.dLastRank ?? src.prevRank);
+      if (Number.isFinite(lw) && lw > 0) return lw;
+    }
+    for (const src of sources) {
+      const cw = Number(src.dRank ?? src.rank);
+      if (Number.isFinite(cw) && cw > 0) return cw;
+    }
+    return Infinity;
+  };
+
+  // ── 3. 헬퍼: statsRef ────────────────────────────────────────────────────
+  const getStat = name =>
+    statsRef[name] || { played: 0, restStreak: 0, lastTurnPlayed: -9999, consecutiveCount: 0 };
+
+  // ── 4. 헬퍼: 키 생성 ─────────────────────────────────────────────────────
+  const teamKey  = team       => [...team].sort().join('|');
+  const matchKey = (home, away) => [teamKey(home), teamKey(away)].sort().join('||');
+
+  // ── 5. 규칙 1-10: 휴식 우선순위 정렬 ─────────────────────────────────────
+  // 1순위: 연속 휴식 횟수 많을수록 우선
+  // 2순위: 직전 턴 미참가
+  // 3순위: 총 참가 횟수 적을수록 우선
+  const restPriority = (a, b) => {
+    const sa = getStat(a.name), sb = getStat(b.name);
+    const ra = Number(sa.restStreak) || 0, rb = Number(sb.restStreak) || 0;
+    if (ra !== rb) return rb - ra;
+    const aSkipped = sa.lastTurnPlayed !== (turnNo - 1) ? 1 : 0;
+    const bSkipped = sb.lastTurnPlayed !== (turnNo - 1) ? 1 : 0;
+    if (aSkipped !== bSkipped) return bSkipped - aSkipped;
+    const ap = Number(sa.played) || 0, bp = Number(sb.played) || 0;
+    if (ap !== bp) return ap - bp;
+    return String(a.name).localeCompare(String(b.name));
+  };
+
+  // ── 6. 인원 파악 ─────────────────────────────────────────────────────────
+  const genderCount = (pool) => ({
+    males:   pool.filter(p => getGender(p.name) === 'M').length,
+    females: pool.filter(p => getGender(p.name) === 'F').length,
+  });
+
+  // ── 규칙 4-2: 성별 불균형 감지 ───────────────────────────────────────────
+  // 한 성별이 1명 이하면 불균형 → 성별 구분 없이 전체 풀 취급
+  const isGenderImbalanced = (pool) => {
+    const { males, females } = genderCount(pool);
+    return females <= 1 || males <= 1;
+  };
+
+  // ── 7. 규칙 1-1~1-3: matchType 가능 여부 ─────────────────────────────────
+  const canMakeType = (type, pool) => {
+    // 규칙 4-2: 불균형이면 전체 풀 기준으로 4명 가능 여부만 체크
+    if (isGenderImbalanced(pool)) return pool.length >= 4;
+    const { males, females } = genderCount(pool);
+    if (type === 'M') return males >= 4 || (males === 3 && females >= 1);
+    if (type === 'F') return females >= 4 || (females === 3 && males >= 1);
+    if (type === 'X') return allowMixed && males >= 2 && females >= 2;
+    return false;
+  };
+
+  // ── 8. 규칙 1-6 / 1-7: 보충 선수 ─────────────────────────────────────────
+  // 남복 부족 → 여자 최고랭커(rank 숫자 가장 낮음)
+  // 여복 부족 → 남자 최저랭커(rank 숫자 가장 높음)
+  const findSupplement = (type, pool, excludeNames) => {
+    const excl = new Set(excludeNames);
+    const avail = pool.filter(p => !excl.has(p.name));
+    if (type === 'M') {
+      const females = avail.filter(p => getGender(p.name) === 'F');
+      if (!females.length) return null;
+      // 여자가 한 명뿐이면 그 선수 사용 (규칙 1-6)
+      return females.sort((a, b) => getRank(a.name) - getRank(b.name))[0];
+    }
+    if (type === 'F') {
+      const males = avail.filter(p => getGender(p.name) === 'M');
+      if (!males.length) return null;
+      return males.sort((a, b) => getRank(b.name) - getRank(a.name))[0]; // 최저랭커
+    }
+    return null;
+  };
+
+  // ── 9. 후보 평가 객체 생성 ───────────────────────────────────────────────
+  const buildEval = (home, away, type, histCtx) => {
     const names = [...home, ...away];
-    const uniq = new Set(names);
-    if (uniq.size !== 4) return null;
+    if (new Set(names).size !== 4) return null;
     if (roundEngineIsBlockedGenderBattleMatch(home, away, allowGenderBattle)) return null;
 
-    const tSet = type === 'M' ? historyCtx.maleTeamSet : (type === 'F' ? historyCtx.femaleTeamSet : historyCtx.mixedTeamSet);
-    const mSet = type === 'M' ? historyCtx.maleMatchSet : (type === 'F' ? historyCtx.femaleMatchSet : historyCtx.mixedMatchSet);
-    const homeKey = teamKey(home);
-    const awayKey = teamKey(away);
-    const gameKey = matchKey(home, away);
+    const hKey = teamKey(home), aKey = teamKey(away), gKey = matchKey(home, away);
+    const tSet = type === 'M' ? histCtx.maleTeamSet   : (type === 'F' ? histCtx.femaleTeamSet : histCtx.mixedTeamSet);
+    const mSet = type === 'M' ? histCtx.maleMatchSet  : (type === 'F' ? histCtx.femaleMatchSet : histCtx.mixedMatchSet);
 
-    let longRestScore = 0;
-    let restedPrevCount = 0;
-    let consecutivePenalty = 0;
-    let playedSum = 0;
-    let rankGap = 0;
-
-    const avgRank = team => {
-      const rankSum = team.reduce((sum, name) => {
-        const p = players.find(pl => pl?.name === name);
-        const raw = Number(p?.dRank ?? p?.rank);
-        const fallback = Number(getStat(name).played) || 0;
-        return sum + (Number.isFinite(raw) && raw > 0 ? raw : fallback);
-      }, 0);
-      return rankSum / Math.max(1, team.length);
-    };
-    rankGap = Math.abs(avgRank(home) - avgRank(away));
+    let longRestScore = 0, restedPrevCount = 0, consecutivePenalty = 0;
+    let consecutiveExceed = 0, playedSum = 0;
 
     names.forEach(name => {
       const st = getStat(name);
-      const restStreak = Number(st.restStreak) || 0;
-      const played = Number(st.played) || 0;
-      longRestScore += restStreak >= 2 ? (restStreak * 2) : restStreak;
-      if (st.lastTurnPlayed !== (turnNo - 1)) restedPrevCount += 1;
-      if (st.lastTurnPlayed === (turnNo - 1)) consecutivePenalty += 1;
-      playedSum += played;
+      const rs = Number(st.restStreak) || 0;
+      longRestScore      += rs >= 2 ? rs * 2 : rs;
+      restedPrevCount    += st.lastTurnPlayed !== (turnNo - 1) ? 1 : 0;
+      consecutivePenalty += st.lastTurnPlayed === (turnNo - 1) ? 1 : 0;
+      consecutiveExceed  += (Number(st.consecutiveCount) || 0) >= 2 ? 1 : 0;
+      playedSum          += Number(st.played) || 0;
     });
 
+    const avgRank = team => team.reduce((s, n) => s + getRank(n), 0) / team.length;
+    const rankGap = Math.abs(avgRank(home) - avgRank(away));
+
     return {
-      type,
-      home,
-      away,
-      names,
-      homeKey,
-      awayKey,
-      gameKey,
-      teamRepeatCount: (tSet.has(homeKey) ? 1 : 0) + (tSet.has(awayKey) ? 1 : 0),
-      matchupRepeatCount: mSet.has(gameKey) ? 1 : 0,
-      longRestScore,
-      restedPrevCount,
-      consecutivePenalty,
-      playedSum,
-      rankGap,
-      lex: `${homeKey}||${awayKey}`,
+      type, home, away, names,
+      homeKey: hKey, awayKey: aKey, gameKey: gKey,
+      teamRepeatCount:    (tSet.has(hKey) ? 1 : 0) + (tSet.has(aKey) ? 1 : 0),
+      matchupRepeatCount: mSet.has(gKey) ? 1 : 0,
+      longRestScore, restedPrevCount, consecutivePenalty,
+      consecutiveExceed, playedSum, rankGap,
+      lex: `${hKey}||${aKey}`,
     };
   };
 
+  // ── 10. 후보 비교: 우선순위 ──────────────────────────────────────────────
   const preferCandidate = (a, b) => {
     if (!a) return b;
     if (!b) return a;
-    if (a.longRestScore !== b.longRestScore) return a.longRestScore > b.longRestScore ? a : b;
-    if (a.restedPrevCount !== b.restedPrevCount) return a.restedPrevCount > b.restedPrevCount ? a : b;
-    if (a.consecutivePenalty !== b.consecutivePenalty) return a.consecutivePenalty < b.consecutivePenalty ? a : b;
-    if (a.teamRepeatCount !== b.teamRepeatCount) return a.teamRepeatCount < b.teamRepeatCount ? a : b;
-    if (a.matchupRepeatCount !== b.matchupRepeatCount) return a.matchupRepeatCount < b.matchupRepeatCount ? a : b;
-    if (a.rankGap !== b.rankGap) return a.rankGap < b.rankGap ? a : b;
-    if (a.playedSum !== b.playedSum) return a.playedSum < b.playedSum ? a : b;
+    // 연속 2회 초과자 최소화 (연속출전 제한)
+    if (a.consecutiveExceed !== b.consecutiveExceed)
+      return a.consecutiveExceed < b.consecutiveExceed ? a : b;
+    // 오래 쉰 선수 우선 (규칙 1-10)
+    if (a.longRestScore !== b.longRestScore)
+      return a.longRestScore > b.longRestScore ? a : b;
+    if (a.restedPrevCount !== b.restedPrevCount)
+      return a.restedPrevCount > b.restedPrevCount ? a : b;
+    // 연속 출전 패널티 최소화
+    if (a.consecutivePenalty !== b.consecutivePenalty)
+      return a.consecutivePenalty < b.consecutivePenalty ? a : b;
+    // 새 팀 조합 우선 (규칙 1-8, 1-9, 1-14)
+    if (a.teamRepeatCount !== b.teamRepeatCount)
+      return a.teamRepeatCount < b.teamRepeatCount ? a : b;
+    // 새 상대 조합 우선 (규칙 1-15)
+    if (a.matchupRepeatCount !== b.matchupRepeatCount)
+      return a.matchupRepeatCount < b.matchupRepeatCount ? a : b;
+    // 랭크 균형
+    if (a.rankGap !== b.rankGap)
+      return a.rankGap < b.rankGap ? a : b;
+    if (a.playedSum !== b.playedSum)
+      return a.playedSum < b.playedSum ? a : b;
     return a.lex <= b.lex ? a : b;
   };
 
-  const gatherTypeCandidates = (type, pool, strictNewTeams, historyCtx) => {
+  // ── 11. 타입별 후보 수집 ─────────────────────────────────────────────────
+  const gatherCandidates = (type, pool, strictNewTeams, histCtx) => {
     if (type === 'X' && !allowMixed) return [];
-    const cap = Math.min(pool.length, 12);
+    const CAP = Math.min(pool.length, 14);
     const candidates = [];
 
-    if (type === 'M' || type === 'F') {
-      const bucket = pool.filter(p => type === 'M' ? (p.gender !== 'F') : (p.gender === 'F')).slice(0, cap);
+    // 규칙 4-2: 성별 불균형이면 성별 구분 없이 전체 풀에서 4명 조합
+    if (isGenderImbalanced(pool)) {
+      const bucket = pool.slice(0, CAP);
       if (bucket.length < 4) return [];
-      const tSet = type === 'M' ? historyCtx.maleTeamSet : historyCtx.femaleTeamSet;
-      for (let i = 0; i < bucket.length - 3; i += 1) {
-        for (let j = i + 1; j < bucket.length - 2; j += 1) {
-          for (let k = j + 1; k < bucket.length - 1; k += 1) {
-            for (let l = k + 1; l < bucket.length; l += 1) {
+      // 불균형 시 history는 maleTeamSet/maleMatchSet 기준으로 통일
+      const tSet = histCtx.maleTeamSet;
+      for (let i = 0; i < bucket.length - 3; i++) {
+        for (let j = i + 1; j < bucket.length - 2; j++) {
+          for (let k = j + 1; k < bucket.length - 1; k++) {
+            for (let l = k + 1; l < bucket.length; l++) {
               const g = [bucket[i].name, bucket[j].name, bucket[k].name, bucket[l].name];
               const pairings = [
                 [[g[0], g[1]], [g[2], g[3]]],
@@ -160,11 +264,36 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
                 [[g[0], g[3]], [g[1], g[2]]],
               ];
               pairings.forEach(([home, away]) => {
-                const hKey = teamKey(home);
-                const aKey = teamKey(away);
-                if (strictNewTeams && (tSet.has(hKey) || tSet.has(aKey))) return;
-                const evald = buildEval(home, away, type, historyCtx);
-                if (evald) candidates.push(evald);
+                if (strictNewTeams) {
+                  const hk = teamKey(home), ak = teamKey(away);
+                  if (tSet.has(hk) || tSet.has(ak)) return;
+                }
+                // 불균형 시 allowGenderBattle 무시 (규칙 4-2: 동일 조건)
+                const names = [...home, ...away];
+                if (new Set(names).size !== 4) return;
+                const hKey = teamKey(home), aKey = teamKey(away), gKey = matchKey(home, away);
+                let longRestScore = 0, restedPrevCount = 0, consecutivePenalty = 0;
+                let consecutiveExceed = 0, playedSum = 0;
+                names.forEach(name => {
+                  const st = getStat(name);
+                  const rs = Number(st.restStreak) || 0;
+                  longRestScore      += rs >= 2 ? rs * 2 : rs;
+                  restedPrevCount    += st.lastTurnPlayed !== (turnNo - 1) ? 1 : 0;
+                  consecutivePenalty += st.lastTurnPlayed === (turnNo - 1) ? 1 : 0;
+                  consecutiveExceed  += (Number(st.consecutiveCount) || 0) >= 2 ? 1 : 0;
+                  playedSum          += Number(st.played) || 0;
+                });
+                const avgRank = team => team.reduce((s, n) => s + getRank(n), 0) / team.length;
+                const rankGap = Math.abs(avgRank(home) - avgRank(away));
+                candidates.push({
+                  type: 'M', home, away, names,
+                  homeKey: hKey, awayKey: aKey, gameKey: gKey,
+                  teamRepeatCount:    (tSet.has(hKey) ? 1 : 0) + (tSet.has(aKey) ? 1 : 0),
+                  matchupRepeatCount: histCtx.maleMatchSet.has(gKey) ? 1 : 0,
+                  longRestScore, restedPrevCount, consecutivePenalty,
+                  consecutiveExceed, playedSum, rankGap,
+                  lex: `${hKey}||${aKey}`,
+                });
               });
             }
           }
@@ -173,14 +302,54 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
       return candidates;
     }
 
-    const men = pool.filter(p => p.gender !== 'F').slice(0, cap);
-    const women = pool.filter(p => p.gender === 'F').slice(0, cap);
+    if (type === 'M' || type === 'F') {
+      let bucket = pool
+        .filter(p => (type === 'M' ? getGender(p.name) === 'M' : getGender(p.name) === 'F'))
+        .slice(0, CAP);
+
+      // 보충 선수 (규칙 1-6 / 1-7)
+      if (bucket.length === 3) {
+        const supp = findSupplement(type, pool, bucket.map(p => p.name));
+        if (supp) bucket = [...bucket, supp];
+      }
+      if (bucket.length < 4) return [];
+
+      const tSet = type === 'M' ? histCtx.maleTeamSet : histCtx.femaleTeamSet;
+
+      for (let i = 0; i < bucket.length - 3; i++) {
+        for (let j = i + 1; j < bucket.length - 2; j++) {
+          for (let k = j + 1; k < bucket.length - 1; k++) {
+            for (let l = k + 1; l < bucket.length; l++) {
+              const g = [bucket[i].name, bucket[j].name, bucket[k].name, bucket[l].name];
+              const pairings = [
+                [[g[0], g[1]], [g[2], g[3]]],
+                [[g[0], g[2]], [g[1], g[3]]],
+                [[g[0], g[3]], [g[1], g[2]]],
+              ];
+              pairings.forEach(([home, away]) => {
+                if (strictNewTeams) {
+                  const hk = teamKey(home), ak = teamKey(away);
+                  if (tSet.has(hk) || tSet.has(ak)) return;
+                }
+                const ev = buildEval(home, away, type, histCtx);
+                if (ev) candidates.push(ev);
+              });
+            }
+          }
+        }
+      }
+      return candidates;
+    }
+
+    // 혼복 (X)
+    const men   = pool.filter(p => getGender(p.name) === 'M').slice(0, CAP);
+    const women = pool.filter(p => getGender(p.name) === 'F').slice(0, CAP);
     if (men.length < 2 || women.length < 2) return [];
 
-    for (let mi = 0; mi < men.length - 1; mi += 1) {
-      for (let mj = mi + 1; mj < men.length; mj += 1) {
-        for (let fi = 0; fi < women.length - 1; fi += 1) {
-          for (let fj = fi + 1; fj < women.length; fj += 1) {
+    for (let mi = 0; mi < men.length - 1; mi++) {
+      for (let mj = mi + 1; mj < men.length; mj++) {
+        for (let fi = 0; fi < women.length - 1; fi++) {
+          for (let fj = fi + 1; fj < women.length; fj++) {
             const m1 = men[mi].name, m2 = men[mj].name;
             const f1 = women[fi].name, f2 = women[fj].name;
             const pairings = [
@@ -188,11 +357,12 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
               [[m1, f2], [m2, f1]],
             ];
             pairings.forEach(([home, away]) => {
-              const hKey = teamKey(home);
-              const aKey = teamKey(away);
-              if (strictNewTeams && (historyCtx.mixedTeamSet.has(hKey) || historyCtx.mixedTeamSet.has(aKey))) return;
-              const evald = buildEval(home, away, 'X', historyCtx);
-              if (evald) candidates.push(evald);
+              if (strictNewTeams) {
+                const hk = teamKey(home), ak = teamKey(away);
+                if (histCtx.mixedTeamSet.has(hk) || histCtx.mixedTeamSet.has(ak)) return;
+              }
+              const ev = buildEval(home, away, 'X', histCtx);
+              if (ev) candidates.push(ev);
             });
           }
         }
@@ -201,176 +371,283 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
     return candidates;
   };
 
-  const chooseCandidateForType = (type, pool, strictNewTeams, variantOffset, historyCtx) => {
-    const cands = gatherTypeCandidates(type, pool, strictNewTeams, historyCtx);
+  const chooseBest = (type, pool, strictNewTeams, varOffset, histCtx) => {
+    const cands = gatherCandidates(type, pool, strictNewTeams, histCtx);
     if (!cands.length) return null;
-    const ranked = cands.sort((x, y) => (preferCandidate(x, y) === x ? -1 : 1));
+    const ranked = [...cands].sort((x, y) => preferCandidate(x, y) === x ? -1 : 1);
     const selectable = Math.min(5, ranked.length);
-    const idx = selectable ? (Math.max(0, Number(variantOffset) || 0) % selectable) : 0;
+    const idx = selectable ? (Math.max(0, varOffset) % selectable) : 0;
     return ranked[idx] || ranked[0];
   };
 
-  const getTypeTryOrder = preferredType => {
-    const base = preferredType === 'F'
-      ? ['F', 'X', 'M']
-      : (preferredType === 'X' ? ['X', 'M', 'F'] : ['M', 'F', 'X']);
-    return base.filter((t, idx, arr) => arr.indexOf(t) === idx);
+  // ── 12. 규칙 1-1~1-5: 시도 순서 ─────────────────────────────────────────
+  // 남복 가능 → 우선 / 여복 가능 → 다음 / 둘 다 불가 → 혼복
+  // 혼복 2연속 허용 후 리셋
+  // 규칙 4-2: 성별 불균형이면 타입 구분 없이 'M' 하나로 통일 (gatherCandidates가 전체 풀 처리)
+  const getTypeOrder = (preferred, curMixedStreak, pool) => {
+    if (isGenderImbalanced(pool)) return pool.length >= 4 ? ['M'] : [];
+
+    const canM = canMakeType('M', pool);
+    const canF = canMakeType('F', pool);
+    const canX = canMakeType('X', pool);
+    const mixedOk = allowMixed && canX && curMixedStreak < 2;
+
+    let order;
+    if (preferred === 'F')      order = ['F', 'X', 'M'];
+    else if (preferred === 'X') order = ['X', 'M', 'F'];
+    else                        order = ['M', 'F', 'X'];
+
+    return order.filter(t => {
+      if (t === 'M' && !canM) return false;
+      if (t === 'F' && !canF) return false;
+      if (t === 'X' && !mixedOk) return false;
+      return true;
+    });
   };
 
-  const sanitizeTypeOrder = (order, currentMixedStreak) => order.filter(t => {
-    if (t === 'X' && !allowMixed) return false;
-    if (t === 'X' && currentMixedStreak >= 2) return false;
-    return true;
-  });
-
-  const persistHistory = (pick, historyCtx) => {
+  // ── 13. history 갱신 ─────────────────────────────────────────────────────
+  // 불균형(규칙 4-2) 시 type이 'M'으로 통일되어 들어오므로 자연스럽게 maleTeamSet 사용
+  const persistHistory = (pick, histCtx) => {
     if (!pick) return;
-    const maleTeamRef = historyCtx.maleTeamSet;
-    const femaleTeamRef = historyCtx.femaleTeamSet;
-    const mixedTeamRef = historyCtx.mixedTeamSet;
-    const maleMatchRef = historyCtx.maleMatchSet;
-    const femaleMatchRef = historyCtx.femaleMatchSet;
-    const mixedMatchRef = historyCtx.mixedMatchSet;
-
     if (pick.type === 'M') {
-      maleTeamRef.add(pick.homeKey);
-      maleTeamRef.add(pick.awayKey);
-      maleMatchRef.add(pick.gameKey);
+      histCtx.maleTeamSet.add(pick.homeKey);
+      histCtx.maleTeamSet.add(pick.awayKey);
+      histCtx.maleMatchSet.add(pick.gameKey);
     } else if (pick.type === 'F') {
-      femaleTeamRef.add(pick.homeKey);
-      femaleTeamRef.add(pick.awayKey);
-      femaleMatchRef.add(pick.gameKey);
+      histCtx.femaleTeamSet.add(pick.homeKey);
+      histCtx.femaleTeamSet.add(pick.awayKey);
+      histCtx.femaleMatchSet.add(pick.gameKey);
     } else {
-      mixedTeamRef.add(pick.homeKey);
-      mixedTeamRef.add(pick.awayKey);
-      mixedMatchRef.add(pick.gameKey);
+      histCtx.mixedTeamSet.add(pick.homeKey);
+      histCtx.mixedTeamSet.add(pick.awayKey);
+      histCtx.mixedMatchSet.add(pick.gameKey);
     }
   };
 
-  const updateRhythmState = (createdType, rhythmState) => {
+  // ── 14. nextMatchType 리듬 갱신 ──────────────────────────────────────────
+  // M → F → X → M... (가능한 타입만)
+  const updateRhythm = (createdType, rhythm) => {
     if (createdType === 'M') {
-      rhythmState.nextMatchType = 'F';
-      rhythmState.mixedStreak = 0;
-      return;
-    }
-    if (createdType === 'F') {
-      rhythmState.nextMatchType = 'X';
-      rhythmState.mixedStreak = 0;
-      return;
-    }
-    if (rhythmState.mixedStreak <= 0) {
-      rhythmState.nextMatchType = 'X';
-      rhythmState.mixedStreak = 1;
+      rhythm.nextMatchType = 'F';
+      rhythm.mixedStreak   = 0;
+    } else if (createdType === 'F') {
+      rhythm.nextMatchType = 'X';
+      rhythm.mixedStreak   = 0;
     } else {
-      rhythmState.nextMatchType = 'M';
-      rhythmState.mixedStreak = 2;
+      // 혼복: 규칙 1-4/1-5 처리
+      if (rhythm.mixedStreak <= 0) {
+        rhythm.nextMatchType = 'X';
+        rhythm.mixedStreak   = 1;
+      } else {
+        rhythm.nextMatchType = 'M';
+        rhythm.mixedStreak   = 2;
+      }
     }
   };
 
-  const buildReasonTags = (pick) => {
+  // ── 15. reasonTags 생성 ──────────────────────────────────────────────────
+  const buildReasonTags = (pick, isFirstMatchRanked) => {
+    if (isFirstMatchRanked) return ['첫 대진 랭킹 기반'];
     const tags = [];
     if ((pick.longRestScore || 0) > 0 || (pick.restedPrevCount || 0) >= 2) tags.push('오래 쉰 선수 우선');
     if ((pick.teamRepeatCount || 0) === 0) tags.push('파트너 반복 회피');
-    else if ((pick.matchupRepeatCount || 0) === 0) tags.push('상대 반복 회피');
+    else if ((pick.matchupRepeatCount || 0) === 0)                         tags.push('상대 반복 회피');
     if ((pick.rankGap || 0) <= 2) tags.push('랭크 균형');
     if ((pick.consecutivePenalty || 0) <= 1) tags.push('연속 출전 제한');
     if (!tags.length) tags.push('공정 출전 균형');
     return tags.slice(0, 3);
   };
 
-  const planForCourtCount = (courtCountToUse) => {
-    const localHistory = {
-      maleMatchSet: new Set(maleMatchSet),
-      femaleMatchSet: new Set(femaleMatchSet),
-      mixedMatchSet: new Set(mixedMatchSet),
-      maleTeamSet: new Set(maleTeamSet),
-      femaleTeamSet: new Set(femaleTeamSet),
-      mixedTeamSet: new Set(mixedTeamSet),
+  // ── 16. 규칙 1-12/1-13: 첫 턴 첫 경기 — 랭킹 기반 대진 ──────────────────
+  // 첫 선수(최고랭커) 성별로 matchType 결정
+  // home = (1위, 4위), away = (2위, 3위)
+  const buildFirstTurnFirstMatch = (pool, histCtx, rhythm) => {
+    // 최고랭커 찾기
+    const sorted = [...pool].sort((a, b) => getRank(a.name) - getRank(b.name));
+    if (!sorted.length) return null;
+
+    const topPlayer = sorted[0];
+    const topGender = getGender(topPlayer.name);
+
+    // 최고랭커 성별에 따라 첫 시합 유형 결정 (규칙 1-12)
+    let firstType = topGender === 'F' ? 'F' : 'M';
+
+    // 해당 타입이 아예 불가능한 경우 혼복으로 폴백
+    if (!canMakeType(firstType, pool)) {
+      if (allowMixed && canMakeType('X', pool)) firstType = 'X';
+      else if (canMakeType(firstType === 'M' ? 'F' : 'M', pool))
+        firstType = firstType === 'M' ? 'F' : 'M';
+      else return null;
+    }
+
+    // 해당 타입 선수 풀 구성 (보충 포함)
+    // 규칙 4-2: 불균형이면 성별 필터 없이 전체 풀 사용
+    let bucket;
+    if (isGenderImbalanced(pool)) {
+      bucket = [...pool];
+    } else if (firstType === 'M') {
+      bucket = pool.filter(p => getGender(p.name) === 'M');
+      if (bucket.length === 3) {
+        const supp = findSupplement('M', pool, bucket.map(p => p.name));
+        if (supp) bucket = [...bucket, supp];
+      }
+    } else if (firstType === 'F') {
+      bucket = pool.filter(p => getGender(p.name) === 'F');
+      if (bucket.length === 3) {
+        const supp = findSupplement('F', pool, bucket.map(p => p.name));
+        if (supp) bucket = [...bucket, supp];
+      }
+    } else {
+      // 혼복
+      const men   = pool.filter(p => getGender(p.name) === 'M');
+      const women = pool.filter(p => getGender(p.name) === 'F');
+      if (men.length < 2 || women.length < 2) return null;
+      bucket = [...men, ...women];
+    }
+    if (bucket.length < 4) return null;
+
+    // 랭킹 정렬 후 1,4 vs 2,3 구성 (규칙 1-12/1-13)
+    let home, away;
+    if (firstType === 'X') {
+      const men   = bucket.filter(p => getGender(p.name) === 'M').sort((a, b) => getRank(a.name) - getRank(b.name));
+      const women = bucket.filter(p => getGender(p.name) === 'F').sort((a, b) => getRank(a.name) - getRank(b.name));
+      if (men.length < 2 || women.length < 2) return null;
+      // 남1+여2(낮은랭킹) vs 남2+여1(높은랭킹) → 균형 구성
+      home = [men[0].name, women[1] ? women[1].name : women[0].name];
+      away = [men[1].name, women[0].name];
+    } else {
+      const bSorted = [...bucket].sort((a, b) => getRank(a.name) - getRank(b.name));
+      if (bSorted.length < 4) return null;
+      // 1위 파트너 = 지난주 최저랭커 (4위), 상대 = 2위 + 3위 (규칙 1-12/1-13)
+      home = [bSorted[0].name, bSorted[3].name];
+      away = [bSorted[1].name, bSorted[2].name];
+    }
+
+    const allNames = [...home, ...away];
+    if (new Set(allNames).size !== 4) return null;
+    if (roundEngineIsBlockedGenderBattleMatch(home, away, allowGenderBattle)) return null;
+
+    const hKey = teamKey(home), aKey = teamKey(away), gKey = matchKey(home, away);
+    return {
+      type: firstType, home, away, names: allNames,
+      homeKey: hKey, awayKey: aKey, gameKey: gKey,
+      teamRepeatCount:    0,
+      matchupRepeatCount: 0,
+      isFirstRanked: true,
     };
-    const rhythm = { nextMatchType, mixedStreak };
-    const sortedPool = [...playersList].filter(p => p?.name).sort(restPriority);
-    const activePool = sortedPool.slice(0, Math.min(sortedPool.length, courtCountToUse * 4));
+  };
+
+  // ── 17. 코트 수별 플랜 생성 ──────────────────────────────────────────────
+  const planForCourts = (courtsToUse) => {
+    const localHist = {
+      maleTeamSet:    new Set(maleTeamSet),
+      femaleTeamSet:  new Set(femaleTeamSet),
+      mixedTeamSet:   new Set(mixedTeamSet),
+      maleMatchSet:   new Set(maleMatchSet),
+      femaleMatchSet: new Set(femaleMatchSet),
+      mixedMatchSet:  new Set(mixedMatchSet),
+    };
+    const rhythm    = { nextMatchType, mixedStreak };
     const usedNames = new Set();
-    const matches = [];
+    const matches   = [];
 
-    const getRemainingPool = () => activePool.filter(p => !usedNames.has(p.name));
+    // 휴식 우선순위로 정렬된 풀
+    const sortedPool = [...playersList].filter(p => p && p.name).sort(restPriority);
 
-    for (let courtIdx = 0; courtIdx < courtCountToUse; courtIdx += 1) {
-      const pool = getRemainingPool();
+    const getPool = () => sortedPool.filter(p => !usedNames.has(p.name));
+
+    for (let courtIdx = 0; courtIdx < courtsToUse; courtIdx++) {
+      const pool = getPool();
       if (pool.length < 4) break;
 
-      const preferredType = rhythm.nextMatchType;
-      let tryOrder = sanitizeTypeOrder(getTypeTryOrder(preferredType), rhythm.mixedStreak);
-      if (!tryOrder.length) tryOrder = sanitizeTypeOrder(['M', 'F', 'X'], rhythm.mixedStreak);
+      let picked        = null;
+      let isFirstRanked = false;
 
-      let picked = null;
-      for (let i = 0; i < tryOrder.length; i += 1) {
-        picked = chooseCandidateForType(tryOrder[i], pool, true, variantIndex + courtIdx, localHistory);
-        if (picked) break;
+      // 규칙 1-12/1-13: 첫 턴의 첫 경기에만 랭킹 기반 대진 적용
+      if (isFirstTurn && courtIdx === 0) {
+        picked        = buildFirstTurnFirstMatch(pool, localHist, rhythm);
+        isFirstRanked = !!picked;
       }
+
+      // 랭킹 기반 대진 실패 또는 일반 경기 → 규칙 1-1~1-5 기반 타입 결정
       if (!picked) {
-        for (let i = 0; i < tryOrder.length; i += 1) {
-          picked = chooseCandidateForType(tryOrder[i], pool, false, variantIndex + courtIdx, localHistory);
+        const typeOrder = getTypeOrder(rhythm.nextMatchType, rhythm.mixedStreak, pool);
+        const fallback  = typeOrder.length
+          ? typeOrder
+          : (['M', 'F', 'X'].filter(t => canMakeType(t, pool)));
+
+        // strict(새 조합만) 먼저 시도, 실패 시 반복 허용 (규칙 1-14/1-15)
+        for (const strict of [true, false]) {
+          for (const t of fallback) {
+            picked = chooseBest(t, pool, strict, variantIndex + courtIdx, localHist);
+            if (picked) break;
+          }
           if (picked) break;
         }
       }
+
       if (!picked) break;
       if (roundEngineIsBlockedGenderBattleMatch(picked.home, picked.away, allowGenderBattle)) continue;
 
       matches.push({
-        courtNo: matches.length + 1,
-        matchType: picked.type,
-        home: picked.home,
-        away: picked.away,
-        reasonTags: buildReasonTags(picked),
+        courtNo:    matches.length + 1,
+        matchType:  picked.type,
+        home:       picked.home,
+        away:       picked.away,
+        reasonTags: buildReasonTags(picked, isFirstRanked),
       });
-      picked.names.forEach(name => usedNames.add(name));
-      persistHistory(picked, localHistory);
-      updateRhythmState(picked.type, rhythm);
+
+      picked.names.forEach(n => usedNames.add(n));
+      persistHistory(picked, localHist);
+      updateRhythm(picked.type, rhythm);
     }
 
     return {
       matches,
-      success: matches.length === courtCountToUse,
-      history: localHistory,
+      success:       matches.length === courtsToUse,
+      history:       localHist,
       nextMatchType: rhythm.nextMatchType,
-      mixedStreak: rhythm.mixedStreak,
+      mixedStreak:   rhythm.mixedStreak,
     };
   };
 
+  // ── 18. 코트 수 줄여가며 최선의 플랜 선택 ────────────────────────────────
   let finalPlan = null;
-  for (let courts = targetCourts; courts >= 1; courts -= 1) {
-    const plan = planForCourtCount(courts);
+  for (let courts = targetCourts; courts >= 1; courts--) {
+    const plan = planForCourts(courts);
     if (!plan.matches.length) continue;
     finalPlan = plan;
     if (plan.success) break;
   }
 
-  const matches = finalPlan ? finalPlan.matches : [];
+  // ── 19. options 뮤테이트 (round_auto_view.js가 읽어감) ───────────────────
   if (finalPlan) {
     nextMatchType = finalPlan.nextMatchType;
-    mixedStreak = finalPlan.mixedStreak;
-    maleMatchSet.clear(); finalPlan.history.maleMatchSet.forEach(v => maleMatchSet.add(v));
+    mixedStreak   = finalPlan.mixedStreak;
+
+    // localHist → 글로벌 Set 동기화
+    maleTeamSet.clear();    finalPlan.history.maleTeamSet.forEach(v => maleTeamSet.add(v));
+    femaleTeamSet.clear();  finalPlan.history.femaleTeamSet.forEach(v => femaleTeamSet.add(v));
+    mixedTeamSet.clear();   finalPlan.history.mixedTeamSet.forEach(v => mixedTeamSet.add(v));
+    maleMatchSet.clear();   finalPlan.history.maleMatchSet.forEach(v => maleMatchSet.add(v));
     femaleMatchSet.clear(); finalPlan.history.femaleMatchSet.forEach(v => femaleMatchSet.add(v));
-    mixedMatchSet.clear(); finalPlan.history.mixedMatchSet.forEach(v => mixedMatchSet.add(v));
-    maleTeamSet.clear(); finalPlan.history.maleTeamSet.forEach(v => maleTeamSet.add(v));
-    femaleTeamSet.clear(); finalPlan.history.femaleTeamSet.forEach(v => femaleTeamSet.add(v));
-    mixedTeamSet.clear(); finalPlan.history.mixedTeamSet.forEach(v => mixedTeamSet.add(v));
+    mixedMatchSet.clear();  finalPlan.history.mixedMatchSet.forEach(v => mixedMatchSet.add(v));
   }
 
   options.nextMatchType = nextMatchType;
-  options.phase = nextMatchType === 'X' ? 'mixed' : 'same';
+  options.mixedStreak   = Math.max(0, mixedStreak);
+  options.phase         = nextMatchType === 'X' ? 'mixed' : 'same';
   options.mixedRemaining = 0;
-  options.mixedStreak = Math.max(0, mixedStreak);
   options.history = {
-    sameMaleMatchKeys: Array.from(maleMatchSet).slice(-200),
+    sameMaleTeamKeys:    Array.from(maleTeamSet).slice(-200),
+    sameFemaleTeamKeys:  Array.from(femaleTeamSet).slice(-200),
+    mixedTeamKeys:       Array.from(mixedTeamSet).slice(-200),
+    sameMaleMatchKeys:   Array.from(maleMatchSet).slice(-200),
     sameFemaleMatchKeys: Array.from(femaleMatchSet).slice(-200),
-    mixedMatchKeys: Array.from(mixedMatchSet).slice(-200),
-    sameMaleTeamKeys: Array.from(maleTeamSet).slice(-200),
-    sameFemaleTeamKeys: Array.from(femaleTeamSet).slice(-200),
-    mixedTeamKeys: Array.from(mixedTeamSet).slice(-200),
+    mixedMatchKeys:      Array.from(mixedMatchSet).slice(-200),
   };
-  return matches;
+
+  return finalPlan ? finalPlan.matches : [];
 }
 
 function roundEngineGenerateRoundRobinMatches(participants, options = {}) {

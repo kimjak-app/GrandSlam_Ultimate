@@ -120,7 +120,7 @@ async function _fsSavePlayers(clubId, playerArr) {
   const col   = _clubRef(clubId).collection('players');
   const batch = _db.batch();
   playerArr.forEach(p => {
-    const data = Object.assign({ sport: 'tennis', level: 'A', attributes: {} }, p);
+    const data = Object.assign({ sport: 'tennis', gender: 'M', level: 'A', attributes: {} }, p);
     batch.set(col.doc(_sanitizeDocId(data.name)), data);
   });
   // 삭제된 선수 제거
