@@ -774,10 +774,11 @@ function roundAutoOpenAddGuestModal() {
 }
 function initRoundAutoPlayerPool() {
   const currentClubId = roundAutoGetSelectedClubId();
+  // ✅ v5.121: 클럽 변경 시에만 state 재로드 — 설정 변경(필터/선수) 시엔 메모리 state 유지
   if (roundAutoLoadedClubId !== currentClubId) {
     roundAutoState = createRoundAutoInitialState();
+    loadRoundAutoState();
   }
-  loadRoundAutoState();
 
   const courtInput = document.getElementById('round-auto-court-count');
   const courtTabs = document.querySelectorAll('#round-auto-court-tabs .court-tab-btn');
