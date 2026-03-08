@@ -199,21 +199,58 @@ function roundViewGenerateRoundSchedule() {
   if (roundMode === 'single') {
     roundParticipants = [...checked];
   } else {
-    let teams = [];
-    if (roundOpt === 'rank') {
-      const sorted = checked.sort((a, b) => {
-        const pA = players.find(p => p.name === a);
-        const pB = players.find(p => p.name === b);
-        return (pA.rank || 999) - (pB.rank || 999);
-      });
-      for (let i = 0; i < sorted.length; i += 2) teams.push([sorted[i], sorted[i + 1]]);
-    } else if (roundOpt === 'random') {
-      const shuffled = shuffleArray([...checked]);
-      for (let i = 0; i < shuffled.length; i += 2) teams.push([shuffled[i], shuffled[i + 1]]);
+    if (roundOpt === 'rank' || roundOpt === 'random') {
+      // 랭킹순/무작위: 팀을 미리 묶지 않고 가능한 모든 2vs2 조합 생성
+      // 예) 4명 → 3가지 조합 전부 경기로 표시
+      let pool;
+      if (roundOpt === 'rank') {
+        pool = [...checked].sort((a, b) => {
+          const pA = players.find(p => p.name === a);
+          const pB = players.find(p => p.name === b);
+          return ((pA && pA.rank) || 999) - ((pB && pB.rank) || 999);
+        });
+      } else {
+        pool = shuffleArray([...checked]);
+      }
+      // 모든 2vs2 조합 생성 (중복 제외)
+      const allMatches = [];
+      const seen = new Set();
+      for (let i = 0; i < pool.length - 1; i++) {
+        for (let j = i + 1; j < pool.length; j++) {
+          for (let k = 0; k < pool.length - 1; k++) {
+            if (k === i || k === j) continue;
+            for (let l = k + 1; l < pool.length; l++) {
+              if (l === i || l === j) continue;
+              const home = [pool[i], pool[j]].sort();
+              const away = [pool[k], pool[l]].sort();
+              const key = [home.join('&'), away.join('&')].sort().join('||');
+              if (seen.has(key)) continue;
+              seen.add(key);
+              allMatches.push({ home, away });
+            }
+          }
+        }
+      }
+      const allowGenderBattle = !!($('round-allow-gender-battle')?.checked);
+      roundParticipants = pool; // 개인 기준으로 저장 (랭킹/통계용)
+      roundMatches = allMatches
+        .filter(m => !roundEngineIsBlockedGenderBattleMatch(m.home, m.away, allowGenderBattle))
+        .map((m, idx) => ({ id: `match-${idx}`, round: 1, home: m.home, away: m.away, winner: null }));
+      if (!roundMatches.length) {
+        gsAlert('현재 옵션에서는 생성 가능한 대진이 없습니다. 선수/팀 구성을 조정하거나 [남 vs 여 매치 허용]을 켜주세요.');
+        return;
+      }
+      $('round-setup-area').style.display = 'none';
+      $('round-match-area').style.display = 'block';
+      roundViewRenderRoundMatches();
+      roundViewUpdateRoundRanking();
+      return;
     } else {
+      // 지정선택: 기존대로 사용자가 묶은 팀 순서 유지
+      const teams = [];
       for (let i = 0; i < checked.length; i += 2) teams.push([checked[i], checked[i + 1]]);
+      roundParticipants = teams;
     }
-    roundParticipants = teams;
   }
 
   const allowGenderBattle = roundMode === 'double'

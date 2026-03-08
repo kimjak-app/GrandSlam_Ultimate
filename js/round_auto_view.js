@@ -12,7 +12,7 @@ function createRoundAutoInitialState() {
   return {
     mode: 'double',
     eventType: 'double',
-    courtCount: 2,
+    courtCount: 1,
     selectedPlayers: [],
     turns: [],
     history: { partners: {}, opponents: {}, playedCount: {} },
@@ -178,6 +178,7 @@ function roundAutoGetClubPlayers() {
     ? players
       .filter(p => !HIDDEN_PLAYERS.includes(p.name) && (!p.status || p.status === 'active'))
       .map((p, idx) => ({ ...p, rank: rankMap[p.name] || p.rank || (idx + 1) }))
+      .sort((a, b) => a.rank - b.rank)
     : [];
 }
 
@@ -326,6 +327,8 @@ function roundAutoGetSelectedEligiblePool() {
     level: p.level || 'A',
     gender: p.gender || 'U',
     isGuest: false,
+    rank: p.rank,
+    dRank: p.dRank,
   }]));
   const guestMap = new Map(roundAutoGetFilteredGuests().map(g => [g.name, {
     id: g.id || g.name,
@@ -333,6 +336,8 @@ function roundAutoGetSelectedEligiblePool() {
     level: g.level || 'A',
     gender: g.gender || 'U',
     isGuest: true,
+    rank: g.rank,
+    dRank: g.dRank,
   }]));
   return (roundAutoState.selectedPlayers || [])
     .map(name => clubMap.get(name) || guestMap.get(name))
@@ -776,7 +781,7 @@ function initRoundAutoPlayerPool() {
 
   const courtInput = document.getElementById('round-auto-court-count');
   const courtTabs = document.querySelectorAll('#round-auto-court-tabs .court-tab-btn');
-  const currentCount = roundAutoState.courtCount || 2;
+  const currentCount = roundAutoState.courtCount || 1;
 
   const applyCourtCount = (value, fromTab) => {
     roundAutoState.courtCount = value;

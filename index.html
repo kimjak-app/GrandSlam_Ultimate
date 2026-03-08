@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>GrandSlam Ultimate v5.11</title>
+  <title>GrandSlam Ultimate v5.12</title>
   <link rel="apple-touch-icon" sizes="180x180" href="icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icon.png">
   <link rel="shortcut icon" href="icon.png">
@@ -534,7 +534,7 @@
     </div>
 
     <div style="text-align:right; font-size:11px; color:#ccc; margin-top:10px; font-weight:400; padding-right:5px;">
-      v5.11</div>
+      v5.12</div>
   </div>
 
   <div id="view-tennis" class="app-screen">
@@ -1305,14 +1305,14 @@
             style="display:flex; align-items:center; justify-content:center; gap:8px;">
             <span class="material-symbols-outlined">tour</span> 토너먼트
           </button>
-          <!-- 라운드(자동생성)으로 대체됨 — v4.96에서 메뉴 숨김 -->
-          <button class="btn-purple-main" onclick="openRound()"
-            style="display:none; align-items:center; justify-content:center; gap:8px;">
-            <span class="material-symbols-outlined">cached</span> 라운드
-          </button>
           <button class="btn-purple-main" onclick="openRoundAuto()"
             style="display:flex; align-items:center; justify-content:center; gap:8px;">
             <span class="material-symbols-outlined">autorenew</span> 라운드(자동생성)
+          </button>
+          <!-- ✅ v5.12: 라운드(수동) 복원 -->
+          <button class="btn-purple-main" onclick="openRound()"
+            style="display:flex; align-items:center; justify-content:center; gap:8px;">
+            <span class="material-symbols-outlined">cached</span> 라운드(수동)
           </button>
           <button class="btn-purple-main" onclick="openExchange()"
             style="display:flex; align-items:center; justify-content:center; gap:8px;">
@@ -1360,7 +1360,7 @@
             <button type="button" class="opt-btn" data-event-type="double" style="margin:0;">복식</button>
             <button type="button" class="opt-btn" data-event-type="single" style="margin:0;">단식</button>
           </div>
-          <div style="font-size:13px; color:#555; font-weight:600; margin-bottom:6px;">등급 필터</div>
+          <div style="font-size:13px; color:#555; font-weight:600; margin-bottom:6px;">등급 필터 <span style="font-size:11px; color:#999; font-weight:400;">(클럽 내 선수 등급 선택합니다)</span></div>
           <div id="round-auto-level-filters" style="display:flex; gap:10px; margin-bottom:10px;">
             <label style="font-size:13px;"><input type="checkbox" value="A"> A</label>
             <label style="font-size:13px;"><input type="checkbox" value="B"> B</label>
@@ -1405,7 +1405,7 @@
           <div id="round-auto-personal-rank-table" style="font-size:13px; color:#8E8E93;">승자 선택 후 표시됩니다.</div>
         </div>
 
-        <div class="tour-section-title"><span class="material-symbols-outlined">leaderboard</span>누적 랭킹</div>
+        <div class="tour-section-title"><span class="material-symbols-outlined">leaderboard</span>라운드 조합 랭킹 순위</div>
         <div
           style="border: 2px solid #E5E5EA; border-radius: 15px; padding: 14px; background: white; margin-bottom: 30px;">
           <div id="round-auto-rank-table" style="font-size:13px; color:#8E8E93;">경기 결과가 아직 없습니다.</div>
@@ -1597,7 +1597,7 @@
           <div>- ✅ <b>v2.0</b>: 단/복식 게임 로직·랭킹 완성, 토너먼트 모드 도입</div>
           <div>- ✅ <b>v3.0</b>: 사다리게임·라운드 모드·다중 클럽·클라우드·성별/혼복 시스템</div>
           <div>- ✅ <b>v4.0</b>: 다종목 구조·급수·Firestore 마이그레이션·백업/복원·지역 필터</div>
-          <div>- ✅ <b>v5.11</b>: 홈화면 클럽 회계 확인 기능 추가 (투명 회계 공개) / 점수초기화 시 gender·level 필드 보호 버그 수정<br>- ✅ <b>v5.0</b>: 대기열 자동매칭 엔진 도입 — M→F→X 리듬 사이클, 휴식/연속출전 우선순위, 팀·대진 중복 최소화 / 이중 commit 구조 버그 수정 (단일 경로 통일) / 죽은 코드 정리 (supportMatchSet 제거)</div>
+          <div>- ✅ <b>v5.12</b>: 라운드(자동생성) 마이너 수정 (수동 메뉴 복원 / 코트 초기값 1 / 등급 필터 설명 / 랭킹 명칭 변경) / 라운드(수동) 랭킹순·무작위 복식 가능 조합 전체 생성 (기존 1경기 → 모든 2vs2 조합)<br>- ✅ <b>v5.11</b>: 홈화면 클럽 회계 확인 기능 추가 (투명 회계 공개) / 점수초기화 시 gender·level 필드 보호 버그 수정<br>- ✅ <b>v5.0</b>: 대기열 자동매칭 엔진 도입 — M→F→X 리듬 사이클, 휴식/연속출전 우선순위, 팀·대진 중복 최소화 / 이중 commit 구조 버그 수정 (단일 경로 통일) / 죽은 코드 정리 (supportMatchSet 제거)</div>
 
         </div>
       </div>

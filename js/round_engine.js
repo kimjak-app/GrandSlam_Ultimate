@@ -87,24 +87,15 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
   };
 
   // ── 2. 헬퍼: 랭킹 조회 ───────────────────────────────────────────────────
-  // 지난주 랭킹 우선 → 이번주 랭킹 → Infinity
+  // eligiblePool에 실제 들어오는 필드: rank (round_auto_view에서 세팅)
+  // 선수 객체 자체에는 dRank 필드 존재
+  // 우선순위: dRank → rank → Infinity
   const getRank = (name) => {
-    const sources = [];
-    const inPool = playersList.find(p => p.name === name);
-    if (inPool) sources.push(inPool);
-    if (typeof players !== 'undefined') {
-      const gp = (players || []).find(p => p.name === name);
-      if (gp) sources.push(gp);
-    }
-    for (const src of sources) {
-      const lw = Number(src.lastRank ?? src.dLastRank ?? src.prevRank);
-      if (Number.isFinite(lw) && lw > 0) return lw;
-    }
-    for (const src of sources) {
-      const cw = Number(src.dRank ?? src.rank);
-      if (Number.isFinite(cw) && cw > 0) return cw;
-    }
-    return Infinity;
+    const src = playersList.find(p => p.name === name)
+      || (typeof players !== 'undefined' ? (players || []).find(p => p.name === name) : null);
+    if (!src) return Infinity;
+    const v = Number(src.dRank ?? src.rank);
+    return (Number.isFinite(v) && v > 0) ? v : Infinity;
   };
 
   // ── 3. 헬퍼: statsRef ────────────────────────────────────────────────────
@@ -677,15 +668,24 @@ function roundEngineGenerateRoundRobinMatches(participants, options = {}) {
 function roundEngineCalcRankingStandings() {
   const standings = {};
 
+  // roundParticipants가 개인 배열(rank/random 복식)이거나 팀 배열(지정선택)일 수 있음
+  // match의 home/away 기준으로 standings 키를 먼저 구성
+  const keyOf = (p) => Array.isArray(p) ? p.join('&') : String(p);
+  roundMatches.forEach(m => {
+    const hk = keyOf(m.home), ak = keyOf(m.away);
+    if (!standings[hk]) standings[hk] = { name: m.home, wins: 0, losses: 0, matches: 0, points: 0, h2h: {} };
+    if (!standings[ak]) standings[ak] = { name: m.away, wins: 0, losses: 0, matches: 0, points: 0, h2h: {} };
+  });
+  // roundParticipants에만 있는 항목도 포함 (아직 경기 없는 경우)
   roundParticipants.forEach(p => {
-    const key = roundMode === 'single' ? p : p.join('&');
-    standings[key] = { name: p, wins: 0, losses: 0, matches: 0, points: 0, h2h: {} };
+    const key = Array.isArray(p) ? p.join('&') : String(p);
+    if (!standings[key]) standings[key] = { name: p, wins: 0, losses: 0, matches: 0, points: 0, h2h: {} };
   });
 
   roundMatches.forEach(m => {
     if (m.winner === null) return;
-    const homeKey = roundMode === 'single' ? m.home : m.home.join('&');
-    const awayKey = roundMode === 'single' ? m.away : m.away.join('&');
+    const homeKey = keyOf(m.home);
+    const awayKey = keyOf(m.away);
     standings[homeKey].matches++;
     standings[awayKey].matches++;
     if (m.winner === 'home') {
@@ -702,8 +702,8 @@ function roundEngineCalcRankingStandings() {
   if (miniTournamentMatches && miniTournamentMatches.length > 0) {
     miniTournamentMatches.forEach(m => {
       if (m.winner === null) return;
-      const homeKey = roundMode === 'single' ? m.home : m.home.join('&');
-      const awayKey = m.away ? (roundMode === 'single' ? m.away : m.away.join('&')) : null;
+      const homeKey = Array.isArray(m.home) ? m.home.join('&') : String(m.home);
+      const awayKey = m.away ? (Array.isArray(m.away) ? m.away.join('&') : String(m.away)) : null;
       if (m.winner === 'home' && standings[homeKey]) standings[homeKey].miniWins = (standings[homeKey].miniWins || 0) + 1;
       if (m.winner === 'away' && awayKey && standings[awayKey]) standings[awayKey].miniWins = (standings[awayKey].miniWins || 0) + 1;
     });
@@ -730,8 +730,8 @@ function roundEngineSortRankingStandings(standings) {
       Math.abs(s.wins - a.wins) < 0.001 && Math.abs(s.winRate - a.winRate) < 0.001
     );
     if (tiedGroup.length === 2) {
-      const aKey = roundMode === 'single' ? a.name : a.name.join('&');
-      const bKey = roundMode === 'single' ? b.name : b.name.join('&');
+      const aKey = Array.isArray(a.name) ? a.name.join('&') : String(a.name);
+      const bKey = Array.isArray(b.name) ? b.name.join('&') : String(b.name);
       if (a.h2h[bKey] > 0) return -1;
       if (b.h2h[aKey] > 0) return 1;
     }
@@ -824,13 +824,20 @@ function roundEngineApplyRoundBonus(participant, mode, bonus) {
 
 function roundEngineCalcStandings(finishedMatches) {
   const standings = {};
+  const keyOf = (p) => Array.isArray(p) ? p.join('&') : String(p);
+  // match 기준으로 standings 초기화 (개인/팀 혼용 대응)
+  finishedMatches.forEach(m => {
+    const hk = keyOf(m.home), ak = keyOf(m.away);
+    if (!standings[hk]) standings[hk] = { name: m.home, wins: 0, losses: 0, matches: 0, winRate: 0 };
+    if (!standings[ak]) standings[ak] = { name: m.away, wins: 0, losses: 0, matches: 0, winRate: 0 };
+  });
   roundParticipants.forEach(p => {
-    const key = roundMode === 'single' ? p : p.join('&');
-    standings[key] = { name: p, wins: 0, losses: 0, matches: 0, winRate: 0 };
+    const key = keyOf(p);
+    if (!standings[key]) standings[key] = { name: p, wins: 0, losses: 0, matches: 0, winRate: 0 };
   });
   finishedMatches.forEach(m => {
-    const homeKey = roundMode === 'single' ? m.home : m.home.join('&');
-    const awayKey = roundMode === 'single' ? m.away : m.away.join('&');
+    const homeKey = keyOf(m.home);
+    const awayKey = keyOf(m.away);
     standings[homeKey].matches++;
     standings[awayKey].matches++;
     if (m.winner === 'home') { standings[homeKey].wins++; standings[awayKey].losses++; }
