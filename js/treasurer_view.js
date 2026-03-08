@@ -191,10 +191,13 @@ window.showTreasurerSection = function(section) {
   if (section === 'finance') {
     fetchFinanceData().then(() => _origShowTreasurerSection(section));
   } else if (section === 'report') {
-    _origShowTreasurerSection(section);
-    const el = document.getElementById('reportMonth');
-    if (el && !el.value) el.value = new Date().toISOString().slice(0, 7);
-    initReportSettings();
+    // ✅ v5.237: 리포트 진입 시 financeData 먼저 로드
+    fetchFinanceData().then(() => {
+      _origShowTreasurerSection(section);
+      const el = document.getElementById('reportMonth');
+      if (el && !el.value) el.value = new Date().toISOString().slice(0, 7);
+      initReportSettings();
+    });
   } else if (section === 'member-history') {
     _origShowTreasurerSection(section);
     window._memberHistoryTab = 'active';
