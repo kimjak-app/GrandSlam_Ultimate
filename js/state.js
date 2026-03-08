@@ -61,7 +61,7 @@ var isPracticeMode = localStorage.getItem('grandslam_practice_mode') || 'real';
 let adminUnlocked = false;
 
 // Round Mode State
-var roundOpt = 'rank';
+var roundOpt = 'manual';
 var roundMode = 'double';
 var roundParticipants = [];
 var roundMatches = [];

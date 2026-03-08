@@ -774,9 +774,9 @@ function roundAutoOpenAddGuestModal() {
 }
 function initRoundAutoPlayerPool() {
   const currentClubId = roundAutoGetSelectedClubId();
-  // ✅ v5.121: 클럽 변경 시에만 state 재로드 — 설정 변경(필터/선수) 시엔 메모리 state 유지
+  // ✅ v5.122: 클럽 변경 시에만 재로드 — createInitialState 제거로 기록 리셋 방지
+  // loadRoundAutoState() 내부에서 클럽 미존재 시 initial로 세팅하므로 별도 초기화 불필요
   if (roundAutoLoadedClubId !== currentClubId) {
-    roundAutoState = createRoundAutoInitialState();
     loadRoundAutoState();
   }
 
