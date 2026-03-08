@@ -125,16 +125,37 @@ function resetTreasurerView() {
   }
 }
 
-function verifyTreasurerPin() {
+async function verifyTreasurerPin() {
   const pin = $('treasurerPinInput').value;
-  if (pin && (pin === ADMIN_PIN || (MASTER_PIN && pin === MASTER_PIN))) {
+  if (!pin) return;
+
+  // 1. 클럽 관리자 비번 확인
+  if (pin === ADMIN_PIN) {
     treasurerUnlocked = true;
     showTreasurerMenu();
-  } else {
-    gsAlert('비밀번호가 틀렸습니다.');
-    $('treasurerPinInput').value = '';
-    $('treasurerPinInput').focus();
+    return;
   }
+
+  // 2. 총괄관리자 비번 — 메모리 캐시 우선, 없으면 Firebase 직접 조회
+  try {
+    let masterPin = MASTER_PIN;
+    if (!masterPin) {
+      const doc = await _db.collection('master_config').doc('global').get();
+      if (doc.exists) masterPin = String(doc.data().masterPin || '');
+    }
+    if (masterPin && pin === masterPin) {
+      MASTER_PIN = masterPin; // 캐시 세팅
+      treasurerUnlocked = true;
+      showTreasurerMenu();
+      return;
+    }
+  } catch (e) {
+    console.warn('[treasurer] masterPin check error:', e);
+  }
+
+  gsAlert('비밀번호가 틀렸습니다.');
+  $('treasurerPinInput').value = '';
+  $('treasurerPinInput').focus();
 }
 
 function showTreasurerMenu() {
