@@ -1086,9 +1086,22 @@ function roundAutoUpdateModalCount() {
 }
 
 function roundAutoOpenMiniTournamentModal() {
-  const rows = roundAutoComputeSessionStandings();
-  if (!rows.length) {
+  const allRows = roundAutoComputeSessionStandings();
+  if (!allRows.length) {
     gsAlert('오늘 성적 데이터가 없습니다. 먼저 승자를 선택해 주세요.');
+    return;
+  }
+
+  // ✅ v5.124: 현재 체크된 selectedPlayers 기준으로 필터링 — 중간에 빠진 회원/게스트 제외
+  const activeNames = new Set(roundAutoState.selectedPlayers || []);
+  const rows = allRows.filter(row =>
+    Array.isArray(row.players)
+      ? row.players.every(name => activeNames.has(name))
+      : activeNames.has(row.players)
+  );
+
+  if (rows.length < 2) {
+    gsAlert('현재 참여 중인 인원이 부족해 미니 토너먼트를 생성할 수 없습니다. (최소 2팀/2명 필요)');
     return;
   }
 
