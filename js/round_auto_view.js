@@ -1346,6 +1346,24 @@ async function roundAutoGenerateNextTurn() {
   roundAutoSyncStateFromCurrentUI();
   roundAutoState.turns = (roundAutoState.turns || []).filter(turn => turn?.status !== 'preview');
 
+  // ✅ v5.5 버그수정: sessionStats가 비어있는데 done 턴이 있으면 turns 기반으로 재계산
+  const doneTurns = (roundAutoState.turns || []).filter(t => t?.status === 'done');
+  if (doneTurns.length > 0 && Object.keys(roundAutoState.sessionStats || {}).length === 0) {
+    const rebuiltStats = {};
+    doneTurns.forEach(turn => {
+      (turn.matches || []).forEach(match => {
+        [...(match.home || []), ...(match.away || [])].forEach(name => {
+          if (!rebuiltStats[name]) rebuiltStats[name] = { played: 0, rested: 0, restStreak: 0, lastTurnPlayed: null, consecutiveCount: 0 };
+          rebuiltStats[name].played += 1;
+          rebuiltStats[name].restStreak = 0;
+          rebuiltStats[name].lastTurnPlayed = turn.turnNo;
+        });
+      });
+    });
+    roundAutoState.sessionStats = rebuiltStats;
+    console.warn('[round-auto] sessionStats 재계산됨 (리셋 방지)');
+  }
+
   if (!roundAutoState.turns.length) {
     roundAutoState.previewVariant = 0;
     const activeTurnNo = roundAutoState.turnNo + 1;
