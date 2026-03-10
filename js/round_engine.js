@@ -28,6 +28,17 @@ function roundEngineIsBlockedGenderBattleMatch(home, away, allowGenderBattle) {
   return (homeType === 'M' && awayType === 'F') || (homeType === 'F' && awayType === 'M');
 }
 
+// ✅ v5.4: 혼복 vs 남복/여복 대결 차단 (채코치 최적화: 타입 캐싱으로 반복 계산 제거)
+function roundEngineIsBlockedMixedVsSame(home, away, allowMixedVsSame) {
+  if (allowMixedVsSame) return false;
+  const ht = roundEngineGetParticipantGenderType(home);
+  const at = roundEngineGetParticipantGenderType(away);
+  const homeMixed = ht === 'MIXED_OR_UNKNOWN';
+  const awayMixed = at === 'MIXED_OR_UNKNOWN';
+  // 한쪽만 혼복이면 차단 (남복/여복 여부는 타입 캐싱으로 1회만 계산)
+  return homeMixed !== awayMixed;
+}
+
 /**
  * roundEngineBuildAutoDoubleMatches — 김작엔진 1.0
  *
@@ -42,6 +53,8 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
   // ── 0. 입력 정규화 ──────────────────────────────────────────────────────────
   const allowMixed        = options.allowMixed !== false;
   const allowGenderBattle = options.allowGenderBattle === true;
+  // ✅ v5.4: 혼복 vs 남복/여복 대결 허용 여부 (기본값 ON)
+  const allowMixedVsSame  = options.allowMixedVsSame !== false;
   const targetCourts      = Math.max(0, Number(courtCount) || 0);
 
   if (!Array.isArray(playersList) || playersList.length < 4 || targetCourts <= 0) return [];
@@ -171,6 +184,7 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
     const names = [...home, ...away];
     if (new Set(names).size !== 4) return null;
     if (roundEngineIsBlockedGenderBattleMatch(home, away, allowGenderBattle)) return null;
+    if (roundEngineIsBlockedMixedVsSame(home, away, allowMixedVsSame)) return null; // ✅ v5.4 메인 필터
 
     const hKey = teamKey(home), aKey = teamKey(away), gKey = matchKey(home, away);
     const tSet = type === 'M' ? histCtx.maleTeamSet   : (type === 'F' ? histCtx.femaleTeamSet : histCtx.mixedTeamSet);
@@ -371,11 +385,26 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
     return ranked[idx] || ranked[0];
   };
 
+  // ── 12-A. helper: 해당 타입의 새 후보(미사용 조합)가 실제 있는지 확인 (채코치 설계 v5.32_chat)
+  const hasFreshCandidate = (type, pool, histCtx) => {
+    return gatherCandidates(type, pool, true, histCtx).length > 0;
+  };
+
+  // ── 12-B. helper: 성별별 최소 출전 수
+  const minPlayedByGender = (pool, gender) => {
+    const arr = pool.filter(p => getGender(p.name) === gender);
+    if (!arr.length) return Infinity;
+    return Math.min(...arr.map(p => Number(getStat(p.name).played) || 0));
+  };
+
   // ── 12. 규칙 1-1~1-5: 시도 순서 ─────────────────────────────────────────
-  // 남복 가능 → 우선 / 여복 가능 → 다음 / 둘 다 불가 → 혼복
-  // 혼복 2연속 허용 후 리셋
-  // 규칙 4-2: 성별 불균형이면 타입 구분 없이 'M' 하나로 통일 (gatherCandidates가 전체 풀 처리)
-  const getTypeOrder = (preferred, curMixedStreak, pool) => {
+  // 채코치 설계 (v5.32_chat):
+  // 1. 출전 균형 우선: 덜 뛴 성별 타입 먼저
+  // 2. 출전 균등 시: fresh candidate 있는 타입 우선
+  // 3. fresh 없으면: preferred 기반 fallback
+  // 혼복은 mixedStreak < 2 일 때만 허용
+  // 규칙 4-2: 성별 불균형이면 타입 구분 없이 'M' 하나로 통일
+  const getTypeOrder = (preferred, curMixedStreak, pool, histCtx) => {
     if (isGenderImbalanced(pool)) return pool.length >= 4 ? ['M'] : [];
 
     const canM = canMakeType('M', pool);
@@ -383,17 +412,38 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
     const canX = canMakeType('X', pool);
     const mixedOk = allowMixed && canX && curMixedStreak < 2;
 
+    const filter = t => {
+      if (t === 'M') return canM;
+      if (t === 'F') return canF;
+      if (t === 'X') return mixedOk;
+      return false;
+    };
+
+    if (histCtx) {
+      const maleMin   = minPlayedByGender(pool, 'M');
+      const femaleMin = minPlayedByGender(pool, 'F');
+
+      if (femaleMin < maleMin) return ['F', 'X', 'M'].filter(filter);
+      if (maleMin < femaleMin) return ['M', 'X', 'F'].filter(filter);
+
+      const freshM = canM && hasFreshCandidate('M', pool, histCtx);
+      const freshF = canF && hasFreshCandidate('F', pool, histCtx);
+      // 혼복은 mixedStreak < 2이면 fresh 여부 관계없이 허용 — 조합이 적어 fresh 소진돼도 2연속 보장
+      const freshX = mixedOk; // 혼복은 조합 풀이 작으므로 mixedStreak < 2 동안은 fresh 여부와 무관하게 반복 허용
+
+      const freshOrder = [];
+      if (freshM) freshOrder.push('M');
+      if (freshF) freshOrder.push('F');
+      if (freshX) freshOrder.push('X');
+      if (freshOrder.length) return freshOrder;
+    }
+
     let order;
     if (preferred === 'F')      order = ['F', 'X', 'M'];
     else if (preferred === 'X') order = ['X', 'M', 'F'];
     else                        order = ['M', 'F', 'X'];
 
-    return order.filter(t => {
-      if (t === 'M' && !canM) return false;
-      if (t === 'F' && !canF) return false;
-      if (t === 'X' && !mixedOk) return false;
-      return true;
-    });
+    return order.filter(filter);
   };
 
   // ── 13. history 갱신 ─────────────────────────────────────────────────────
@@ -416,23 +466,15 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
   };
 
   // ── 14. nextMatchType 리듬 갱신 ──────────────────────────────────────────
-  // M → F → X → M... (가능한 타입만)
+  // 채코치 설계 (v5.32_chat): mixedStreak만 관리, 강제 순환 제거
+  // 실제 타입 선택은 getTypeOrder(histCtx 포함)가 동적으로 담당
   const updateRhythm = (createdType, rhythm) => {
-    if (createdType === 'M') {
-      rhythm.nextMatchType = 'F';
-      rhythm.mixedStreak   = 0;
-    } else if (createdType === 'F') {
-      rhythm.nextMatchType = 'X';
-      rhythm.mixedStreak   = 0;
+    if (createdType === 'X') {
+      rhythm.mixedStreak   = (rhythm.mixedStreak || 0) + 1;
+      rhythm.nextMatchType = rhythm.mixedStreak >= 2 ? 'M' : 'X';
     } else {
-      // 혼복: 규칙 1-4/1-5 처리
-      if (rhythm.mixedStreak <= 0) {
-        rhythm.nextMatchType = 'X';
-        rhythm.mixedStreak   = 1;
-      } else {
-        rhythm.nextMatchType = 'M';
-        rhythm.mixedStreak   = 2;
-      }
+      rhythm.mixedStreak   = 0;
+      rhythm.nextMatchType = createdType; // 힌트만 유지, getTypeOrder가 동적 판단
     }
   };
 
@@ -447,6 +489,49 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
     if ((pick.consecutivePenalty || 0) <= 1) tags.push('연속 출전 제한');
     if (!tags.length) tags.push('공정 출전 균형');
     return tags.slice(0, 3);
+  };
+
+  // ── 15-B. 김작엔진 v2.1: 공평 오프닝 플랜 생성 ──────────────────────────
+  // 참가 인원/코트 수 기준으로 초반 목표 경기 수(기본 4경기) 안에
+  // 전원 최소 경기 수 보장에 최적인 종목 시퀀스를 계산
+  const buildFairOpeningPlan = (pool, courts, targetGames = 4) => {
+    const { males, females } = genderCount(pool);
+    const totalSlots = targetGames * courts * 4; // 전체 출전 슬롯
+    const totalPlayers = pool.length;
+
+    // 각 종목별 캐파 계산 (라운드 시작 시 고정)
+    const mCap = males  >= 4 ? Math.max(1, Math.floor(males  / 4)) : 0;
+    const fCap = females >= 4 ? Math.max(1, Math.floor(females / 4))
+               : females === 3 ? 1  // 여복: 여3+보충남1
+               : 0;
+    const xCap = (allowMixed && males >= 2 && females >= 2)
+               ? (females <= 2 ? 1 : 2)  // 여자 2명 이하면 혼복 1연속, 3명 이상이면 2연속
+               : 0;
+
+    // 종목 시퀀스 생성: M×mCap → F×fCap → X×xCap 반복
+    const seq = [];
+    let remaining = targetGames * courts;
+    let phase = 0; // 0=M, 1=F, 2=X
+    const caps = [mCap, fCap, xCap];
+    const types = ['M', 'F', 'X'];
+
+    while (seq.length < remaining) {
+      const cap = caps[phase];
+      const type = types[phase];
+      if (cap > 0 && canMakeType(type, pool)) {
+        for (let i = 0; i < cap && seq.length < remaining; i++) {
+          seq.push(type);
+        }
+      }
+      phase = (phase + 1) % 3;
+      // 무한루프 방지: 3페이즈 모두 불가면 M으로 채움
+      if (phase === 0 && seq.length === 0) {
+        seq.push('M');
+        break;
+      }
+    }
+
+    return seq; // ['M','M','X','X','M','M'...] 형태
   };
 
   // ── 16. 규칙 1-12/1-13: 첫 턴 첫 경기 — 랭킹 기반 대진 ──────────────────
@@ -517,6 +602,7 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
     const allNames = [...home, ...away];
     if (new Set(allNames).size !== 4) return null;
     if (roundEngineIsBlockedGenderBattleMatch(home, away, allowGenderBattle)) return null;
+    if (roundEngineIsBlockedMixedVsSame(home, away, allowMixedVsSame)) return null; // ✅ v5.4 메인 필터
 
     const hKey = teamKey(home), aKey = teamKey(away), gKey = matchKey(home, away);
     return {
@@ -538,6 +624,12 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
       femaleMatchSet: new Set(femaleMatchSet),
       mixedMatchSet:  new Set(mixedMatchSet),
     };
+    // ✅ v5.4 김작엔진 v2.1: 공평 오프닝 플랜 생성 (첫 턴에만)
+    const openingPlan = isFirstTurn
+      ? buildFairOpeningPlan([...playersList].filter(p => p && p.name), courtsToUse)
+      : [];
+    const planQueue = [...openingPlan]; // 소진하면서 사용
+
     const rhythm    = { nextMatchType, mixedStreak };
     const usedNames = new Set();
     const matches   = [];
@@ -558,12 +650,25 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
       if (isFirstTurn && courtIdx === 0) {
         picked        = buildFirstTurnFirstMatch(pool, localHist, rhythm);
         isFirstRanked = !!picked;
+        if (picked && planQueue.length) planQueue.shift(); // 오프닝 플랜 첫 항목 소진
       }
 
-      // 랭킹 기반 대진 실패 또는 일반 경기 → 규칙 1-1~1-5 기반 타입 결정
+      // 랭킹 기반 대진 실패 또는 일반 경기 → 오프닝 플랜 우선, 그 다음 기존 로직
       if (!picked) {
-        const typeOrder = getTypeOrder(rhythm.nextMatchType, rhythm.mixedStreak, pool);
-        const fallback  = typeOrder.length
+        // ✅ v5.4: 오프닝 플랜 큐에서 우선 타입 가져오기
+        const planType = planQueue.length ? planQueue[0] : null;
+
+        let typeOrder;
+        if (planType && canMakeType(planType, pool)) {
+          // 오프닝 플랜 타입 우선 시도
+          typeOrder = [planType, ...getTypeOrder(rhythm.nextMatchType, rhythm.mixedStreak, pool, localHist)
+            .filter(t => t !== planType)];
+        } else {
+          // 오프닝 플랜 소진 또는 불가 → 기존 로직
+          typeOrder = getTypeOrder(rhythm.nextMatchType, rhythm.mixedStreak, pool, localHist);
+        }
+
+        const fallback = typeOrder.length
           ? typeOrder
           : (['M', 'F', 'X'].filter(t => canMakeType(t, pool)));
 
@@ -575,10 +680,16 @@ function roundEngineBuildAutoDoubleMatches(playersList, courtCount, options = {}
           }
           if (picked) break;
         }
+
+        // 성공 시 오프닝 플랜 소진
+        if (picked && planQueue.length && picked.type === planQueue[0]) {
+          planQueue.shift();
+        }
       }
 
       if (!picked) break;
       if (roundEngineIsBlockedGenderBattleMatch(picked.home, picked.away, allowGenderBattle)) continue;
+      if (roundEngineIsBlockedMixedVsSame(picked.home, picked.away, allowMixedVsSame)) continue;
 
       matches.push({
         courtNo:    matches.length + 1,
