@@ -22,7 +22,7 @@ function createRoundAutoInitialState() {
       gender: 'all',
       allowMixed: true,
       allowGenderBattle: false,
-      allowMixedVsSame: true,  // ✅ v5.4: 혼복vs남복/여복 허용 (기본값 ON)
+      allowMixedVsSame: true,
       previewTurns: 1,
     },
     sessionStats: {},
@@ -51,6 +51,18 @@ function roundAutoEscape(text) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// ✅ v5.41: 대진표 이름에 성별 아이콘 붙이기
+function roundAutoPlayerLabelWithGender(name, level) {
+  const player = (typeof players !== 'undefined' ? players : []).find(p => p.name === name)
+    || (roundAutoState?.guestPlayers || []).find(p => p.name === name);
+  const icon = player
+    ? (player.gender === 'F'
+        ? '<span class="material-symbols-outlined" style="font-size:11px; color:#E8437A; vertical-align:middle; margin-right:2px;">female</span>'
+        : '<span class="material-symbols-outlined" style="font-size:11px; color:#3A7BD5; vertical-align:middle; margin-right:2px;">male</span>')
+    : '';
+  return icon + roundAutoPlayerLabel(name, level);
 }
 
 function roundAutoPlayerLabel(name, level) {
@@ -261,7 +273,7 @@ function loadRoundAutoState() {
       roundAutoState.config.allowGenderBattle = false;
     }
     if (typeof roundAutoState.config.allowMixedVsSame !== 'boolean') {
-      roundAutoState.config.allowMixedVsSame = true; // ✅ v5.4 기본값 ON
+      roundAutoState.config.allowMixedVsSame = true;
     }
     roundAutoState.config.previewTurns = 1;
 
@@ -1267,6 +1279,43 @@ function roundAutoReasonText(match) {
   return tags.join(' · ');
 }
 
+// ✅ v5.41: 이 턴 재생성
+function roundAutoRegenerateCurrentTurn() {
+  if (!confirm('현재 턴 대진표를 취소하고 재생성할까요?\n(결과 입력된 경기도 초기화됩니다)')) return;
+  roundAutoSyncStateFromCurrentUI();
+  const turns = roundAutoState.turns || [];
+  const activeIdx = turns.findIndex(t => t?.status === 'active');
+  if (activeIdx < 0) { gsAlert('활성 턴이 없습니다.'); return; }
+  const activeTurnNo = turns[activeIdx].turnNo;
+  const prevTurns = turns.slice(0, activeIdx).filter(t => t?.status !== 'preview');
+  roundAutoState.turns = prevTurns;
+  const freshStats = {};
+  prevTurns.forEach(turn => {
+    (turn.matches || []).forEach(match => {
+      [...(match.home || []), ...(match.away || [])].forEach(name => {
+        if (!freshStats[name]) freshStats[name] = { played: 0, rested: 0, restStreak: 0, lastTurnPlayed: null, consecutiveCount: 0 };
+        freshStats[name].played += 1;
+        freshStats[name].restStreak = 0;
+        freshStats[name].lastTurnPlayed = turn.turnNo;
+      });
+    });
+  });
+  roundAutoState.sessionStats = freshStats;
+  const realStats = JSON.parse(JSON.stringify(freshStats));
+  const newActiveTurn = roundAutoBuildTurnWithStats(activeTurnNo, 'active', realStats, true);
+  if (!newActiveTurn) { gsAlert('현재 인원으로 대진 생성이 불가능합니다. 참가자 설정을 확인해주세요.'); return; }
+  const simulatedStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
+  const previewTurn = roundAutoBuildTurnWithStats(activeTurnNo + 1, 'preview', simulatedStats, false);
+  roundAutoState.turns = previewTurn ? [...prevTurns, newActiveTurn, previewTurn] : [...prevTurns, newActiveTurn];
+  roundAutoState.turnNo = activeTurnNo;
+  const normalized = roundAutoNormalizeTurnsState(roundAutoState);
+  roundAutoState = normalized.state;
+  roundAutoRenderMatches();
+  roundAutoRenderRanking();
+  roundAutoRenderPersonalRanking();
+  saveRoundAutoState();
+}
+
 function roundAutoRegeneratePreview() {
   roundAutoSyncStateFromCurrentUI();
 
@@ -1537,8 +1586,9 @@ function roundAutoRenderMatches() {
         </div>
         ${matches.map(match => {
       const teamSeparator = roundAutoIsSingles() ? ' vs ' : ' & ';
-      const home = Array.isArray(match.home) ? match.home.map(roundAutoPlayerLabel).join(teamSeparator) : roundAutoPlayerLabel(match.home);
-      const away = Array.isArray(match.away) ? match.away.map(roundAutoPlayerLabel).join(teamSeparator) : roundAutoPlayerLabel(match.away);
+      // ✅ v5.41: 성별 아이콘 포함
+      const home = Array.isArray(match.home) ? match.home.map(n => roundAutoPlayerLabelWithGender(n, '')).join(teamSeparator) : roundAutoPlayerLabelWithGender(match.home, '');
+      const away = Array.isArray(match.away) ? match.away.map(n => roundAutoPlayerLabelWithGender(n, '')).join(teamSeparator) : roundAutoPlayerLabelWithGender(match.away, '');
       const reasonText = turn.status === 'preview' ? roundAutoReasonText(match) : '';
       const reasonHtml = reasonText
         ? `<div style="margin-top:7px; font-size:11px; color:#6b7280;">생성 이유: ${roundAutoEscape(reasonText)}</div>`
@@ -1548,16 +1598,23 @@ function roundAutoRenderMatches() {
       return `
             <div class="team-box" style="padding:12px; margin-bottom:8px; ${disabled}">
               <div style="font-size:11px; color:#888; margin-bottom:8px;">코트 ${match.courtNo}</div>
-              <div style="display:flex; gap:8px;">
+              <div style="display:flex; align-items:center; gap:6px;">
                 <button class="opt-btn" onclick="roundAutoSetWinner('${match.id}','home')" ${disableAttr}
-                  style="flex:1; ${match.winner === 'home' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${roundAutoEscape(home)}</button>
+                  style="flex:1; ${match.winner === 'home' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${home}</button>
+                <div style="font-size:12px; font-weight:700; color:#888; flex-shrink:0;">vs</div>
                 <button class="opt-btn" onclick="roundAutoSetWinner('${match.id}','away')" ${disableAttr}
-                  style="flex:1; ${match.winner === 'away' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${roundAutoEscape(away)}</button>
+                  style="flex:1; ${match.winner === 'away' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${away}</button>
               </div>
               ${reasonHtml}
             </div>
           `;
     }).join('')}
+        ${turn.status === 'active' ? `
+          <button type="button" class="btn-main" onclick="roundAutoRegenerateCurrentTurn()"
+            style="width:100%; margin-top:8px; background:#b85c38; font-size:13px; padding:10px 12px;">
+            🔄 이 턴 재생성
+          </button>
+        ` : ''}
         ${turn.status === 'preview' ? `
           <button type="button" class="btn-main" onclick="roundAutoRegeneratePreview()"
             style="width:100%; margin-top:4px; background:#4f6786; font-size:13px; padding:10px 12px;">
@@ -1679,7 +1736,7 @@ function roundAutoRenderRanking() {
 // 수동 모드 상태 (라운드 자동생성 뷰 내 토글)
 let roundAutoManualMode = false;
 // 수동 배치 중인 코트별 선수 임시 저장
-let roundAutoManualCourts = []; // [{ courtNo, players: [name, ...] }, ...]
+let roundAutoManualCourts = []; // [{ courtNo, players: [name, ...], matchType: 'double'|'single' }, ...]
 
 function roundAutoSetMode(mode) {
   roundAutoManualMode = (mode === 'manual');
@@ -1711,6 +1768,7 @@ function roundAutoInitManualCourts() {
   roundAutoManualCourts = Array.from({ length: courtCount }, (_, i) => ({
     courtNo: i + 1,
     players: [],
+    matchType: 'double',
   }));
   roundAutoRenderManualCourts();
 }
@@ -1730,20 +1788,48 @@ function roundAutoRenderManualCourts() {
   // 코트별 배치 현황
   roundAutoManualCourts.forEach(court => {
     const slots = court.players;
-    const isFull = slots.length >= 4;
+    const isDouble = court.matchType !== 'single';
+    const maxPlayers = isDouble ? 4 : 2;
+    const isFull = slots.length >= maxPlayers;
+
+    const toggleBtn = (type, label) => {
+      const active = court.matchType === type || (!court.matchType && type === 'double');
+      return `<button onclick="roundAutoManualSetMatchType(${court.courtNo}, '${type}')"
+        style="padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600; border:1px solid var(--aussie-blue);
+               background:${active ? 'var(--aussie-blue)' : 'white'}; color:${active ? 'white' : 'var(--aussie-blue)'}; cursor:pointer;">${label}</button>`;
+    };
+
+    const playerTag = (name) =>
+      `<span onclick="roundAutoManualRemovePlayer(${court.courtNo}, '${roundAutoEscape(name)}')"
+        style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; background:var(--aussie-blue); color:white; border-radius:20px; font-size:12px; font-weight:600; cursor:pointer;">
+        ${roundAutoPlayerLabelWithGender(name, findPlayerLevel ? findPlayerLevel(name) : '')}
+        <span style="font-size:10px; opacity:0.8;">✕</span>
+      </span>`;
+
+    const courtInner = isFull
+      ? (isDouble
+          ? `<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+               <div style="display:flex; gap:4px;">${slots.slice(0,2).map(playerTag).join('')}</div>
+               <div style="font-size:13px; font-weight:700; color:#888;">vs</div>
+               <div style="display:flex; gap:4px;">${slots.slice(2,4).map(playerTag).join('')}</div>
+             </div>`
+          : `<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+               ${playerTag(slots[0])}
+               <div style="font-size:13px; font-weight:700; color:#888;">vs</div>
+               ${playerTag(slots[1])}
+             </div>`)
+      : `<div style="display:flex; flex-wrap:wrap; gap:6px; min-height:32px;">
+           ${slots.map(playerTag).join('')}
+           ${!slots.length ? '<span style="font-size:11px; color:#bbb;">선수를 탭해서 배치하세요</span>' : ''}
+         </div>`;
+
     html += `
       <div style="margin-bottom:10px; padding:8px; background:white; border-radius:10px; border:1px solid #ddd;">
-        <div style="font-size:12px; font-weight:700; color:var(--aussie-blue); margin-bottom:6px;">코트 ${court.courtNo} <span style="font-weight:400; color:#888;">(${slots.length}/4명)</span></div>
-        <div style="display:flex; flex-wrap:wrap; gap:6px; min-height:32px;">
-          ${slots.map(name => `
-            <span onclick="roundAutoManualRemovePlayer(${court.courtNo}, '${roundAutoEscape(name)}')"
-              style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; background:var(--aussie-blue); color:white; border-radius:20px; font-size:12px; font-weight:600; cursor:pointer;">
-              ${roundAutoEscape(roundAutoPlayerLabel(name, findPlayerLevel ? findPlayerLevel(name) : ''))}
-              <span style="font-size:10px; opacity:0.8;">✕</span>
-            </span>
-          `).join('')}
-          ${!slots.length ? '<span style="font-size:11px; color:#bbb;">선수를 탭해서 배치하세요</span>' : ''}
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <div style="font-size:12px; font-weight:700; color:var(--aussie-blue);">코트 ${court.courtNo} <span style="font-weight:400; color:#888;">(${slots.length}/${maxPlayers}명)</span></div>
+          <div style="display:flex; gap:4px;">${toggleBtn('double','복식')}${toggleBtn('single','단식')}</div>
         </div>
+        ${courtInner}
       </div>
     `;
   });
@@ -1794,14 +1880,27 @@ function roundAutoManualRemovePlayer(courtNo, name) {
   roundAutoRenderManualCourts();
 }
 
+// ✅ v5.5: 코트별 단/복식 전환
+function roundAutoManualSetMatchType(courtNo, matchType) {
+  const court = roundAutoManualCourts.find(c => c.courtNo === courtNo);
+  if (!court) return;
+  court.matchType = matchType;
+  if (matchType === 'single' && court.players.length > 2) {
+    court.players = court.players.slice(0, 2);
+  }
+  roundAutoRenderManualCourts();
+}
+
 // 수동 대진 확정 → active 턴으로 생성
 async function roundAutoConfirmManual() {
   const courtCount = roundAutoState.courtCount || 1;
 
-  // 유효성 검사: 각 코트 4명
+  // ✅ v5.5: 유효성 검사 — 단식 2명, 복식 4명
   for (const court of roundAutoManualCourts) {
-    if (court.players.length !== 4) {
-      gsAlert(`코트 ${court.courtNo}에 선수가 ${court.players.length}명입니다. 4명을 배치해주세요.`);
+    const required = court.matchType === 'single' ? 2 : 4;
+    if (court.players.length !== required) {
+      const typeName = court.matchType === 'single' ? '단식(2명)' : '복식(4명)';
+      gsAlert(`코트 ${court.courtNo}는 ${typeName}입니다. ${required}명을 배치해주세요.`);
       return;
     }
   }
@@ -1823,16 +1922,20 @@ async function roundAutoConfirmManual() {
 
   const newTurnNo = (roundAutoState.turnNo || 0) + 1;
 
-  // 수동 배치에서 매치 생성 (코트별 홈팀[0,1] vs 어웨이팀[2,3])
-  const matches = roundAutoManualCourts.map((court, idx) => ({
-    id: `ra-m-${newTurnNo}-${idx + 1}`,
-    turnNo: newTurnNo,
-    courtNo: court.courtNo,
-    home: [court.players[0], court.players[1]],
-    away: [court.players[2], court.players[3]],
-    winner: null,
-    manual: true,
-  }));
+  // ✅ v5.5: 단식 1vs1, 복식 2vs2
+  const matches = roundAutoManualCourts.map((court, idx) => {
+    const isSingle = court.matchType === 'single';
+    return {
+      id: `ra-m-${newTurnNo}-${idx + 1}`,
+      turnNo: newTurnNo,
+      courtNo: court.courtNo,
+      matchType: isSingle ? 'single' : 'double',
+      home: isSingle ? [court.players[0]] : [court.players[0], court.players[1]],
+      away: isSingle ? [court.players[1]] : [court.players[2], court.players[3]],
+      winner: null,
+      manual: true,
+    };
+  });
 
   // sessionStats 업데이트 (출전/휴식 기록 반영)
   const statsRef = roundAutoState.sessionStats || {};
@@ -1953,6 +2056,8 @@ function roundAutoViewOpen() {
 window.roundAutoStorageKey = roundAutoStorageKey;
 window.initRoundAutoPlayerPool = initRoundAutoPlayerPool;
 window.roundAutoGenerateNextTurn = roundAutoGenerateNextTurn;
+window.roundAutoRegenerateCurrentTurn = roundAutoRegenerateCurrentTurn;
+window.roundAutoManualSetMatchType = roundAutoManualSetMatchType;
 window.roundAutoRegeneratePreview = roundAutoRegeneratePreview;
 window.roundAutoSetWinner = roundAutoSetWinner;
 window.roundAutoRenderMatches = roundAutoRenderMatches;

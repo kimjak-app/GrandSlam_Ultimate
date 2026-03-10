@@ -2,6 +2,9 @@
 // MAIN.JS - 앱 진입점 / 이벤트 / 홈 렌더링
 // ========================================
 
+// ✅ 버전 상수 — 버전업 시 여기만 바꾸면 전체 반영
+const APP_VERSION = 'v5.5';
+
 
 // ----------------------------------------
 // 1. 스플래시
@@ -29,6 +32,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   try { await sync(); }           catch (e) { console.error('sync() error:', e); }
 
   hideSplashSafe();
+
+  // ✅ 버전 표시 자동 주입
+  const versionEl = document.getElementById('app-version-display');
+  if (versionEl) versionEl.textContent = APP_VERSION;
+  // title 태그도 동기화
+  document.title = 'GrandSlam Ultimate ' + APP_VERSION;
 
   try { loadWeatherForNextMeeting(0); } catch (e) { console.error('loadWeather() error:', e); }
   Promise.all([
