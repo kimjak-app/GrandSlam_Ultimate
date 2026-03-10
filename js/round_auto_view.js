@@ -1443,6 +1443,52 @@ function roundAutoSetWinner(matchId, side) {
   saveRoundAutoState();
 }
 
+// ✅ v5.6: 완료된 코트에 미리보기 대진 배정
+function roundAutoAssignNextToCourt(courtNo) {
+  const activeTurn = (roundAutoState.turns || []).find(t => t?.status === 'active');
+  const previewTurn = (roundAutoState.turns || []).find(t => t?.status === 'preview');
+  if (!activeTurn || !previewTurn) { gsAlert('미리보기 대진이 없습니다. 다음 턴 생성을 먼저 해주세요.'); return; }
+
+  // 미리보기에서 해당 코트 번호 대진 찾기
+  const previewMatch = (previewTurn.matches || []).find(m => m.courtNo === courtNo);
+  if (!previewMatch) { gsAlert(`미리보기에 코트${courtNo} 대진이 없습니다.`); return; }
+
+  // 활성 턴의 완료된 코트 슬롯에 새 경기 추가
+  const newMatch = {
+    ...previewMatch,
+    id: `ra-${activeTurn.turnNo}-court${courtNo}-next-${Date.now()}`,
+    turnNo: activeTurn.turnNo,
+    courtNo,
+    winner: null,
+    isNextCourt: true, // 코트 연속 경기 표시
+  };
+  activeTurn.matches.push(newMatch);
+
+  // 미리보기에서 해당 코트 대진 제거
+  previewTurn.matches = previewTurn.matches.filter(m => m.courtNo !== courtNo);
+  if (!previewTurn.matches.length) {
+    roundAutoState.turns = roundAutoState.turns.filter(t => t?.status !== 'preview');
+  }
+
+  roundAutoRenderMatches();
+  roundAutoRenderRanking();
+  roundAutoRenderPersonalRanking();
+  saveRoundAutoState();
+}
+
+// ✅ v5.6: 완료된 코트에 수동 대진 입력 모드 진입
+function roundAutoOpenManualForCourt(courtNo) {
+  roundAutoState._manualTargetCourt = courtNo;
+  roundAutoManualCourts = [{ courtNo, players: [], matchType: 'double' }];
+  const manualSelect = document.getElementById('round-auto-manual-select');
+  if (manualSelect) manualSelect.style.display = 'block';
+  roundAutoRenderManualCourts();
+  // 안내 문구 업데이트
+  const titleEl = document.getElementById('round-auto-manual-title');
+  if (titleEl) titleEl.textContent = `코트${courtNo} 다음 경기 직접 입력`;
+  manualSelect?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 async function roundAutoCommitTurnToGlobalLog(activeTurn) {
   if (!activeTurn || !Array.isArray(activeTurn.matches)) return;
   if (activeTurn.committedTurn) return;
@@ -1613,6 +1659,28 @@ function roundAutoRenderMatches() {
         : '';
       const disabled = turn.status === 'preview' ? 'opacity:0.8;' : '';
       const disableAttr = turn.status === 'preview' ? 'disabled' : '';
+      // ✅ v5.5: 완료된 코트에 다음 경기 시작 UI
+      const isDone = match.winner === 'home' || match.winner === 'away';
+      const isActive = turn.status === 'active';
+      const nextCourtHtml = (isDone && isActive && !match.nextCourtAssigned)
+        ? `<div style="margin-top:10px; padding:10px; background:#f0f7f0; border-radius:10px; border:1px solid #c3e0c3;">
+             <div style="font-size:12px; color:#2d7a2d; font-weight:600; margin-bottom:8px;">
+               ✅ 코트${match.courtNo} 다음 경기를 바로 시작하세요
+             </div>
+             <div style="display:flex; gap:6px;">
+               <button class="btn-main" onclick="roundAutoAssignNextCourt('${match.id}', 'preview')"
+                 style="flex:1; font-size:12px; padding:8px; background:var(--wimbledon-sage);">
+                 📋 미리보기 대진 배정
+               </button>
+               <button class="btn-main" onclick="roundAutoAssignNextCourt('${match.id}', 'manual')"
+                 style="flex:1; font-size:12px; padding:8px; background:#4f6786;">
+                 ✏️ 직접 입력
+               </button>
+             </div>
+           </div>`
+        : (match.nextCourtAssigned
+            ? `<div style="margin-top:8px; font-size:11px; color:#2d7a2d; text-align:center;">✅ 다음 대진 배정 완료</div>`
+            : '');
       return `
             <div class="team-box" style="padding:12px; margin-bottom:8px; ${disabled}">
               <div style="font-size:11px; color:#888; margin-bottom:8px;">코트 ${match.courtNo}</div>
@@ -1624,6 +1692,7 @@ function roundAutoRenderMatches() {
                   style="flex:1; ${match.winner === 'away' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${away}</button>
               </div>
               ${reasonHtml}
+              ${nextCourtHtml}
             </div>
           `;
     }).join('')}
@@ -1898,6 +1967,83 @@ function roundAutoManualRemovePlayer(courtNo, name) {
   roundAutoRenderManualCourts();
 }
 
+// ✅ v5.5: 완료된 코트에 다음 대진 배정
+function roundAutoAssignNextCourt(matchId, mode) {
+  const turns = roundAutoState.turns || [];
+  const activeTurn = turns.find(t => t?.status === 'active');
+  if (!activeTurn) return;
+
+  const match = (activeTurn.matches || []).find(m => m.id === matchId);
+  if (!match) return;
+
+  const courtNo = match.courtNo;
+
+  if (mode === 'preview') {
+    // 미리보기 턴에서 같은 코트 번호 대진 가져오기
+    const previewTurn = turns.find(t => t?.status === 'preview');
+    if (!previewTurn) {
+      gsAlert('미리보기 대진이 없습니다. 직접 입력해주세요.');
+      return;
+    }
+    const previewMatch = (previewTurn.matches || []).find(m => m.courtNo === courtNo);
+    if (!previewMatch) {
+      gsAlert(`미리보기에 코트${courtNo} 대진이 없습니다. 직접 입력해주세요.`);
+      return;
+    }
+
+    // 미리보기 대진을 현재 턴에 새 경기로 추가
+    const newMatch = {
+      ...previewMatch,
+      id: `ra-next-${activeTurn.turnNo}-${courtNo}-${Date.now()}`,
+      turnNo: activeTurn.turnNo,
+      status: 'active',
+      winner: null,
+      isNextCourt: true,
+    };
+    activeTurn.matches.push(newMatch);
+    match.nextCourtAssigned = true;
+
+    // 미리보기에서 해당 코트 제거
+    previewTurn.matches = (previewTurn.matches || []).filter(m => m.courtNo !== courtNo);
+
+    const normalized = roundAutoNormalizeTurnsState(roundAutoState);
+    roundAutoState = normalized.state;
+    roundAutoRenderMatches();
+    roundAutoRenderRanking();
+    roundAutoRenderPersonalRanking();
+    saveRoundAutoState();
+
+  } else if (mode === 'manual') {
+    // 수동 입력 — 해당 코트만 수동 UI 열기
+    roundAutoManualMode = true;
+    roundAutoManualCourts = [{
+      courtNo,
+      players: [],
+      matchType: 'double',
+    }];
+
+    // 수동 UI 표시
+    const manualSelect = document.getElementById('round-auto-manual-select');
+    if (manualSelect) {
+      manualSelect.style.display = 'block';
+      // 안내 문구 추가
+      const hint = document.getElementById('round-auto-next-court-hint') || document.createElement('div');
+      hint.id = 'round-auto-next-court-hint';
+      hint.style.cssText = 'margin-bottom:10px; padding:8px 12px; background:#f0f7f0; border-radius:8px; font-size:12px; color:#2d7a2d; font-weight:600;';
+      hint.textContent = `코트${courtNo} 다음 경기 선수를 선택하세요`;
+      manualSelect.insertAdjacentElement('afterbegin', hint);
+    }
+
+    // 확정 버튼 동작을 코트 추가 모드로 변경
+    roundAutoState._nextCourtMatchId = matchId;
+    roundAutoRenderManualCourts();
+    const modeAuto = document.getElementById('round-auto-mode-auto');
+    const modeManual = document.getElementById('round-auto-mode-manual');
+    if (modeAuto) { modeAuto.style.background = 'white'; modeAuto.style.color = 'var(--aussie-blue)'; }
+    if (modeManual) { modeManual.style.background = 'var(--aussie-blue)'; modeManual.style.color = 'white'; }
+  }
+}
+
 // ✅ v5.5: 코트별 단/복식 전환
 function roundAutoManualSetMatchType(courtNo, matchType) {
   const court = roundAutoManualCourts.find(c => c.courtNo === courtNo);
@@ -1912,6 +2058,56 @@ function roundAutoManualSetMatchType(courtNo, matchType) {
 // 수동 대진 확정 → active 턴으로 생성
 async function roundAutoConfirmManual() {
   const courtCount = roundAutoState.courtCount || 1;
+
+  // ✅ v5.5: 코트 추가 모드 (다음 코트 수동 입력)
+  if (roundAutoState._nextCourtMatchId) {
+    const matchId = roundAutoState._nextCourtMatchId;
+    delete roundAutoState._nextCourtMatchId;
+
+    const turns = roundAutoState.turns || [];
+    const activeTurn = turns.find(t => t?.status === 'active');
+    if (!activeTurn) return;
+    const origMatch = (activeTurn.matches || []).find(m => m.id === matchId);
+    if (!origMatch) return;
+
+    const court = roundAutoManualCourts[0];
+    const required = court.matchType === 'single' ? 2 : 4;
+    if (court.players.length !== required) {
+      const typeName = court.matchType === 'single' ? '단식(2명)' : '복식(4명)';
+      gsAlert(`${typeName} — ${required}명을 배치해주세요.`);
+      return;
+    }
+
+    const isSingle = court.matchType === 'single';
+    const newMatch = {
+      id: `ra-next-${activeTurn.turnNo}-${court.courtNo}-${Date.now()}`,
+      turnNo: activeTurn.turnNo,
+      courtNo: court.courtNo,
+      matchType: isSingle ? 'single' : 'double',
+      home: isSingle ? [court.players[0]] : [court.players[0], court.players[1]],
+      away: isSingle ? [court.players[1]] : [court.players[2], court.players[3]],
+      winner: null,
+      isNextCourt: true,
+      manual: true,
+    };
+    activeTurn.matches.push(newMatch);
+    origMatch.nextCourtAssigned = true;
+
+    roundAutoManualMode = false;
+    roundAutoManualCourts = [];
+    const manualSelect = document.getElementById('round-auto-manual-select');
+    if (manualSelect) manualSelect.style.display = 'none';
+    const hint = document.getElementById('round-auto-next-court-hint');
+    if (hint) hint.remove();
+
+    const normalized = roundAutoNormalizeTurnsState(roundAutoState);
+    roundAutoState = normalized.state;
+    roundAutoRenderMatches();
+    roundAutoRenderRanking();
+    roundAutoRenderPersonalRanking();
+    saveRoundAutoState();
+    return;
+  }
 
   // ✅ v5.5: 유효성 검사 — 단식 2명, 복식 4명
   for (const court of roundAutoManualCourts) {
@@ -2075,6 +2271,7 @@ window.roundAutoStorageKey = roundAutoStorageKey;
 window.initRoundAutoPlayerPool = initRoundAutoPlayerPool;
 window.roundAutoGenerateNextTurn = roundAutoGenerateNextTurn;
 window.roundAutoRegenerateCurrentTurn = roundAutoRegenerateCurrentTurn;
+window.roundAutoAssignNextCourt = roundAutoAssignNextCourt;
 window.roundAutoManualSetMatchType = roundAutoManualSetMatchType;
 window.roundAutoRegeneratePreview = roundAutoRegeneratePreview;
 window.roundAutoSetWinner = roundAutoSetWinner;
