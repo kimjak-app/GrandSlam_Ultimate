@@ -222,14 +222,30 @@ function roundAutoGetFilteredGuests() {
   });
 }
 
-function loadRoundAutoState() {
+async function loadRoundAutoState() {
   try {
     const clubId = roundAutoGetSelectedClubId();
     const storageKey = roundAutoStorageKey(clubId);
     const initial = createRoundAutoInitialState();
     roundAutoLoadedClubId = clubId;
 
-    const raw = localStorage.getItem(storageKey);
+    // ✅ 3-1: Firebase 우선 로드 → 없으면 localStorage 폴백
+    let raw = null;
+    if (clubId && typeof _db !== 'undefined') {
+      try {
+        const doc = await _db.collection('clubs').doc(clubId)
+          .collection('settings').doc('roundAutoState').get();
+        if (doc.exists && doc.data().state) {
+          raw = doc.data().state;
+          // Firebase 데이터를 localStorage에도 동기화
+          try { localStorage.setItem(storageKey, raw); } catch(e) {}
+        }
+      } catch (e) {
+        console.warn('[round-auto] Firebase load failed, falling back to localStorage:', e);
+      }
+    }
+    if (!raw) raw = localStorage.getItem(storageKey);
+
     if (!raw) {
       roundAutoState = initial;
       return;
@@ -311,7 +327,15 @@ function loadRoundAutoState() {
 function saveRoundAutoState() {
   try {
     const clubId = roundAutoGetSelectedClubId();
+    // ✅ 3-1: localStorage 동기 저장 (기존 동작 유지)
     localStorage.setItem(roundAutoStorageKey(clubId), JSON.stringify(roundAutoState));
+    // ✅ 3-1: Firebase 백그라운드 저장 (fire-and-forget)
+    if (clubId && typeof _db !== 'undefined') {
+      _db.collection('clubs').doc(clubId)
+        .collection('settings').doc('roundAutoState')
+        .set({ state: JSON.stringify(roundAutoState), savedAt: Date.now() })
+        .catch(e => console.warn('[round-auto] Firebase save failed:', e));
+    }
   } catch (e) {
     console.warn('[round-auto] state save failed:', e);
   }
@@ -814,12 +838,12 @@ function roundAutoOpenAddGuestModal() {
     returnObject: true,
   });
 }
-function initRoundAutoPlayerPool() {
+async function initRoundAutoPlayerPool() {
   const currentClubId = roundAutoGetSelectedClubId();
   // ✅ v5.122: 클럽 변경 시에만 재로드 — createInitialState 제거로 기록 리셋 방지
-  // loadRoundAutoState() 내부에서 클럽 미존재 시 initial로 세팅하므로 별도 초기화 불필요
+  // ✅ 3-1: loadRoundAutoState가 async이므로 await으로 호출
   if (roundAutoLoadedClubId !== currentClubId) {
-    loadRoundAutoState();
+    await loadRoundAutoState();
   }
 
   const courtInput = document.getElementById('round-auto-court-count');
@@ -1669,32 +1693,52 @@ function roundAutoRenderMatches() {
           return '';
         }
 
-        // 미리보기 대진을 기존 opt-btn 스타일로 표시
+        // ✅ v5.62: 코트 완료 후 — 미리보기 동일 코트 자동 배정 (선택 UI 제거)
+        const courtCount = roundAutoState.courtCount || 1;
         const previewTurn = (roundAutoState.turns || []).find(t => t?.status === 'preview');
-        const previewMatches = previewTurn ? (previewTurn.matches || []) : [];
-        const previewListHtml = previewMatches.length
-          ? previewMatches.map(pm => {
-              const ph = Array.isArray(pm.home) ? pm.home.map(n => roundAutoPlayerLabelWithGender(n,'')).join(' & ') : roundAutoPlayerLabelWithGender(pm.home,'');
-              const pa = Array.isArray(pm.away) ? pm.away.map(n => roundAutoPlayerLabelWithGender(n,'')).join(' & ') : roundAutoPlayerLabelWithGender(pm.away,'');
-              return `
-                <div style="margin-bottom:8px;" onclick="roundAutoAssignNextCourt('${match.id}','preview',${pm.courtNo})">
-                  <div style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                    <div class="opt-btn" style="flex:1; text-align:center; padding:10px 6px;">${ph}</div>
-                    <div style="font-size:12px; font-weight:700; color:#888; flex-shrink:0;">vs</div>
-                    <div class="opt-btn" style="flex:1; text-align:center; padding:10px 6px;">${pa}</div>
-                  </div>
-                </div>`;
-            }).join('')
-          : '<div style="font-size:11px; color:#999; text-align:center; padding:8px;">미리보기 대진 없음</div>';
+        const previewMatch = previewTurn ? (previewTurn.matches || []).find(pm => pm.courtNo === match.courtNo) : null;
 
+        if (courtCount === 1) {
+          // 코트 1개: 선택 UI 없이 바로 다음 대진 생성 버튼만 표시
+          return '';
+        }
+
+        // 코트 2개 이상: 미리보기 동일 코트 자동 배정 확정 버튼
+        if (previewMatch) {
+          const ph = Array.isArray(previewMatch.home) ? previewMatch.home.map(n => roundAutoPlayerLabelWithGender(n,'')).join(' & ') : roundAutoPlayerLabelWithGender(previewMatch.home,'');
+          const pa = Array.isArray(previewMatch.away) ? previewMatch.away.map(n => roundAutoPlayerLabelWithGender(n,'')).join(' & ') : roundAutoPlayerLabelWithGender(previewMatch.away,'');
+          return `
+            <div class="team-box" style="padding:12px; margin-bottom:8px;">
+              <div style="font-size:12px; color:#2d7a2d; font-weight:600; margin-bottom:10px; text-align:center;">🏸 코트${match.courtNo} 다음 경기</div>
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px; opacity:0.85;">
+                <div class="opt-btn" style="flex:1; text-align:center; padding:10px 6px; pointer-events:none;">${ph}</div>
+                <div style="font-size:12px; font-weight:700; color:#888; flex-shrink:0;">vs</div>
+                <div class="opt-btn" style="flex:1; text-align:center; padding:10px 6px; pointer-events:none;">${pa}</div>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn-main" onclick="roundAutoAssignNextCourt('${match.id}','preview',${previewMatch.courtNo})"
+                  style="flex:1; font-size:12px; padding:9px; background:var(--wimbledon-sage);">
+                  ✅ 확정
+                </button>
+                <button class="btn-main" onclick="roundAutoAssignNextCourt('${match.id}','manual')"
+                  style="flex:1; font-size:12px; padding:9px; background:#4f6786;">
+                  ✏️ 직접 입력
+                </button>
+              </div>
+              <div style="font-size:11px; color:#999; text-align:center; margin-top:5px;">다른 대진을 원하면 새 대진을 수동으로 입력 가능</div>
+            </div>
+          `;
+        }
+
+        // 미리보기 없을 때 직접 입력만
         return `
           <div class="team-box" style="padding:12px; margin-bottom:8px;">
-            <div style="font-size:12px; color:#2d7a2d; font-weight:600; margin-bottom:10px; text-align:center;">🏸 코트${match.courtNo} 다음 경기 시작하세요</div>
-            ${previewListHtml}
+            <div style="font-size:12px; color:#2d7a2d; font-weight:600; margin-bottom:10px; text-align:center;">🏸 코트${match.courtNo} 다음 경기</div>
             <button class="btn-main" onclick="roundAutoAssignNextCourt('${match.id}','manual')"
-              style="width:100%; font-size:12px; padding:9px; background:#4f6786; margin-top:4px;">
+              style="width:100%; font-size:12px; padding:9px; background:#4f6786;">
               ✏️ 직접 입력
             </button>
+            <div style="font-size:11px; color:#999; text-align:center; margin-top:5px;">다른 대진을 원하면 새 대진을 수동으로 입력 가능</div>
           </div>
         `;
       }
@@ -1719,6 +1763,7 @@ function roundAutoRenderMatches() {
             style="width:100%; margin-top:8px; background:#b85c38; font-size:13px; padding:10px 12px;">
             🔄 이 턴 재생성
           </button>
+          <div style="font-size:11px; color:#999; text-align:center; margin-top:5px;">인원 변동(추가·빠짐·휴식)이 생겼을 때 누르세요</div>
         ` : ''}
         ${turn.status === 'preview' ? `
           <button type="button" class="btn-main" onclick="roundAutoRegeneratePreview()"
@@ -2274,10 +2319,18 @@ async function roundAutoConfirmManual() {
 
 function roundAutoReset() {
   roundAutoState = createRoundAutoInitialState();
+  const clubId = roundAutoGetSelectedClubId();
   try {
-    localStorage.removeItem(roundAutoStorageKey(roundAutoGetSelectedClubId()));
+    localStorage.removeItem(roundAutoStorageKey(clubId));
   } catch (e) {
     console.warn('[round-auto] state clear failed:', e);
+  }
+  // ✅ 3-1: Firebase에서도 삭제
+  if (clubId && typeof _db !== 'undefined') {
+    _db.collection('clubs').doc(clubId)
+      .collection('settings').doc('roundAutoState')
+      .delete()
+      .catch(e => console.warn('[round-auto] Firebase reset failed:', e));
   }
   initRoundAutoPlayerPool();
 }
