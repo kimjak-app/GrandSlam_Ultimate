@@ -129,7 +129,7 @@ function showViewUI(v) {
 
   if (v === 'tennis') sync();
   if (v === 'player-mgmt') updatePlayerList();
-  if (v === 'record') renderPool();
+  if (v === 'record') { renderPool(); setGameCourtCount(1); }
   if (v === 'ladder') renderLadderPlayerPool();
   if (v === 'tournament') initTournament();
   if (v === 'stats') renderStatsPlayerList();

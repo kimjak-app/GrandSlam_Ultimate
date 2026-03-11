@@ -40,6 +40,66 @@ async function save() {
 // ✅ v5.63: 간편 방식 모드 전환 (기본: 간편)
 let gameInputMode = 'simple'; // 'score' | 'simple'
 
+// ✅ v5.631: 코트수 및 멀티코트 팀 데이터
+let gameCourtCount = 1;
+// courtTeams[i] = { home: [], away: [], winner: null }
+let courtTeams = [{ home: [], away: [], winner: null }];
+
+function setGameCourtCount(n) {
+  gameCourtCount = n;
+  // 코트수 탭 UI 업데이트
+  document.querySelectorAll('.game-court-tab-btn').forEach(btn => {
+    const active = Number(btn.dataset.court) === n;
+    btn.style.background = active ? 'var(--wimbledon-sage)' : '';
+    btn.style.color = active ? 'white' : '';
+  });
+  // courtTeams 재초기화
+  courtTeams = Array.from({ length: n }, () => ({ home: [], away: [], winner: null }));
+  hT = []; aT = [];
+  if ($('hN')) $('hN').innerText = '';
+  if ($('aN')) $('aN').innerText = '';
+  GameView.syncPickedTeamsView();
+}
+
+function getCourtPickMax() {
+  return mType === 'double' ? 2 : 1;
+}
+
+// 선택 순서대로 코트별 팀 배정
+function pickMultiCourt(name) {
+  const max = getCourtPickMax(); // 팀당 최대 인원
+  const perCourt = max * 2; // 코트당 총 인원
+
+  // 이미 선택된 선수면 제거
+  for (let i = 0; i < courtTeams.length; i++) {
+    const ct = courtTeams[i];
+    if (ct.home.includes(name)) { ct.home = ct.home.filter(x => x !== name); updateFlatTeams(); GameView.syncPickedTeamsView(); return; }
+    if (ct.away.includes(name)) { ct.away = ct.away.filter(x => x !== name); updateFlatTeams(); GameView.syncPickedTeamsView(); return; }
+  }
+
+  // 빈 슬롯에 순서대로 채우기
+  for (let i = 0; i < courtTeams.length; i++) {
+    const ct = courtTeams[i];
+    if (ct.home.length < max) { ct.home.push(name); break; }
+    if (ct.away.length < max) { ct.away.push(name); break; }
+  }
+
+  updateFlatTeams();
+  GameView.syncPickedTeamsView();
+}
+
+// hT/aT는 코트1 기준 유지 (기존 점수방식 호환)
+function updateFlatTeams() {
+  if (gameCourtCount === 1) {
+    hT = courtTeams[0].home;
+    aT = courtTeams[0].away;
+  } else {
+    // 멀티코트: hT/aT는 참고용으로 전체 합산
+    hT = courtTeams.flatMap(ct => ct.home);
+    aT = courtTeams.flatMap(ct => ct.away);
+  }
+}
+
 function setGameMode(mode) {
   gameInputMode = mode;
   const scoreMode = $('game-score-mode');
@@ -61,9 +121,8 @@ function setGameMode(mode) {
 }
 
 function updateSimpleTeamsUI() {
-  const homeBtn = $('simple-home-btn');
-  const awayBtn = $('simple-away-btn');
-  if (!homeBtn || !awayBtn) return;
+  const container = $('game-simple-courts');
+  if (!container) return;
   const gIcon = name => {
     const p = players.find(pl => pl.name === name);
     if (!p) return '';
@@ -71,24 +130,87 @@ function updateSimpleTeamsUI() {
       ? '<span class="material-symbols-outlined" style="font-size:12px;color:#E8437A;vertical-align:middle;">female</span>'
       : '<span class="material-symbols-outlined" style="font-size:12px;color:#3A7BD5;vertical-align:middle;">male</span>';
   };
-  if (hT.length > 0) {
-    homeBtn.innerHTML = hT.map(n => gIcon(n) + ' ' + displayName(n)).join(' & ');
-    homeBtn.disabled = false;
-    homeBtn.style.opacity = '1';
-  } else {
-    homeBtn.innerHTML = '-';
-    homeBtn.disabled = true;
-    homeBtn.style.opacity = '0.4';
+  const teamLabel = (names) => names.length
+    ? names.map(n => gIcon(n) + ' ' + displayName(n)).join(' & ')
+    : '-';
+
+  let html = '';
+  for (let i = 0; i < gameCourtCount; i++) {
+    const ct = courtTeams[i] || { home: [], away: [], winner: null };
+    const hasHome = ct.home.length > 0;
+    const hasAway = ct.away.length > 0;
+    const courtLabel = gameCourtCount > 1 ? `<div style="font-size:11px;color:#888;margin-bottom:6px;">코트 ${i + 1}</div>` : '';
+    const homeStyle = ct.winner === 'home' ? 'background:var(--wimbledon-sage);color:white;' : '';
+    const awayStyle = ct.winner === 'away' ? 'background:var(--wimbledon-sage);color:white;' : '';
+    html += `
+      <div style="margin-bottom:12px;">
+        ${courtLabel}
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button onclick="setSimpleWinner(${i},'home')"
+            class="opt-btn" style="flex:1;padding:14px 6px;font-size:13px;font-weight:700;${homeStyle}opacity:${hasHome ? '1' : '0.4'};"
+            ${hasHome ? '' : 'disabled'}>${teamLabel(ct.home)}</button>
+          <div style="font-size:13px;font-weight:700;color:#888;flex-shrink:0;">vs</div>
+          <button onclick="setSimpleWinner(${i},'away')"
+            class="opt-btn" style="flex:1;padding:14px 6px;font-size:13px;font-weight:700;${awayStyle}opacity:${hasAway ? '1' : '0.4'};"
+            ${hasAway ? '' : 'disabled'}>${teamLabel(ct.away)}</button>
+        </div>
+      </div>`;
   }
-  if (aT.length > 0) {
-    awayBtn.innerHTML = aT.map(n => gIcon(n) + ' ' + displayName(n)).join(' & ');
-    awayBtn.disabled = false;
-    awayBtn.style.opacity = '1';
-  } else {
-    awayBtn.innerHTML = '-';
-    awayBtn.disabled = true;
-    awayBtn.style.opacity = '0.4';
+  // 저장 버튼
+  const allDone = courtTeams.slice(0, gameCourtCount).every(ct => ct.winner !== null);
+  html += `<button class="btn-main" onclick="saveSimpleAll()" style="width:100%;${allDone ? '' : 'opacity:0.5;'}">
+    <span class="material-symbols-outlined title-ico">save</span>결과 저장
+  </button>`;
+  container.innerHTML = html;
+}
+
+function setSimpleWinner(courtIdx, side) {
+  if (!courtTeams[courtIdx]) return;
+  courtTeams[courtIdx].winner = courtTeams[courtIdx].winner === side ? null : side;
+  updateSimpleTeamsUI();
+}
+
+async function saveSimpleAll() {
+  const courts = courtTeams.slice(0, gameCourtCount);
+  const allDone = courts.every(ct => ct.winner !== null);
+  if (!allDone) { gsAlert('✋ 모든 코트의 승리팀을 선택해주세요.'); return; }
+
+  for (const ct of courts) {
+    const h = ct.home;
+    const a = ct.away;
+    const hs = ct.winner === 'home' ? '1' : '0';
+    const as = ct.winner === 'away' ? '1' : '0';
+    const msg = GameEngine.validateSaveInput(isPracticeMode, hs, as, mType, h, a);
+    if (msg) { gsAlert(msg); return; }
+    GameEngine.materializeHiddenPlayers([...h, ...a]);
   }
+
+  snapshotLastRanks();
+
+  for (const ct of courts) {
+    const h = ct.home;
+    const a = ct.away;
+    const hs = ct.winner === 'home' ? '1' : '0';
+    const as = ct.winner === 'away' ? '1' : '0';
+    const logEntry = GameEngine.createMatchLogEntry(mType, h, a, hs, as);
+    const snapshot = GameEngine.snapshotSaveState();
+    GameEngine.applyMatchAndAppendLog(mType, h, a, logEntry.winner, logEntry);
+    const ok = await pushWithMatchLogAppend(logEntry);
+    if (!ok) {
+      GameEngine.rollbackSaveState(snapshot);
+      gsAlert('❌ 저장 실패! 다시 시도해주세요.');
+      return;
+    }
+  }
+
+  gsAlert('저장!');
+  courtTeams = Array.from({ length: gameCourtCount }, () => ({ home: [], away: [], winner: null }));
+  hT = []; aT = [];
+  renderPool();
+  updateSimpleTeamsUI();
+  tab(1);
+  renderStatsPlayerList();
+  setTimeout(applyAutofitAllTables, 0);
 }
 
 async function saveSimple(winner) {
@@ -182,6 +304,10 @@ function renderPool() {
 }
 
 function pick(n) {
+  if (gameCourtCount > 1) {
+    pickMultiCourt(n);
+    return;
+  }
   const picked = GameEngine.pickTeams(n, mType, hT, aT);
   if (!picked.changed) return;
   hT = picked.homeTeam;
@@ -197,6 +323,7 @@ function setM(t) {
   mType = t;
   hT = [];
   aT = [];
+  courtTeams = Array.from({ length: gameCourtCount }, () => ({ home: [], away: [], winner: null }));
   $('hN').innerText = '';
   $('aN').innerText = '';
   updateRecordCount();
@@ -301,7 +428,10 @@ function toggleTournamentMode() {
 
 window.save = save;
 window.saveSimple = saveSimple;
+window.saveSimpleAll = saveSimpleAll;
+window.setSimpleWinner = setSimpleWinner;
 window.setGameMode = setGameMode;
+window.setGameCourtCount = setGameCourtCount;
 window.updateSimpleTeamsUI = updateSimpleTeamsUI;
 window.editP = editP;
 window.addP = addP;
