@@ -66,6 +66,8 @@ function syncPickedTeamsView() {
   $('aN').innerText = aT.map(displayName).join(',');
   updateRecordCountView();
   renderPoolView();
+  // ✅ v5.63: 간편 방식 UI도 같이 갱신
+  if (typeof updateSimpleTeamsUI === 'function') updateSimpleTeamsUI();
 }
 
 function setMatchTypeView(t) {

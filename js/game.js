@@ -37,6 +37,92 @@ async function save() {
   setTimeout(applyAutofitAllTables, 0);
 }
 
+// ✅ v5.63: 간편 방식 모드 전환
+let gameInputMode = 'score'; // 'score' | 'simple'
+
+function setGameMode(mode) {
+  gameInputMode = mode;
+  const scoreMode = $('game-score-mode');
+  const simpleMode = $('game-simple-mode');
+  const scoreBtn = $('mode-score-btn');
+  const simpleBtn = $('mode-simple-btn');
+  if (mode === 'score') {
+    if (scoreMode) scoreMode.style.display = 'block';
+    if (simpleMode) simpleMode.style.display = 'none';
+    if (scoreBtn) { scoreBtn.style.background = 'var(--wimbledon-sage)'; scoreBtn.style.color = 'white'; }
+    if (simpleBtn) { simpleBtn.style.background = 'white'; simpleBtn.style.color = 'var(--wimbledon-sage)'; }
+  } else {
+    if (scoreMode) scoreMode.style.display = 'none';
+    if (simpleMode) simpleMode.style.display = 'block';
+    if (scoreBtn) { scoreBtn.style.background = 'white'; scoreBtn.style.color = 'var(--wimbledon-sage)'; }
+    if (simpleBtn) { simpleBtn.style.background = 'var(--wimbledon-sage)'; simpleBtn.style.color = 'white'; }
+    updateSimpleTeamsUI();
+  }
+}
+
+function updateSimpleTeamsUI() {
+  const homeBtn = $('simple-home-btn');
+  const awayBtn = $('simple-away-btn');
+  if (!homeBtn || !awayBtn) return;
+  const gIcon = name => {
+    const p = players.find(pl => pl.name === name);
+    if (!p) return '';
+    return p.gender === 'F'
+      ? '<span class="material-symbols-outlined" style="font-size:12px;color:#E8437A;vertical-align:middle;">female</span>'
+      : '<span class="material-symbols-outlined" style="font-size:12px;color:#3A7BD5;vertical-align:middle;">male</span>';
+  };
+  if (hT.length > 0) {
+    homeBtn.innerHTML = hT.map(n => gIcon(n) + ' ' + displayName(n)).join(' & ');
+    homeBtn.disabled = false;
+    homeBtn.style.background = '#f0f4ff';
+    homeBtn.style.color = '#333';
+  } else {
+    homeBtn.innerHTML = '-';
+    homeBtn.disabled = true;
+    homeBtn.style.background = '#e8e8e8';
+  }
+  if (aT.length > 0) {
+    awayBtn.innerHTML = aT.map(n => gIcon(n) + ' ' + displayName(n)).join(' & ');
+    awayBtn.disabled = false;
+    awayBtn.style.background = '#f0f4ff';
+    awayBtn.style.color = '#333';
+  } else {
+    awayBtn.innerHTML = '-';
+    awayBtn.disabled = true;
+    awayBtn.style.background = '#e8e8e8';
+  }
+}
+
+async function saveSimple(winner) {
+  const hs = winner === 'home' ? '1' : '0';
+  const as = winner === 'away' ? '1' : '0';
+  const msg = GameEngine.validateSaveInput(isPracticeMode, hs, as, mType, hT, aT);
+  if (msg) { gsAlert(msg); return; }
+
+  GameEngine.materializeHiddenPlayers([...hT, ...aT]);
+  snapshotLastRanks();
+
+  const logEntry = GameEngine.createMatchLogEntry(mType, hT, aT, hs, as);
+  const snapshot = GameEngine.snapshotSaveState();
+  GameEngine.applyMatchAndAppendLog(mType, hT, aT, logEntry.winner, logEntry);
+
+  const ok = await pushWithMatchLogAppend(logEntry);
+  if (!ok) {
+    GameEngine.rollbackSaveState(snapshot);
+    gsAlert('❌ 저장 실패! 다시 시도해주세요.');
+    return;
+  }
+
+  gsAlert('저장!');
+  hT = [];
+  aT = [];
+  renderPool();
+  updateSimpleTeamsUI();
+  tab(1);
+  renderStatsPlayerList();
+  setTimeout(applyAutofitAllTables, 0);
+}
+
 function editP(oldName) {
   gsEditName(oldName, newName => {
     if (!newName?.trim() || newName.trim() === oldName) return;
@@ -216,6 +302,9 @@ function toggleTournamentMode() {
 }
 
 window.save = save;
+window.saveSimple = saveSimple;
+window.setGameMode = setGameMode;
+window.updateSimpleTeamsUI = updateSimpleTeamsUI;
 window.editP = editP;
 window.addP = addP;
 window.delP = delP;
