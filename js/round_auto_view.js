@@ -1698,7 +1698,6 @@ function roundAutoRenderMatches() {
                 <div style="font-size:12px; font-weight:700; color:#888; flex-shrink:0;">vs</div>
                 <div class="opt-btn" style="flex:1; text-align:center; padding:10px 6px; pointer-events:none;">${away}</div>
               </div>
-              <div style="font-size:11px; color:var(--wimbledon-sage); font-weight:600; text-align:center; margin-top:8px;">✅ ${match.winner === 'home' ? home : away} 승리 확정 — 아래 다음 턴 생성을 눌러주세요</div>
             </div>
           `;
         }
