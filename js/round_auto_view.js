@@ -1694,9 +1694,9 @@ function roundAutoRenderMatches() {
             <div class="team-box" style="padding:12px; margin-bottom:8px;">
               <div style="font-size:11px; color:#888; margin-bottom:8px;">코트 ${match.courtNo}</div>
               <div style="display:flex; align-items:center; gap:6px;">
-                <div class="opt-btn" style="flex:1; text-align:center; background:var(--wimbledon-sage); color:white; padding:10px 6px; pointer-events:none;">${home}</div>
+                <div class="opt-btn" style="flex:1; text-align:center; padding:10px 6px; pointer-events:none; ${match.winner === 'home' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${home}</div>
                 <div style="font-size:12px; font-weight:700; color:#888; flex-shrink:0;">vs</div>
-                <div class="opt-btn" style="flex:1; text-align:center; padding:10px 6px; pointer-events:none;">${away}</div>
+                <div class="opt-btn" style="flex:1; text-align:center; padding:10px 6px; pointer-events:none; ${match.winner === 'away' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${away}</div>
               </div>
             </div>
           `;
