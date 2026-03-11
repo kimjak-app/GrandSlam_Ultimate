@@ -1408,19 +1408,8 @@ async function roundAutoGenerateNextTurn() {
     }
     const allDone = (activeTurn.matches || []).every(m => m.winner === 'home' || m.winner === 'away');
     if (!allDone) {
-      roundAutoState.previewVariant = Math.max(0, Number(roundAutoState.previewVariant) || 0) + 1;
-      const previewTurnNo = activeTurn.turnNo + 1;
-      const simulatedStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
-      const previewTurn = roundAutoBuildTurnWithStats(previewTurnNo, 'preview', simulatedStats, false);
-      if (previewTurn) {
-        roundAutoState.turns = [activeTurn, previewTurn];
-        roundAutoRenderMatches();
-        roundAutoRenderRanking();
-        roundAutoRenderPersonalRanking();
-        saveRoundAutoState();
-        return;
-      }
-      gsAlert('승자 먼저 체크');
+      // ✅ v5.621: 승자 미선택 시 항상 알림 표시 (코트 수 무관)
+      gsAlert('✋ 모든 경기의 승리팀을 선택한 후 다음 턴 생성을 눌러주세요.');
       return;
     }
 
@@ -1699,35 +1688,26 @@ function roundAutoRenderMatches() {
         const previewMatch = previewTurn ? (previewTurn.matches || []).find(pm => pm.courtNo === match.courtNo) : null;
 
         if (courtCount === 1) {
-          // 코트 1개: 선택 UI 없이 바로 다음 대진 생성 버튼만 표시
-          return '';
-        }
-
-        // 코트 2개 이상: 미리보기 동일 코트 자동 배정 확정 버튼
-        if (previewMatch) {
-          const ph = Array.isArray(previewMatch.home) ? previewMatch.home.map(n => roundAutoPlayerLabelWithGender(n,'')).join(' & ') : roundAutoPlayerLabelWithGender(previewMatch.home,'');
-          const pa = Array.isArray(previewMatch.away) ? previewMatch.away.map(n => roundAutoPlayerLabelWithGender(n,'')).join(' & ') : roundAutoPlayerLabelWithGender(previewMatch.away,'');
+          // ✅ v5.621: 코트 1개 — 승리팀 선택 상태 그대로 유지, 화면 전환 없음
+          // (다음 턴 생성 버튼은 항상 하단에 고정 표시됨)
           return `
             <div class="team-box" style="padding:12px; margin-bottom:8px;">
-              <div style="font-size:12px; color:#2d7a2d; font-weight:600; margin-bottom:10px; text-align:center;">🏸 코트${match.courtNo} 다음 경기</div>
-              <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px; opacity:0.85;">
-                <div class="opt-btn" style="flex:1; text-align:center; padding:10px 6px; pointer-events:none;">${ph}</div>
+              <div style="font-size:11px; color:#888; margin-bottom:8px;">코트 ${match.courtNo}</div>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <div class="opt-btn" style="flex:1; text-align:center; background:var(--wimbledon-sage); color:white; padding:10px 6px; pointer-events:none;">${home}</div>
                 <div style="font-size:12px; font-weight:700; color:#888; flex-shrink:0;">vs</div>
-                <div class="opt-btn" style="flex:1; text-align:center; padding:10px 6px; pointer-events:none;">${pa}</div>
+                <div class="opt-btn" style="flex:1; text-align:center; padding:10px 6px; pointer-events:none;">${away}</div>
               </div>
-              <div style="display:flex; gap:8px;">
-                <button class="btn-main" onclick="roundAutoAssignNextCourt('${match.id}','preview',${previewMatch.courtNo})"
-                  style="flex:1; font-size:12px; padding:9px; background:var(--wimbledon-sage);">
-                  ✅ 확정
-                </button>
-                <button class="btn-main" onclick="roundAutoAssignNextCourt('${match.id}','manual')"
-                  style="flex:1; font-size:12px; padding:9px; background:#4f6786;">
-                  ✏️ 직접 입력
-                </button>
-              </div>
-              <div style="font-size:11px; color:#999; text-align:center; margin-top:5px;">다른 대진을 원하면 새 대진을 수동으로 입력 가능</div>
+              <div style="font-size:11px; color:var(--wimbledon-sage); font-weight:600; text-align:center; margin-top:8px;">✅ ${match.winner === 'home' ? home : away} 승리 확정 — 아래 다음 턴 생성을 눌러주세요</div>
             </div>
           `;
+        }
+
+        // ✅ v5.621: 코트 2개 이상 — 확정 버튼 제거, 미리보기 자동 배정 즉시 실행
+        if (previewMatch) {
+          // 승리팀 선택 즉시 자동 배정 (렌더링 시점에 바로 실행)
+          setTimeout(() => roundAutoAssignNextCourt(match.id, 'preview', previewMatch.courtNo), 0);
+          return '';
         }
 
         // 미리보기 없을 때 직접 입력만
