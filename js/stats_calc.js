@@ -118,16 +118,6 @@ function ensure(p) {
   return p;
 }
 
-  if (p.isGuest === undefined) p.isGuest = false;
-  if (p.gender !== 'M' && p.gender !== 'F') p.gender = 'M';
-  if (p.isTreasurer === undefined) p.isTreasurer = false;
-  if (p.isFeeExempt === undefined) p.isFeeExempt = false;
-  if (!p.level || !['A', 'B', 'C', 'D'].includes(p.level)) p.level = 'A';
-  if (!p.attributes) p.attributes = { sport: 'tennis', preferredPosition: null };
-  if (!p.name) p.name = "NONAME";
-  return p;
-}
-
 
 // ----------------------------------------
 // 3. 경기 결과 → 선수 점수 반영
