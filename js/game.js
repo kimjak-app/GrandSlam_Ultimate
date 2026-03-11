@@ -37,8 +37,8 @@ async function save() {
   setTimeout(applyAutofitAllTables, 0);
 }
 
-// ✅ v5.63: 간편 방식 모드 전환
-let gameInputMode = 'score'; // 'score' | 'simple'
+// ✅ v5.63: 간편 방식 모드 전환 (기본: 간편)
+let gameInputMode = 'simple'; // 'score' | 'simple'
 
 function setGameMode(mode) {
   gameInputMode = mode;
@@ -74,22 +74,20 @@ function updateSimpleTeamsUI() {
   if (hT.length > 0) {
     homeBtn.innerHTML = hT.map(n => gIcon(n) + ' ' + displayName(n)).join(' & ');
     homeBtn.disabled = false;
-    homeBtn.style.background = '#f0f4ff';
-    homeBtn.style.color = '#333';
+    homeBtn.style.opacity = '1';
   } else {
     homeBtn.innerHTML = '-';
     homeBtn.disabled = true;
-    homeBtn.style.background = '#e8e8e8';
+    homeBtn.style.opacity = '0.4';
   }
   if (aT.length > 0) {
     awayBtn.innerHTML = aT.map(n => gIcon(n) + ' ' + displayName(n)).join(' & ');
     awayBtn.disabled = false;
-    awayBtn.style.background = '#f0f4ff';
-    awayBtn.style.color = '#333';
+    awayBtn.style.opacity = '1';
   } else {
     awayBtn.innerHTML = '-';
     awayBtn.disabled = true;
-    awayBtn.style.background = '#e8e8e8';
+    awayBtn.style.opacity = '0.4';
   }
 }
 
