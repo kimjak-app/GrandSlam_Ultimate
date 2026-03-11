@@ -120,7 +120,12 @@ async function _fsSavePlayers(clubId, playerArr) {
   const col   = _clubRef(clubId).collection('players');
   const batch = _db.batch();
   playerArr.forEach(p => {
-    const data = Object.assign({ sport: 'tennis', gender: 'M', level: 'A', attributes: {} }, p);
+    // ✅ 3-3: 스키마 고정 — ensure()로 필수 필드 보장 후 저장
+    const validated = typeof ensure === 'function' ? ensure({ ...p }) : { ...p };
+    // rank/dRank 기본값 보장
+    if (validated.rank  === undefined || validated.rank  === null) validated.rank  = 0;
+    if (validated.dRank === undefined || validated.dRank === null) validated.dRank = 0;
+    const data = Object.assign({ sport: 'tennis', gender: 'M', level: 'A', attributes: {} }, validated);
     batch.set(col.doc(_sanitizeDocId(data.name)), data);
   });
   // 삭제된 선수 제거
@@ -133,8 +138,15 @@ async function _fsSavePlayers(clubId, playerArr) {
 async function _fsAppendMatchLog(clubId, entries) {
   const col   = _clubRef(clubId).collection('matchLog');
   const batch = _db.batch();
-  entries.forEach(m => {
-    batch.set(col.doc(_sanitizeDocId(m.id)), Object.assign({ sport: 'tennis' }, m));
+  // ✅ 3-2: 저장 전 normalizeMatchLog()로 표준 필드명만 사용하도록 강제
+  const STANDARD_FIELDS = new Set(['id', 'ts', 'date', 'type', 'home', 'away', 'hs', 'as', 'winner', 'memo',
+    'sport', 'exchangeId', 'matchCategory', 'resultType', 'clubSideHome', 'clubAId', 'clubBId', 'clubBName', 'pointsHome', 'pointsAway']);
+  const normalized = normalizeMatchLog(entries);
+  normalized.forEach(m => {
+    // 표준 필드만 남기고 레거시 필드(homeScore, hS, awayScore, aS, mType 등) 완전 제거
+    const clean = {};
+    Object.keys(m).forEach(k => { if (STANDARD_FIELDS.has(k)) clean[k] = m[k]; });
+    batch.set(col.doc(_sanitizeDocId(m.id)), Object.assign({ sport: 'tennis' }, clean));
   });
   await batch.commit();
 }

@@ -177,8 +177,145 @@ function _renderManagerAdminTab() {
             <span class="material-symbols-outlined">folder_open</span> 백업 파일 선택해서 복원
           </button>
         </div>
+        <button class="btn-purple-main" onclick="recalcAllScores()" style="display:flex; align-items:center; justify-content:center; gap:8px; background:#FF9500;">
+          <span class="material-symbols-outlined">calculate</span> 🔄 점수 전체 재계산 (새 기준 적용)
+        </button>
+        <button class="btn-purple-main" onclick="normalizeExistingData()" style="display:flex; align-items:center; justify-content:center; gap:8px; background:#5856D6;">
+          <span class="material-symbols-outlined">auto_fix_high</span> 🧹 기존 데이터 정규화 (1회 실행)
+        </button>
       </div>
     </div>`;
+}
+
+
+// ----------------------------------------
+// 9. 점수 전체 재계산
+// ----------------------------------------
+
+async function recalcAllScores() {
+  const clubId = typeof getActiveClubId === 'function' ? getActiveClubId() : null;
+  if (!clubId) { gsAlert('클럽을 먼저 선택해주세요.'); return; }
+
+  gsConfirm(
+    '⚠️ 점수 전체 재계산\n\n현재 점수 기준(tennis.js)을 기준으로\n모든 경기 기록을 처음부터 재계산합니다.\n\n진행 전 반드시 백업을 완료해주세요.\n계속하시겠습니까?',
+    async ok => {
+      if (!ok) return;
+      const overlay = document.getElementById('loading-overlay');
+      if (overlay) overlay.style.display = 'flex';
+      try {
+        // 1. Firebase에서 최신 matchLog 전체 로드
+        const logSnap = await _clubRef(clubId).collection('matchLog').orderBy('ts', 'asc').get();
+        const rawLogs = logSnap.docs.map(d => d.data());
+        const logs    = normalizeMatchLog(rawLogs);
+
+        // 2. Firebase에서 현재 선수 목록 로드
+        const playerSnap = await _clubRef(clubId).collection('players').get();
+        const playerArr  = playerSnap.docs.map(d => ({ ...d.data() }));
+
+        if (!playerArr.length) { gsAlert('선수 데이터가 없습니다.'); return; }
+
+        // 3. 모든 선수 점수 필드 초기화 (gender/level 등 비점수 필드는 보존)
+        const SCORE_FIELDS = [
+          'score', 'wins', 'losses',
+          'dScore', 'dWins', 'dLosses',
+          'sScore', 'sWins', 'sLosses',
+          'mScore', 'mWins', 'mLosses',
+          'weekly', 'wWins', 'wLosses',
+          'wdScore', 'wdWins', 'wdLosses',
+          'wsScore', 'wsWins', 'wsLosses',
+        ];
+        playerArr.forEach(p => SCORE_FIELDS.forEach(f => { p[f] = 0; }));
+
+        // 4. matchLog 시간순으로 재계산 (전역 players를 임시 교체 후 계산)
+        const _origPlayers = players;
+        players = playerArr;
+
+        logs.forEach(m => {
+          const winner = m.winner || '';
+          if (!winner) return; // 결과 미확정 경기 스킵
+          const type   = m.type || 'double';
+          const home   = Array.isArray(m.home) ? m.home : [];
+          const away   = Array.isArray(m.away) ? m.away : [];
+          if (!home.length || !away.length) return;
+          applyMatchToPlayers(type, home, away, winner);
+        });
+
+        const recalcedPlayers = [...players];
+        players = _origPlayers;
+
+        // 5. 결과 미리보기 모달
+        const previewRows = recalcedPlayers
+          .sort((a, b) => (b.score || 0) - (a.score || 0))
+          .map((p, i) => {
+            const orig = _origPlayers.find(x => x.name === p.name);
+            const diff = ((p.score || 0) - (orig?.score || 0)).toFixed(1);
+            const diffColor = parseFloat(diff) >= 0 ? '#34C759' : '#FF3B30';
+            return `<tr>
+              <td style="padding:6px 8px; font-size:13px;">${i + 1}위</td>
+              <td style="padding:6px 8px; font-size:13px; font-weight:600;">${p.name}</td>
+              <td style="padding:6px 8px; font-size:13px; text-align:right;">${(p.score || 0).toFixed(1)}pt</td>
+              <td style="padding:6px 8px; font-size:13px; text-align:right; color:${diffColor};">${parseFloat(diff) >= 0 ? '+' : ''}${diff}</td>
+            </tr>`;
+          }).join('');
+
+        const previewModal = document.createElement('div');
+        previewModal.id = 'recalc-preview-modal';
+        previewModal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:30000;display:flex;justify-content:center;align-items:center;';
+        previewModal.innerHTML = `
+          <div style="background:#fff;border-radius:20px;padding:24px 18px 18px;width:360px;max-width:94vw;max-height:82vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.25);">
+            <div style="font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:4px;">🔄 재계산 결과 미리보기</div>
+            <div style="font-size:12px;color:#8E8E93;margin-bottom:14px;">경기 ${logs.length}건 기준 / 저장 전 확인하세요</div>
+            <table style="width:100%;border-collapse:collapse;border:1px solid #eee;border-radius:10px;overflow:hidden;">
+              <thead>
+                <tr style="background:#f5f5f7;">
+                  <th style="padding:8px;font-size:12px;color:#666;">순위</th>
+                  <th style="padding:8px;font-size:12px;color:#666;text-align:left;">선수</th>
+                  <th style="padding:8px;font-size:12px;color:#666;text-align:right;">새 점수</th>
+                  <th style="padding:8px;font-size:12px;color:#666;text-align:right;">변화</th>
+                </tr>
+              </thead>
+              <tbody>${previewRows}</tbody>
+            </table>
+            <div style="display:flex;gap:10px;margin-top:16px;">
+              <button id="recalc-confirm-btn"
+                style="flex:1;padding:13px;background:#FF9500;color:white;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;">
+                ✅ 확인 — Firebase 저장
+              </button>
+              <button onclick="document.getElementById('recalc-preview-modal').remove()"
+                style="flex:1;padding:13px;background:#8E8E93;color:white;border:none;border-radius:12px;font-size:14px;cursor:pointer;">
+                취소
+              </button>
+            </div>
+          </div>`;
+
+        document.body.appendChild(previewModal);
+
+        // 6. 확인 버튼 클릭 시 Firebase 저장
+        document.getElementById('recalc-confirm-btn').onclick = async () => {
+          previewModal.remove();
+          if (overlay) overlay.style.display = 'flex';
+          try {
+            await _fsSavePlayers(clubId, recalcedPlayers);
+            // 전역 players 동기화
+            players = recalcedPlayers;
+            if (typeof computeAll === 'function') computeAll();
+            gsAlert(`✅ 점수 재계산 완료!\n\n${recalcedPlayers.length}명 / ${logs.length}경기 기준으로\nFirebase players 업데이트 완료.`);
+          } catch (e) {
+            console.error('[admin] recalcAllScores save error:', e);
+            gsAlert('❌ Firebase 저장 실패\n\n' + e.message);
+          } finally {
+            if (overlay) overlay.style.display = 'none';
+          }
+        };
+
+      } catch (e) {
+        console.error('[admin] recalcAllScores error:', e);
+        gsAlert('❌ 재계산 실패\n\n' + e.message);
+      } finally {
+        if (overlay) overlay.style.display = 'none';
+      }
+    }
+  );
 }
 
 
@@ -531,8 +668,66 @@ async function getContactEmail() {
 
 
 // ----------------------------------------
-// window 전역 등록
+// 10. 기존 데이터 일괄 정규화 (3-2 matchLog + 3-3 players)
 // ----------------------------------------
+
+async function normalizeExistingData() {
+  const clubId = typeof getActiveClubId === 'function' ? getActiveClubId() : null;
+  if (!clubId) { gsAlert('클럽을 먼저 선택해주세요.'); return; }
+
+  gsConfirm(
+    '🧹 기존 데이터 정규화\n\n【matchLog】레거시 필드(homeScore, hS 등) → 표준 필드(hs, as)로 일괄 변환\n【players】누락된 필수 필드(rank, dRank 등) 일괄 보완\n\n데이터 내용은 변경되지 않고 필드명/구조만 정리됩니다.\n진행 전 백업을 권장합니다. 계속하시겠습니까?',
+    async ok => {
+      if (!ok) return;
+      const overlay = document.getElementById('loading-overlay');
+      if (overlay) overlay.style.display = 'flex';
+      try {
+        // ── 3-2: matchLog 정규화 ──────────────────────────────
+        const logSnap = await _clubRef(clubId).collection('matchLog').get();
+        const rawLogs = logSnap.docs.map(d => ({ _docId: d.id, ...d.data() }));
+        const STANDARD_FIELDS = new Set(['id', 'ts', 'date', 'type', 'home', 'away', 'hs', 'as', 'winner', 'memo',
+          'sport', 'exchangeId', 'matchCategory', 'resultType', 'clubSideHome', 'clubAId', 'clubBId', 'clubBName', 'pointsHome', 'pointsAway']);
+
+        const normalizedLogs = normalizeMatchLog(rawLogs);
+        let logUpdated = 0;
+
+        // 500개씩 배치 처리
+        for (let i = 0; i < normalizedLogs.length; i += 400) {
+          const batch = _db.batch();
+          const chunk = normalizedLogs.slice(i, i + 400);
+          chunk.forEach(m => {
+            const clean = {};
+            Object.keys(m).forEach(k => { if (STANDARD_FIELDS.has(k)) clean[k] = m[k]; });
+            const docRef = _clubRef(clubId).collection('matchLog').doc(_sanitizeDocId(m.id));
+            batch.set(docRef, Object.assign({ sport: 'tennis' }, clean));
+            logUpdated++;
+          });
+          await batch.commit();
+        }
+
+        // ── 3-3: players 정규화 ──────────────────────────────
+        const playerSnap = await _clubRef(clubId).collection('players').get();
+        const playerArr  = playerSnap.docs.map(d => ({ ...d.data() }));
+        const normalizedPlayers = playerArr.map(p => {
+          const validated = typeof ensure === 'function' ? ensure({ ...p }) : { ...p };
+          if (validated.rank  === undefined || validated.rank  === null) validated.rank  = 0;
+          if (validated.dRank === undefined || validated.dRank === null) validated.dRank = 0;
+          return validated;
+        });
+
+        await _fsSavePlayers(clubId, normalizedPlayers);
+
+        gsAlert(`✅ 데이터 정규화 완료!\n\n【matchLog】${logUpdated}건 표준 필드명으로 변환\n【players】${normalizedPlayers.length}명 스키마 보완 완료\n\n앞으로 신규 저장 시 자동으로 정규화됩니다.`);
+
+      } catch (e) {
+        console.error('[admin] normalizeExistingData error:', e);
+        gsAlert('❌ 정규화 실패\n\n' + e.message);
+      } finally {
+        if (overlay) overlay.style.display = 'none';
+      }
+    }
+  );
+}
 
 window.showAdminAuth               = showAdminAuth;
 window.closeAdminPinModal          = closeAdminPinModal;
@@ -542,6 +737,8 @@ window.restoreMasterSelective      = restoreMasterSelective;
 window._confirmMasterSelectiveRestore = _confirmMasterSelectiveRestore;
 window.importBackupWithGuard       = importBackupWithGuard;
 window.resetExchangeData           = resetExchangeData;
+window.recalcAllScores             = recalcAllScores;
+window.normalizeExistingData       = normalizeExistingData;
 window._loadClubApprovalList       = _loadClubApprovalList;
 window._filterClubApprovalList     = _filterClubApprovalList;
 window._toggleUnapprovedFilter     = _toggleUnapprovedFilter;

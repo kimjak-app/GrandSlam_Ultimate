@@ -14,18 +14,18 @@ const TENNIS_RULES = {
   // Firestore 이전 후엔 clubs/{clubId}/settings.sports.tennis.scoringRule 에서 로드
   // 현재는 fallback 상수로 사용
   scoring: {
-    participate: 1.0,       // 참가 기본점수
+    participate: 0.2,       // 참가 기본점수
     single: {
-      win:  3.0,
-      loss: -0.5,
+      win:  4.0,
+      loss: -0.1,
     },
     double: {
-      win:  2.0,
-      loss: -0.5,
+      win:  3.0,
+      loss: -0.1,
     },
     mixed: {
-      win:  2.0,
-      loss: -0.5,
+      win:  3.0,
+      loss: -0.1,
     },
   },
 

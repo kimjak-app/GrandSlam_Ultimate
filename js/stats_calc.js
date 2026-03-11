@@ -103,9 +103,20 @@ function ensure(p) {
     'weekly', 'wWins', 'wLosses',
     'wdScore', 'wsScore', 'wdWins', 'wdLosses', 'wsWins', 'wsLosses',
     'lastW', 'lastWD', 'lastWS',
-    'mScore', 'mWins', 'mLosses', 'lastM'
+    'mScore', 'mWins', 'mLosses', 'lastM',
+    'rank', 'dRank'   // ✅ 3-3: 글로벌 랭킹 엔진용 필수 필드
   ];
   fields.forEach(f => { if (p[f] === undefined) p[f] = 0; });
+
+  if (p.isGuest === undefined) p.isGuest = false;
+  if (p.gender !== 'M' && p.gender !== 'F') p.gender = 'M';
+  if (p.isTreasurer === undefined) p.isTreasurer = false;
+  if (p.isFeeExempt === undefined) p.isFeeExempt = false;
+  if (!p.level || !['A', 'B', 'C', 'D'].includes(p.level)) p.level = 'A';
+  if (!p.attributes) p.attributes = { sport: 'tennis', preferredPosition: null };
+  if (!p.name) p.name = "NONAME";
+  return p;
+}
 
   if (p.isGuest === undefined) p.isGuest = false;
   if (p.gender !== 'M' && p.gender !== 'F') p.gender = 'M';
