@@ -85,32 +85,35 @@
     ladderGap = (cvs.width - 80) / (ldP.length - 1);
     ladderLines = [];
 
-    // v5.634: 균형 잡힌 가로선 생성 — 열 쌍별 독립 배분, 인접 conflict 제거
+    // v5.634: 균형 잡힌 가로선 생성 — 열 쌍별 목표 개수 보장 + 인접 conflict 방지
     const ROWS = 12;
     const colPairs = ldP.length - 1;
     const targetPerPair = Math.max(5, Math.round(ROWS * 0.6));
+    // row별 점유 열 쌍 추적 (인접 열 쌍 중복 방지)
+    const rowOccupied = {}; // rowOccupied[row] = Set of from-indices
 
     for (let i = 0; i < colPairs; i++) {
-      // 이 열 쌍에서 이미 사용된 row 추적 (같은 열 쌍 내 중복만 방지)
-      const usedRows = new Set();
-      let placed = 0;
-      // 전체 row를 섞어서 targetPerPair개 배치 보장
+      // 전체 row를 섞어서 순서 랜덤화
       const rowIndices = Array.from({ length: ROWS }, (_, r) => r);
       for (let k = rowIndices.length - 1; k > 0; k--) {
         const j = Math.floor(Math.random() * (k + 1));
         [rowIndices[k], rowIndices[j]] = [rowIndices[j], rowIndices[k]];
       }
-      rowIndices.forEach(r => {
-        if (placed >= targetPerPair) return;
-        if (usedRows.has(r)) return;
-        usedRows.add(r);
+      let placed = 0;
+      for (const r of rowIndices) {
+        if (placed >= targetPerPair) break;
+        // 인접 열 쌍(i-1, i+1)이 같은 row에 있으면 스킵
+        const occupied = rowOccupied[r] || new Set();
+        if (occupied.has(i - 1) || occupied.has(i + 1)) continue;
+        if (!rowOccupied[r]) rowOccupied[r] = new Set();
+        rowOccupied[r].add(i);
         ladderLines.push({
           x: 40 + (i * ladderGap),
           y: 130 + (r * 30) + (Math.random() * 5),
           from: i, to: i + 1, row: r
         });
         placed++;
-      });
+      }
     }
 
     drawLadderBase(ctx, cvs);
