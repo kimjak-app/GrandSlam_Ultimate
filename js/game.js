@@ -138,10 +138,10 @@ function updateSimpleTeamsUI() {
   let html = '';
   for (let i = 0; i < gameCourtCount; i++) {
     const ct = courtTeams[i] || { home: [], away: [], winner: null };
-    const hasHome = ct.home.length > 0;
-    const hasAway = ct.away.length > 0;
-    const canClick = hasHome && hasAway;
-    // 코트 라벨 — 항상 중앙 정렬
+    const max = mType === 'double' ? 2 : 1;
+    const homeReady = ct.home.length === max;
+    const awayReady = ct.away.length === max;
+    const canClick = homeReady && awayReady;
     const courtLabel = `<div style="font-size:11px;color:#888;margin-bottom:6px;text-align:center;">코트 ${i + 1}</div>`;
     const homeStyle = ct.winner === 'home' ? 'background:var(--wimbledon-sage);color:white;' : '';
     const awayStyle = ct.winner === 'away' ? 'background:var(--wimbledon-sage);color:white;' : '';
@@ -150,11 +150,11 @@ function updateSimpleTeamsUI() {
         ${courtLabel}
         <div style="display:flex;align-items:center;gap:8px;">
           <button onclick="saveSimpleImmediate(${i},'home')"
-            class="opt-btn" style="flex:1;padding:14px 6px;font-size:13px;font-weight:700;${homeStyle}opacity:${canClick ? '1' : '0.4'};"
+            class="opt-btn" style="flex:1;padding:14px 6px;font-size:13px;font-weight:700;${homeStyle}opacity:${homeReady ? '1' : '0.4'};"
             ${canClick ? '' : 'disabled'}>${teamLabel(ct.home)}</button>
           <div style="font-size:13px;font-weight:700;color:#888;flex-shrink:0;">vs</div>
           <button onclick="saveSimpleImmediate(${i},'away')"
-            class="opt-btn" style="flex:1;padding:14px 6px;font-size:13px;font-weight:700;${awayStyle}opacity:${canClick ? '1' : '0.4'};"
+            class="opt-btn" style="flex:1;padding:14px 6px;font-size:13px;font-weight:700;${awayStyle}opacity:${awayReady ? '1' : '0.4'};"
             ${canClick ? '' : 'disabled'}>${teamLabel(ct.away)}</button>
         </div>
       </div>`;
