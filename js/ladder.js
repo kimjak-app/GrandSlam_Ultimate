@@ -85,13 +85,30 @@
     ladderGap = (cvs.width - 80) / (ldP.length - 1);
     ladderLines = [];
 
-    for(let r=0; r<12; r++) {
-      for(let i=0; i<ldP.length-1; i++) {
-        if(Math.random() > 0.45) {
-          ladderLines.push({ x: 40 + (i * ladderGap), y: 130 + (r * 30) + (Math.random() * 5), from: i, to: i+1 });
-          i++;
-        }
+    // v5.634: 균형 잡힌 가로선 생성 — 열 쌍별 목표 개수 보장
+    const ROWS = 12;
+    const colPairs = ldP.length - 1;
+    const targetPerPair = Math.max(4, Math.round(ROWS * 0.55));
+
+    for (let i = 0; i < colPairs; i++) {
+      const rowIndices = Array.from({ length: ROWS }, (_, r) => r);
+      for (let k = rowIndices.length - 1; k > 0; k--) {
+        const j = Math.floor(Math.random() * (k + 1));
+        [rowIndices[k], rowIndices[j]] = [rowIndices[j], rowIndices[k]];
       }
+      const chosen = rowIndices.slice(0, targetPerPair).sort((a, b) => a - b);
+      chosen.forEach(r => {
+        const conflict = ladderLines.some(l =>
+          l.row === r && (l.from === i - 1 || l.from === i + 1)
+        );
+        if (!conflict) {
+          ladderLines.push({
+            x: 40 + (i * ladderGap),
+            y: 130 + (r * 30) + (Math.random() * 5),
+            from: i, to: i + 1, row: r
+          });
+        }
+      });
     }
 
     drawLadderBase(ctx, cvs);
