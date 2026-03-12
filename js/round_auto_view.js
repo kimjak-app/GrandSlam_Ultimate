@@ -2298,6 +2298,11 @@ async function roundAutoConfirmManual() {
 
 function roundAutoReset() {
   roundAutoState = createRoundAutoInitialState();
+  // ✅ v5.635: 수동배치 상태도 함께 초기화
+  roundAutoManualMode = false;
+  roundAutoManualCourts = [];
+  const manualSelect = document.getElementById('round-auto-manual-select');
+  if (manualSelect) manualSelect.style.display = 'none';
   const clubId = roundAutoGetSelectedClubId();
   try {
     localStorage.removeItem(roundAutoStorageKey(clubId));
