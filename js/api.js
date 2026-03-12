@@ -1,5 +1,6 @@
 // ========================================
 // API.JS - Firestore 데이터 레이어
+// v5.633 — C/D: legacy write 금지 + validation 로그 강화
 //
 // Firestore 컬렉션 구조:
 //   clubs/{clubId}/players           (선수 1명 = 문서 1개)
@@ -8,6 +9,11 @@
 //   clubs/{clubId}/settings/feeData  (feeData, monthlyFeeAmount)
 //   clubs/{clubId}/settings/financeData
 //   clubs/{clubId}/exchanges/{id}
+//
+// ⚠️  matchLog write 규칙:
+//   - 반드시 _fsAppendMatchLog() 경유 (STANDARD_FIELDS 화이트리스트 적용)
+//   - 직접 batch.set() 금지 (treasurer_view.js permanentDelete도 적용 완료)
+//   - 필드명 기준: GrandSlam_CanonicalSchema_v1.0.docx 참조
 // ========================================
 
 
@@ -264,16 +270,19 @@ async function pushPayload(payload) {
 
   $('loading-overlay').style.display = 'flex';
   setStatus(`<div style="color:#888; font-size:12px; margin-bottom:10px;">저장 중...</div>`);
+  let _phase = 'init'; // ✅ D: 단계 추적 — 실패 시 어느 단계에서 막혔는지 로그
   try {
     const clubId = payload.clubId || (typeof getActiveClubId === 'function' ? getActiveClubId() : 'default');
 
     if (Array.isArray(payload.data)) {
+      _phase = 'fsSavePlayers';
       await _fsSavePlayers(clubId, payload.data);
       players = payload.data.map(ensure);
     }
 
     // matchLog 전체 초기화
     if (payload.matchLogReset === true) {
+      _phase = 'matchLogReset';
       const logCol = _clubRef(clubId).collection('matchLog');
       const snap   = await logCol.get();
       if (!snap.empty) {
@@ -288,6 +297,7 @@ async function pushPayload(payload) {
 
     // matchLog 추가
     if (Array.isArray(payload.matchLogAppend) && payload.matchLogAppend.length > 0) {
+      _phase = 'gameCountCheck';
       // 미승인 클럽 gameCount 체크
       const clubDoc  = await _db.collection('clubs').doc(clubId).get();
       const clubInfo = clubDoc.exists ? clubDoc.data() : {};
@@ -299,11 +309,19 @@ async function pushPayload(payload) {
           gsAlert(`🔒 무료 체험 경기(20회)를 모두 사용했습니다.\n\n계속 사용하려면 총괄 관리자에게 문의하세요.\n📧 ${email}`);
           return false;
         }
+        _phase = 'gameCountIncrement';
         await _db.collection('clubs').doc(clubId).update({
           gameCount: firebase.firestore.FieldValue.increment(payload.matchLogAppend.length)
         });
       }
+      _phase = 'fsAppendMatchLog';
       const normalized = normalizeMatchLog(payload.matchLogAppend);
+      // ✅ D: 저장 직전 엔트리 유효성 검증 로그
+      normalized.forEach((m, idx) => {
+        if (!m.id || !m.ts || !m.type || !Array.isArray(m.home) || !Array.isArray(m.away)) {
+          console.warn(`[pushPayload] matchLog[${idx}] 필드 누락:`, JSON.stringify(m));
+        }
+      });
       await _fsAppendMatchLog(clubId, normalized);
       // 로컬 반영 (dedupe)
       const byId = new Map(matchLog.map(m => [m.id, m]));
@@ -311,13 +329,15 @@ async function pushPayload(payload) {
       matchLog = Array.from(byId.values()).sort((a, b) => Number(b.ts) - Number(a.ts));
     }
 
+    _phase = 'pushMvpHistory';
     await pushMvpHistory();
     setStatus('');
     setTimeout(applyAutofitAllTables, 0);
     return true;
   } catch (e) {
-    console.error('pushPayload error:', e);
-    setStatus(`<div style="color:#ff3b30; font-size:12px; margin-bottom:10px;">저장 실패 😵‍💫</div>`);
+    // ✅ D: 단계 + 에러 메시지 상세 로그
+    console.error(`[pushPayload] 실패 단계: ${_phase} | 에러:`, e.code || '', e.message, e);
+    setStatus(`<div style="color:#ff3b30; font-size:12px; margin-bottom:10px;">저장 실패 😵‍💫 (${_phase})</div>`);
     return false;
   } finally {
     $('loading-overlay').style.display = 'none';

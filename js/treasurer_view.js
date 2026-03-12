@@ -845,10 +845,17 @@ async function _doPermanentDelete(name) {
 
   if (affected.length > 0) {
     try {
+      // ✅ C: legacy write 금지 — STANDARD_FIELDS 필터 적용
+      const STANDARD_FIELDS = new Set(['id', 'ts', 'date', 'type', 'home', 'away', 'hs', 'as', 'winner', 'memo',
+        'sport', 'exchangeId', 'matchCategory', 'resultType', 'clubSideHome', 'clubAId', 'clubBId', 'clubBName', 'pointsHome', 'pointsAway']);
       const col = _clubRef(clubId).collection('matchLog');
       for (let i = 0; i < affected.length; i += 400) {
         const batch = _db.batch();
-        affected.slice(i, i + 400).forEach(m => batch.set(col.doc(_sanitizeDocId(m.id)), m));
+        affected.slice(i, i + 400).forEach(m => {
+          const clean = {};
+          Object.keys(m).forEach(k => { if (STANDARD_FIELDS.has(k)) clean[k] = m[k]; });
+          batch.set(col.doc(_sanitizeDocId(m.id)), Object.assign({ sport: 'tennis' }, clean));
+        });
         await batch.commit();
       }
     } catch(e) { console.warn('permanentDelete matchLog 업데이트 오류:', e); }
