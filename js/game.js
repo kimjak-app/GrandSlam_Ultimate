@@ -123,6 +123,9 @@ function setGameMode(mode) {
 function updateSimpleTeamsUI() {
   const container = $('game-simple-courts');
   if (!container) return;
+  // 간편 방식이 비활성 상태면 렌더링 스킵
+  if (gameInputMode !== 'simple') return;
+
   const gIcon = name => {
     const p = players.find(pl => pl.name === name);
     if (!p) return '';
@@ -139,76 +142,60 @@ function updateSimpleTeamsUI() {
     const ct = courtTeams[i] || { home: [], away: [], winner: null };
     const hasHome = ct.home.length > 0;
     const hasAway = ct.away.length > 0;
-    const courtLabel = gameCourtCount > 1 ? `<div style="font-size:11px;color:#888;margin-bottom:6px;">코트 ${i + 1}</div>` : '';
+    // 항상 코트 번호 표시
+    const courtLabel = `<div style="font-size:11px;color:#888;margin-bottom:6px;">코트 ${i + 1}</div>`;
     const homeStyle = ct.winner === 'home' ? 'background:var(--wimbledon-sage);color:white;' : '';
     const awayStyle = ct.winner === 'away' ? 'background:var(--wimbledon-sage);color:white;' : '';
     html += `
       <div style="margin-bottom:12px;">
         ${courtLabel}
         <div style="display:flex;align-items:center;gap:8px;">
-          <button onclick="setSimpleWinner(${i},'home')"
+          <button onclick="saveSimpleImmediate(${i},'home')"
             class="opt-btn" style="flex:1;padding:14px 6px;font-size:13px;font-weight:700;${homeStyle}opacity:${hasHome ? '1' : '0.4'};"
-            ${hasHome ? '' : 'disabled'}>${teamLabel(ct.home)}</button>
+            ${hasHome && hasAway ? '' : 'disabled'}>${teamLabel(ct.home)}</button>
           <div style="font-size:13px;font-weight:700;color:#888;flex-shrink:0;">vs</div>
-          <button onclick="setSimpleWinner(${i},'away')"
+          <button onclick="saveSimpleImmediate(${i},'away')"
             class="opt-btn" style="flex:1;padding:14px 6px;font-size:13px;font-weight:700;${awayStyle}opacity:${hasAway ? '1' : '0.4'};"
-            ${hasAway ? '' : 'disabled'}>${teamLabel(ct.away)}</button>
+            ${hasHome && hasAway ? '' : 'disabled'}>${teamLabel(ct.away)}</button>
         </div>
       </div>`;
   }
-  // 저장 버튼
-  const allDone = courtTeams.slice(0, gameCourtCount).every(ct => ct.winner !== null);
-  html += `<button class="btn-main" onclick="saveSimpleAll()" style="width:100%;${allDone ? '' : 'opacity:0.5;'}">
-    <span class="material-symbols-outlined title-ico">save</span>결과 저장
-  </button>`;
   container.innerHTML = html;
 }
 
-function setSimpleWinner(courtIdx, side) {
-  if (!courtTeams[courtIdx]) return;
-  courtTeams[courtIdx].winner = courtTeams[courtIdx].winner === side ? null : side;
-  updateSimpleTeamsUI();
-}
+// ✅ v5.632: 이긴 팀 누르면 즉시 저장, 해당 코트만 초기화
+async function saveSimpleImmediate(courtIdx, side) {
+  const ct = courtTeams[courtIdx];
+  if (!ct) return;
+  const h = ct.home;
+  const a = ct.away;
+  const hs = side === 'home' ? '1' : '0';
+  const as = side === 'away' ? '1' : '0';
 
-async function saveSimpleAll() {
-  const courts = courtTeams.slice(0, gameCourtCount);
-  const allDone = courts.every(ct => ct.winner !== null);
-  if (!allDone) { gsAlert('✋ 모든 코트의 승리팀을 선택해주세요.'); return; }
+  const msg = GameEngine.validateSaveInput(isPracticeMode, hs, as, mType, h, a);
+  if (msg) { gsAlert(msg); return; }
 
-  for (const ct of courts) {
-    const h = ct.home;
-    const a = ct.away;
-    const hs = ct.winner === 'home' ? '1' : '0';
-    const as = ct.winner === 'away' ? '1' : '0';
-    const msg = GameEngine.validateSaveInput(isPracticeMode, hs, as, mType, h, a);
-    if (msg) { gsAlert(msg); return; }
-    GameEngine.materializeHiddenPlayers([...h, ...a]);
-  }
-
+  GameEngine.materializeHiddenPlayers([...h, ...a]);
   snapshotLastRanks();
 
-  for (const ct of courts) {
-    const h = ct.home;
-    const a = ct.away;
-    const hs = ct.winner === 'home' ? '1' : '0';
-    const as = ct.winner === 'away' ? '1' : '0';
-    const logEntry = GameEngine.createMatchLogEntry(mType, h, a, hs, as);
-    const snapshot = GameEngine.snapshotSaveState();
-    GameEngine.applyMatchAndAppendLog(mType, h, a, logEntry.winner, logEntry);
-    const ok = await pushWithMatchLogAppend(logEntry);
-    if (!ok) {
-      GameEngine.rollbackSaveState(snapshot);
-      gsAlert('❌ 저장 실패! 다시 시도해주세요.');
-      return;
-    }
+  const logEntry = GameEngine.createMatchLogEntry(mType, h, a, hs, as);
+  const snapshot = GameEngine.snapshotSaveState();
+  GameEngine.applyMatchAndAppendLog(mType, h, a, logEntry.winner, logEntry);
+
+  const ok = await pushWithMatchLogAppend(logEntry);
+  if (!ok) {
+    GameEngine.rollbackSaveState(snapshot);
+    gsAlert('❌ 저장 실패! 다시 시도해주세요.');
+    return;
   }
 
-  gsAlert('저장!');
-  courtTeams = Array.from({ length: gameCourtCount }, () => ({ home: [], away: [], winner: null }));
-  hT = []; aT = [];
+  // 해당 코트만 초기화
+  courtTeams[courtIdx] = { home: [], away: [], winner: null };
+  updateFlatTeams();
+
+  // 진행중인 코트 선수 제외하고 풀 갱신
   renderPool();
   updateSimpleTeamsUI();
-  tab(1);
   renderStatsPlayerList();
   setTimeout(applyAutofitAllTables, 0);
 }
@@ -428,8 +415,7 @@ function toggleTournamentMode() {
 
 window.save = save;
 window.saveSimple = saveSimple;
-window.saveSimpleAll = saveSimpleAll;
-window.setSimpleWinner = setSimpleWinner;
+window.saveSimpleImmediate = saveSimpleImmediate;
 window.setGameMode = setGameMode;
 window.setGameCourtCount = setGameCourtCount;
 window.updateSimpleTeamsUI = updateSimpleTeamsUI;
