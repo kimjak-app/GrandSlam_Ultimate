@@ -123,8 +123,6 @@ function setGameMode(mode) {
 function updateSimpleTeamsUI() {
   const container = $('game-simple-courts');
   if (!container) return;
-  // 간편 방식이 비활성 상태면 렌더링 스킵
-  if (gameInputMode !== 'simple') return;
 
   const gIcon = name => {
     const p = players.find(pl => pl.name === name);
@@ -142,8 +140,9 @@ function updateSimpleTeamsUI() {
     const ct = courtTeams[i] || { home: [], away: [], winner: null };
     const hasHome = ct.home.length > 0;
     const hasAway = ct.away.length > 0;
-    // 항상 코트 번호 표시
-    const courtLabel = `<div style="font-size:11px;color:#888;margin-bottom:6px;">코트 ${i + 1}</div>`;
+    const canClick = hasHome && hasAway;
+    // 코트 라벨 — 항상 중앙 정렬
+    const courtLabel = `<div style="font-size:11px;color:#888;margin-bottom:6px;text-align:center;">코트 ${i + 1}</div>`;
     const homeStyle = ct.winner === 'home' ? 'background:var(--wimbledon-sage);color:white;' : '';
     const awayStyle = ct.winner === 'away' ? 'background:var(--wimbledon-sage);color:white;' : '';
     html += `
@@ -151,12 +150,12 @@ function updateSimpleTeamsUI() {
         ${courtLabel}
         <div style="display:flex;align-items:center;gap:8px;">
           <button onclick="saveSimpleImmediate(${i},'home')"
-            class="opt-btn" style="flex:1;padding:14px 6px;font-size:13px;font-weight:700;${homeStyle}opacity:${hasHome ? '1' : '0.4'};"
-            ${hasHome && hasAway ? '' : 'disabled'}>${teamLabel(ct.home)}</button>
+            class="opt-btn" style="flex:1;padding:14px 6px;font-size:13px;font-weight:700;${homeStyle}opacity:${canClick ? '1' : '0.4'};"
+            ${canClick ? '' : 'disabled'}>${teamLabel(ct.home)}</button>
           <div style="font-size:13px;font-weight:700;color:#888;flex-shrink:0;">vs</div>
           <button onclick="saveSimpleImmediate(${i},'away')"
-            class="opt-btn" style="flex:1;padding:14px 6px;font-size:13px;font-weight:700;${awayStyle}opacity:${hasAway ? '1' : '0.4'};"
-            ${hasHome && hasAway ? '' : 'disabled'}>${teamLabel(ct.away)}</button>
+            class="opt-btn" style="flex:1;padding:14px 6px;font-size:13px;font-weight:700;${awayStyle}opacity:${canClick ? '1' : '0.4'};"
+            ${canClick ? '' : 'disabled'}>${teamLabel(ct.away)}</button>
         </div>
       </div>`;
   }
@@ -291,15 +290,8 @@ function renderPool() {
 }
 
 function pick(n) {
-  if (gameCourtCount > 1) {
-    pickMultiCourt(n);
-    return;
-  }
-  const picked = GameEngine.pickTeams(n, mType, hT, aT);
-  if (!picked.changed) return;
-  hT = picked.homeTeam;
-  aT = picked.awayTeam;
-  GameView.syncPickedTeamsView();
+  // ✅ v5.632: 코트수 무관 pickMultiCourt 통일 (코트1 이름 미표시 버그 수정)
+  pickMultiCourt(n);
 }
 
 function updateRecordCount() {
