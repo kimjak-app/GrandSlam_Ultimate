@@ -559,6 +559,136 @@ async function roundAutoCommitSingleMatchToGlobalLog(activeTurn, match) {
 }
 
 // ✅ v5.82: 공용 queue shift() + 승격 시 courtNo 동적 부여 + plannerState 전역 반영
+// ✅ v5.86: 단일코트 — 승리팀 선택 즉시 다음 대진 자동 투입
+// ✅ v5.862: 단일코트 자동 투입 — 미리보기는 대기 선수만으로 시도, 현재 경기 투입은 전체 인원으로
+async function roundAutoHandleSingleCourtDone(matchId) {
+  const activeTurn = (roundAutoState.turns || []).find(t => t?.status === 'active');
+  if (!activeTurn) return;
+
+  const match = (activeTurn.matches || []).find(m => m.id === matchId);
+  if (!match || (match.winner !== 'home' && match.winner !== 'away')) return;
+
+  // 1. 중복 실행 방지
+  if (match._courtDoneInFlight) return;
+  match._courtDoneInFlight = true;
+
+  try {
+    // 2. sessionStats 즉시 동기 업데이트 (다음 대진 생성 전에 반드시)
+    match.committed = true;
+    match.ts = Date.now();
+    const eligiblePool = roundAutoGetSelectedEligiblePool();
+    const matchPlayerNames = new Set([
+      ...(Array.isArray(match.home) ? match.home : [match.home]),
+      ...(Array.isArray(match.away) ? match.away : [match.away]),
+    ]);
+    const activePlayers = eligiblePool.filter(p => matchPlayerNames.has(p.name));
+    const statsRef = roundAutoState.sessionStats && typeof roundAutoState.sessionStats === 'object'
+      ? roundAutoState.sessionStats : {};
+    roundAutoApplyTurnParticipation(activePlayers, eligiblePool, activeTurn.turnNo, statsRef);
+    roundAutoState.sessionStats = statsRef;
+
+    // 3. 전체 인원으로 다음 대진 즉시 생성 후 현재 경기에 투입
+    // (미리보기 유무 관계없이 전체 eligiblePool 기준으로 직접 생성)
+    const isSingles = roundAutoIsSingles();
+    const requiredCount = isSingles ? 2 : 4;
+    const freshStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
+
+    // 전체 인원으로 다음 대진 직접 생성
+    // roundAutoChooseFairSingleCourtSetup 반환: { activePlayers: [p,p,p,p], pairing: { home:[p,p], away:[p,p] } }
+    let nextHome = null;
+    let nextAway = null;
+
+    if (eligiblePool.length >= requiredCount) {
+      if (isSingles) {
+        const singles = roundAutoGenerateSinglesTurn(eligiblePool, 1, activeTurn.turnNo, freshStats);
+        if (singles && singles.length > 0) {
+          nextHome = singles[0].home;
+          nextAway = singles[0].away;
+        }
+      } else {
+        const setup = roundAutoChooseFairSingleCourtSetup(eligiblePool, activeTurn.turnNo, freshStats);
+        if (setup && setup.pairing) {
+          nextHome = setup.pairing.home.map(p => p.name);
+          nextAway = setup.pairing.away.map(p => p.name);
+        }
+      }
+    }
+
+    roundAutoState.turns = roundAutoState.turns.filter(t => t?.status !== 'preview');
+
+    if (!nextHome || !nextAway) {
+      // 인원 부족 — 투입 없음, 미리보기도 없음 (UI에서 생성 불가 표시)
+    } else {
+      // 3. 다음 경기 현재 활성 턴에 투입
+      const newMatch = {
+        id: `ra-${activeTurn.turnNo}-court1-next-${Date.now()}`,
+        turnNo: activeTurn.turnNo,
+        courtNo: 1,
+        home: nextHome,
+        away: nextAway,
+        winner: null,
+        committed: false,
+        isNextCourt: true,
+      };
+      activeTurn.matches.push(newMatch);
+
+      // 4. 미리보기: 방금 투입된 경기 참여자 제외한 대기 선수만으로 시도
+      const newMatchPlayerNames = new Set([...nextHome, ...nextAway]);
+      const waitingPool = eligiblePool.filter(p => !newMatchPlayerNames.has(p.name));
+
+      if (waitingPool.length >= requiredCount) {
+        const previewStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
+        let previewHome = null;
+        let previewAway = null;
+
+        if (isSingles) {
+          const previewSingles = roundAutoGenerateSinglesTurn(waitingPool, 1, activeTurn.turnNo + 1, previewStats);
+          if (previewSingles && previewSingles.length > 0) {
+            previewHome = previewSingles[0].home;
+            previewAway = previewSingles[0].away;
+          }
+        } else {
+          const previewSetup = roundAutoChooseFairSingleCourtSetup(waitingPool, activeTurn.turnNo + 1, previewStats);
+          if (previewSetup && previewSetup.pairing) {
+            previewHome = previewSetup.pairing.home.map(p => p.name);
+            previewAway = previewSetup.pairing.away.map(p => p.name);
+          }
+        }
+
+        if (previewHome && previewAway) {
+          roundAutoState.turns.push({
+            turnNo: activeTurn.turnNo + 1,
+            status: 'preview',
+            matches: [{
+              id: `ra-preview-${activeTurn.turnNo + 1}-1`,
+              turnNo: activeTurn.turnNo + 1,
+              courtNo: 1,
+              home: previewHome,
+              away: previewAway,
+              winner: null,
+            }],
+          });
+        }
+      }
+      // 대기 선수 부족이면 미리보기 없음 — UI에서 "생성 불가" 표시
+    }
+
+    // 5. 정규화 및 렌더링
+    const normalized = roundAutoNormalizeTurnsState(roundAutoState);
+    roundAutoState = normalized.state;
+    roundAutoRenderMatches();
+    roundAutoRenderRanking();
+    roundAutoRenderPersonalRanking();
+    saveRoundAutoState();
+
+    // 6. 커밋 fire-and-forget
+    roundAutoCommitSingleMatchToGlobalLog(activeTurn, match).catch(() => {});
+
+  } finally {
+    match._courtDoneInFlight = false;
+  }
+}
+
 async function roundAutoHandleCourtDone(matchId) {
   const turns = roundAutoState.turns || [];
   const activeTurn = turns.find(t => t?.status === 'active');
@@ -1864,8 +1994,14 @@ function roundAutoSetWinner(matchId, side) {
   roundAutoRenderPersonalRanking();
   saveRoundAutoState();
 
-  if ((Number(roundAutoState.courtCount) || 1) >= 2 && targetTurn?.status === 'active' && (targetMatch.winner === 'home' || targetMatch.winner === 'away')) {
-    Promise.resolve().then(() => roundAutoHandleCourtDone(matchId));
+  if (targetTurn?.status === 'active' && (targetMatch.winner === 'home' || targetMatch.winner === 'away')) {
+    if ((Number(roundAutoState.courtCount) || 1) >= 2) {
+      // ✅ v5.86: 멀티코트 — 코트별 독립 자동 투입
+      Promise.resolve().then(() => roundAutoHandleCourtDone(matchId));
+    } else {
+      // ✅ v5.86: 단일코트 — 승리팀 선택 즉시 다음 대진 자동 투입
+      Promise.resolve().then(() => roundAutoHandleSingleCourtDone(matchId));
+    }
   }
 }
 
@@ -2169,108 +2305,102 @@ function roundAutoRenderMatches() {
     }
   }
 
-  list.innerHTML = turns.map(turn => {
-    const matches = (turn.matches || []).sort((a, b) => a.courtNo - b.courtNo);
-    const turnBadge = turn.status === 'active' ? '진행중' : '미리보기';
-    const badgeBg = turn.status === 'active' ? 'var(--wimbledon-sage)' : '#6b7280';
-    return `
-      <div style="margin-bottom:16px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-          <div style="font-weight:700; font-size:13px; color:var(--wimbledon-sage);">TURN ${turn.turnNo}</div>
-          <span style="font-size:11px; color:#fff; background:${badgeBg}; border-radius:999px; padding:3px 8px;">${turnBadge}</span>
-        </div>
-        ${matches.map(match => {
-      const teamSeparator = roundAutoIsSingles() ? ' vs ' : ' & ';
-      // ✅ v5.41: 성별 아이콘 포함
-      const home = Array.isArray(match.home) ? match.home.map(n => roundAutoPlayerLabelWithGender(n, '')).join(teamSeparator) : roundAutoPlayerLabelWithGender(match.home, '');
-      const away = Array.isArray(match.away) ? match.away.map(n => roundAutoPlayerLabelWithGender(n, '')).join(teamSeparator) : roundAutoPlayerLabelWithGender(match.away, '');
-      const reasonText = turn.status === 'preview' ? roundAutoReasonText(match) : '';
-      const reasonHtml = reasonText
-        ? `<div style="margin-top:7px; font-size:11px; color:#6b7280;">생성 이유: ${roundAutoEscape(reasonText)}</div>`
-        : '';
-      const disabled = turn.status === 'preview' ? 'opacity:0.8;' : '';
-      const disableAttr = turn.status === 'preview' ? 'disabled' : '';
-      // ✅ v5.53: 완료된 경기 — 결과 숨기고 다음 경기 선택창만 표시
-      const isDone = match.winner === 'home' || match.winner === 'away';
-      const isActive = turn.status === 'active';
+  // ✅ v5.86: 단일코트도 멀티코트와 동일한 UI로 통합 렌더링
+  const activeTurnSingle = turns.find(t => t.status === 'active');
+  const previewTurnSingle = turns.find(t => t.status === 'preview');
 
-      if (isDone && isActive && !match.isNextCourt) {
-        if (match.nextCourtAssigned) {
-          // 배정 완료 → 아무것도 표시 안 함 (새 대진이 아래 isNextCourt로 표시됨)
-          return '';
-        }
+  if (activeTurnSingle) {
+    const renderTeamSingle = team => (Array.isArray(team)
+      ? team.map(n => roundAutoPlayerLabelWithGender(n, '')).join(roundAutoIsSingles() ? ' vs ' : ' & ')
+      : roundAutoPlayerLabelWithGender(team, ''));
 
-        // ✅ v5.62: 코트 완료 후 — 미리보기 동일 코트 자동 배정 (선택 UI 제거)
-        const courtCount = roundAutoState.courtCount || 1;
-        const previewTurn = (roundAutoState.turns || []).find(t => t?.status === 'preview');
-        const previewMatch = previewTurn ? (previewTurn.matches || []).find(pm => pm.courtNo === match.courtNo) : null;
+    // ✅ v5.863: isNextCourt 조건 제거 — 2번째 이후 경기도 정상 렌더링
+    const liveMatch = (activeTurnSingle.matches || []).find(m => m.winner == null)
+      || (activeTurnSingle.matches || []).slice(-1)[0];
 
-        if (courtCount === 1) {
-          // ✅ v5.621: 코트 1개 — 승리팀 선택 상태 그대로 유지, 화면 전환 없음
-          // (다음 턴 생성 버튼은 항상 하단에 고정 표시됨)
-          return `
-            <div class="team-box" style="padding:12px; margin-bottom:8px;">
-              <div style="font-size:11px; color:#888; margin-bottom:8px;">코트 ${match.courtNo}</div>
-              <div style="display:flex; align-items:center; gap:6px;">
-                <div class="opt-btn" style="flex:1; text-align:center; padding:10px 6px; pointer-events:none; ${match.winner === 'home' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${home}</div>
-                <div style="font-size:12px; font-weight:700; color:#888; flex-shrink:0;">vs</div>
-                <div class="opt-btn" style="flex:1; text-align:center; padding:10px 6px; pointer-events:none; ${match.winner === 'away' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${away}</div>
-              </div>
-            </div>
-          `;
-        }
+    // 코트1 n번째 경기 계산
+    const courtMatchCount = (activeTurnSingle.matches || []).filter(m => Number(m?.courtNo) === 1).length;
+    const courtLabel = courtMatchCount > 0
+      ? `코트1 ${courtMatchCount}번째 경기`
+      : `코트1`;
 
-        // ✅ v5.621: 코트 2개 이상 — 확정 버튼 제거, 미리보기 자동 배정 즉시 실행
-        if (previewMatch) {
-          // 승리팀 선택 즉시 자동 배정 (렌더링 시점에 바로 실행)
-          setTimeout(() => roundAutoAssignNextCourt(match.id, 'preview', previewMatch.courtNo), 0);
-          return '';
-        }
-
-        // 미리보기 없을 때 직접 입력만
-        return `
-          <div class="team-box" style="padding:12px; margin-bottom:8px;">
-            <div style="font-size:12px; color:#2d7a2d; font-weight:600; margin-bottom:10px; text-align:center;">🏸 코트${match.courtNo} 다음 경기</div>
-            <button class="btn-main" onclick="roundAutoAssignNextCourt('${match.id}','manual')"
-              style="width:100%; font-size:12px; padding:9px; background:#4f6786;">
-              ✏️ 직접 입력
-            </button>
-            <div style="font-size:11px; color:#999; text-align:center; margin-top:5px;">다른 대진을 원하면 새 대진을 수동으로 입력 가능</div>
-          </div>
-        `;
+    let currentHtml = '<div style="font-size:12px; color:#999; text-align:center; padding:12px 0;">지금 대기 중인 경기 없음</div>';
+    if (liveMatch) {
+      const isDone = liveMatch.winner === 'home' || liveMatch.winner === 'away';
+      if (isDone) {
+        currentHtml = `
+          <div style="display:flex; align-items:center; gap:6px;">
+            <div class="opt-btn" style="flex:1; text-align:center; padding:10px 6px; pointer-events:none; ${liveMatch.winner === 'home' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${renderTeamSingle(liveMatch.home)}</div>
+            <div style="font-size:12px; font-weight:700; color:#888; flex-shrink:0;">vs</div>
+            <div class="opt-btn" style="flex:1; text-align:center; padding:10px 6px; pointer-events:none; ${liveMatch.winner === 'away' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${renderTeamSingle(liveMatch.away)}</div>
+          </div>`;
+      } else {
+        currentHtml = `
+          <div style="display:flex; align-items:center; gap:6px;">
+            <button class="opt-btn" onclick="roundAutoSetWinner('${liveMatch.id}','home')"
+              style="flex:1; ${liveMatch.winner === 'home' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${renderTeamSingle(liveMatch.home)}</button>
+            <div style="font-size:12px; font-weight:700; color:#888; flex-shrink:0;">vs</div>
+            <button class="opt-btn" onclick="roundAutoSetWinner('${liveMatch.id}','away')"
+              style="flex:1; ${liveMatch.winner === 'away' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${renderTeamSingle(liveMatch.away)}</button>
+          </div>`;
       }
+    }
 
-      // 진행중(isNextCourt 포함) or 미리보기 — 기존 스타일
-      return `
-            <div class="team-box" style="padding:12px; margin-bottom:8px; ${disabled}">
-              <div style="font-size:11px; color:#888; margin-bottom:8px;">코트 ${match.courtNo}</div>
-              <div style="display:flex; align-items:center; gap:6px;">
-                <button class="opt-btn" onclick="roundAutoSetWinner('${match.id}','home')" ${disableAttr}
-                  style="flex:1; ${match.winner === 'home' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${home}</button>
-                <div style="font-size:12px; font-weight:700; color:#888; flex-shrink:0;">vs</div>
-                <button class="opt-btn" onclick="roundAutoSetWinner('${match.id}','away')" ${disableAttr}
-                  style="flex:1; ${match.winner === 'away' ? 'background:var(--wimbledon-sage); color:white;' : ''}">${away}</button>
-              </div>
-              ${reasonHtml}
-            </div>
-          `;
-    }).join('')}
-        ${turn.status === 'active' ? `
-          <button type="button" class="btn-main" onclick="roundAutoRegenerateCurrentTurn()"
-            style="width:100%; margin-top:8px; background:#b85c38; font-size:13px; padding:10px 12px;">
-            🔄 이 턴 재생성
-          </button>
-          <div style="font-size:11px; color:#999; text-align:center; margin-top:5px;">인원 변동(추가·빠짐·휴식)이 생겼을 때 누르세요</div>
-        ` : ''}
-        ${turn.status === 'preview' ? `
-          <button type="button" class="btn-main" onclick="roundAutoRegeneratePreview()"
-            style="width:100%; margin-top:4px; background:#4f6786; font-size:13px; padding:10px 12px;">
-            다음 대진 재생성
-          </button>
-        ` : ''}
-      </div>
-    `;
-  }).join('');
+    // 미리보기 섹션
+    let queueHtmlSingle = '';
+    const hasQueueSingle = previewTurnSingle && Array.isArray(previewTurnSingle.matches) && previewTurnSingle.matches.length > 0;
+    if (hasQueueSingle) {
+      const queueItems = previewTurnSingle.matches.map((pm, idx) => `
+        <div style="padding:8px 0; ${idx > 0 ? 'border-top:1px dashed #e5e7eb;' : ''}">
+          <div style="font-size:11px; color:#9ca3af; margin-bottom:6px;">${idx + 1}순위</div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <div class="opt-btn" style="flex:1; text-align:center; opacity:0.75; cursor:default; pointer-events:none;">${renderTeamSingle(pm.home)}</div>
+            <div style="font-size:12px; font-weight:700; color:#888; flex-shrink:0;">vs</div>
+            <div class="opt-btn" style="flex:1; text-align:center; opacity:0.75; cursor:default; pointer-events:none;">${renderTeamSingle(pm.away)}</div>
+          </div>
+        </div>`).join('');
+      queueHtmlSingle = `
+        <div style="margin-bottom:10px; padding:12px; border:1px dashed #d1d5db; border-radius:10px; background:#f9fafb;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <div style="font-size:12px; font-weight:700; color:#6b7280;">⏳ 다음 대기 경기</div>
+            <span style="font-size:11px; color:#fff; background:#9ca3af; border-radius:999px; padding:2px 8px;">미리보기</span>
+          </div>
+          ${queueItems}
+        </div>`;
+    } else {
+      queueHtmlSingle = `
+        <div style="margin-bottom:10px; padding:12px; border:1px dashed #d1d5db; border-radius:10px; background:#f9fafb;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <div style="font-size:12px; font-weight:700; color:#6b7280;">⏳ 다음 대기 경기</div>
+            <span style="font-size:11px; color:#fff; background:#9ca3af; border-radius:999px; padding:2px 8px;">미리보기</span>
+          </div>
+          <div style="font-size:12px; color:#9ca3af; text-align:center; padding:8px 0;">인원 부족으로 생성 불가</div>
+        </div>`;
+    }
+
+    list.innerHTML = `
+      <div style="margin-bottom:12px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+          <div style="font-weight:700; font-size:13px; color:var(--wimbledon-sage);">현재 경기</div>
+          <span style="font-size:11px; color:#fff; background:var(--wimbledon-sage); border-radius:999px; padding:3px 8px;">진행중</span>
+        </div>
+        <div class="team-box" style="padding:12px; margin-bottom:10px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+            <div style="font-weight:700; font-size:13px; color:var(--wimbledon-sage);">${courtLabel}</div>
+          </div>
+          ${currentHtml}
+        </div>
+        ${queueHtmlSingle}
+        <button type="button" class="btn-main" onclick="roundAutoRegenerateCurrentTurn()"
+          style="width:100%; margin-top:8px; background:#b85c38; font-size:13px; padding:10px 12px;">
+          🔄 현재 진행 구성 재생성
+        </button>
+      </div>`;
+    return;
+  }
+
+  // turns 있지만 active 없음 — 빈 상태
+  list.innerHTML = '<div style="font-size:12px; color:#999; text-align:center; padding:10px;">생성된 매치가 없습니다.</div>';
 }
 
 function roundAutoComputePersonalStandings() {
@@ -2849,6 +2979,7 @@ window.roundAutoAssignNextCourt = roundAutoAssignNextCourt;
 window.roundAutoManualSetMatchType = roundAutoManualSetMatchType;
 window.roundAutoRegeneratePreview = roundAutoRegeneratePreview;
 window.roundAutoSetWinner = roundAutoSetWinner;
+window.roundAutoHandleSingleCourtDone = roundAutoHandleSingleCourtDone;
 window.roundAutoRenderMatches = roundAutoRenderMatches;
 window.roundAutoHandleCourtDone = roundAutoHandleCourtDone;
 window.roundAutoStartSession = roundAutoStartSession;
