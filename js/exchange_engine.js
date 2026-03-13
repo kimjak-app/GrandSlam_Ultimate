@@ -1,4 +1,4 @@
-// ========================================
+﻿// ========================================
 // EXCHANGE_ENGINE.JS - 교류전 데이터/계산 엔진
 // ========================================
 
@@ -17,7 +17,7 @@ let exchangeClubBPlayers  = [];
 let exchangeCurrentTab    = 'game';
 let exPickedHome          = [];
 let exPickedAway          = [];
-let exMatchCategory       = 'singles';
+let exMatchCategory       = 'doubles';
 let exSetupSelectedClubId = null;
 
 function _exchangeColRef(clubId) {
@@ -38,6 +38,7 @@ async function createExchange(config) {
     clubBId: config.clubBId || null,
     clubBName: config.clubBName,
     isClubBTemp: config.isClubBTemp || false,
+    courtCount: Math.max(1, Number(config.courtCount) || 1),
     victoryMode: config.victoryMode,
     handicapEnabled: config.handicapEnabled,
     status: 'ongoing',
@@ -152,6 +153,23 @@ async function updateExchangeAggregate(exchange, logEntry, points) {
     activeExchange.scoreA += deltaA;
     activeExchange.scoreB += deltaB;
     if (aWin) activeExchange.winsA++; else activeExchange.winsB++;
+    if (isSingles) {
+      if (aWin) {
+        activeExchange.singlesWinsA++;
+        activeExchange.singlesLossB++;
+      } else {
+        activeExchange.singlesWinsB++;
+        activeExchange.singlesLossA++;
+      }
+    } else {
+      if (aWin) {
+        activeExchange.doublesWinsA++;
+        activeExchange.doublesLossB++;
+      } else {
+        activeExchange.doublesWinsB++;
+        activeExchange.doublesLossA++;
+      }
+    }
   } catch (e) {
     console.error('[exchange] updateExchangeAggregate error:', e);
   }
@@ -182,7 +200,10 @@ async function saveExchangeGame(baseLogEntry, matchCategory, resultType, clubSid
 function getExchangePlayerHint(playerName) {
   if (!activeExchange) return '';
   const count = getPlayerExchangeMatchCount(activeExchange.id, playerName) + 1;
-  const pt = calculateExchangePoint(true, count, activeExchange.handicapEnabled);
+  const isHome = exPickedHome.includes(playerName);
+  const isAway = exPickedAway.includes(playerName);
+  const isWinHint = isHome ? true : (isAway ? false : true);
+  const pt = calculateExchangePoint(isWinHint, count, activeExchange.handicapEnabled);
   if (count >= 3 && activeExchange.handicapEnabled) {
     return `⚠ ${playerName} (${count}번째 출전) — 승리 시 ${pt}점 (핸디캡 적용)`;
   }
@@ -215,12 +236,12 @@ function getExchangeStatsForPlayer(playerName) {
   return { singleWin, singleLoss, doubleWin, doubleLoss, vsClubs };
 }
 
-function updateExchangeAggregateLocal(pts) {
+function updateExchangeAggregateLocal(pts, winner) {
   if (!activeExchange) return;
   const ex = activeExchange;
   const homeTotal = (pts.home || []).reduce((a, b) => a + b, 0);
   const awayTotal = (pts.away || []).reduce((a, b) => a + b, 0);
-  const homeWin = homeTotal > awayTotal;
+  const homeWin = winner === 'home';
   ex.scoreA += homeTotal;
   ex.scoreB += awayTotal;
   if (homeWin) {
@@ -237,3 +258,4 @@ function updateExchangeAggregateLocal(pts) {
     ex.doublesLossA += exMatchCategory === 'doubles' ? 1 : 0;
   }
 }
+

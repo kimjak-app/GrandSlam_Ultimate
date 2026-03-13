@@ -2235,6 +2235,9 @@
             style="margin-top:10px; width:100%; padding:12px; background:transparent; border:2px dashed #aaa; border-radius:14px; color:#888; font-size:14px; font-weight:400; cursor:pointer;">
             🔧 시뮬레이션 모드 (테스트용)
           </button>
+          <button class="ex-save-btn" onclick="openExchangeAdminModal()" style="margin-top:10px;">
+            <span class="material-symbols-outlined" style="font-size:18px;">settings</span> 교류전 운영
+          </button>
           <button class="btn-main" onclick="showView('game')" style="background:var(--text-gray); margin-top:12px;">
             <span class="material-symbols-outlined"
               style="font-size:18px;vertical-align:middle;margin-right:5px;">arrow_back</span>뒤로가기
@@ -2249,10 +2252,10 @@
           <div class="ex-section-title"><span class="material-symbols-outlined"
               style="font-size:16px;">sports_tennis</span> 경기 유형</div>
           <div class="ex-cat-row">
-            <button id="ex-cat-singles" class="ex-cat-btn active" onclick="setExMatchCategory('singles')"><span
-                class="material-symbols-outlined" style="font-size:16px;">person</span> 단식</button>
-            <button id="ex-cat-doubles" class="ex-cat-btn" onclick="setExMatchCategory('doubles')"><span
+            <button id="ex-cat-doubles" class="ex-cat-btn active" onclick="setExMatchCategory('doubles')"><span
                 class="material-symbols-outlined" style="font-size:16px;">group</span> 복식</button>
+            <button id="ex-cat-singles" class="ex-cat-btn" onclick="setExMatchCategory('singles')"><span
+                class="material-symbols-outlined" style="font-size:16px;">person</span> 단식</button>
           </div>
           <div class="ex-result-row">
             <button class="ex-result-btn active" onclick="setExResultType(this,'normal')"
@@ -2294,20 +2297,41 @@
         </div>
 
         <!-- 선택 표시 -->
-        <div class="ex-picked-display">
+        <div class="ex-section-card">
+          <div class="ex-section-title"><span class="material-symbols-outlined" style="font-size:16px;">tune</span> 기록 방식 선택</div>
+          <div class="ex-result-row" style="margin-top:0;">
+            <button id="ex-record-mode-quick" class="ex-result-btn active" onclick="setExRecordMode('quick')">간편 방식</button>
+            <button id="ex-record-mode-score" class="ex-result-btn" onclick="setExRecordMode('score')">점수 방식</button>
+          </div>
+        </div>
+
+        <!-- 선택 표시 -->
+        <div id="ex-picked-display-wrap" class="ex-picked-display">
           <div id="ex-picked-home" class="ex-picked-side ex-picked-home-side">선택 없음</div>
           <div style="display:flex;align-items:center;color:#ccc;font-weight:800;">vs</div>
           <div id="ex-picked-away" class="ex-picked-side ex-picked-away-side">선택 없음</div>
         </div>
 
+        <!-- 간편 방식: 이번 대진표 -->
+        <div id="ex-quick-matchup-card" class="ex-section-card" style="display:none;">
+          <div class="ex-section-title"><span class="material-symbols-outlined" style="font-size:16px;">sports_tennis</span> 이번 대진표</div>
+          <div style="display:flex; gap:8px; align-items:center; justify-content:center;">
+            <button id="ex-quick-card-home" onclick="setExQuickWinner('home')" style="flex:1; padding:14px 10px; border-radius:12px; border:2px solid #d9d9d9; background:#fff; font-size:15px; font-weight:700; color:var(--text-dark); cursor:pointer;">선택 없음</button>
+            <div style="display:flex;align-items:center;color:#ccc;font-weight:800;">VS</div>
+            <button id="ex-quick-card-away" onclick="setExQuickWinner('away')" style="flex:1; padding:14px 10px; border-radius:12px; border:2px solid #d9d9d9; background:#fff; font-size:15px; font-weight:700; color:var(--text-dark); cursor:pointer;">선택 없음</button>
+          </div>
+        </div>
+
         <!-- 점수 입력 -->
         <div class="ex-section-card">
-          <div class="ex-section-title"><span class="material-symbols-outlined"
-              style="font-size:16px;">scoreboard</span> 점수 입력</div>
-          <div class="ex-score-input-row">
-            <input id="ex-score-home" class="ex-score-input" type="number" min="0" placeholder="0">
-            <div class="ex-score-colon">:</div>
-            <input id="ex-score-away" class="ex-score-input" type="number" min="0" placeholder="0">
+          <div id="ex-score-area">
+            <div class="ex-section-title"><span class="material-symbols-outlined"
+                style="font-size:16px;">scoreboard</span> 점수 입력</div>
+            <div id="ex-score-input-row" class="ex-score-input-row">
+              <input id="ex-score-home" class="ex-score-input" type="number" min="0" placeholder="0">
+              <div class="ex-score-colon">:</div>
+              <input id="ex-score-away" class="ex-score-input" type="number" min="0" placeholder="0">
+            </div>
           </div>
           <button class="ex-save-btn" onclick="saveExchangeResult()"><span class="material-symbols-outlined"
               style="font-size:18px;">save</span> 결과 저장</button>
@@ -2386,8 +2410,21 @@
         </div>
         <div id="ex-club-region-results" class="ex-club-results"></div>
       </div>
-      <div class="ex-or-divider">또는 당일팀 직접 입력</div>
-      <input id="ex-setup-club-b-name" class="ex-club-search-input" placeholder="당일팀 이름 입력">
+      <div class="ex-or-divider">또는 당일 게스트팀 직접 입력</div>
+      <input id="ex-setup-club-b-name" class="ex-club-search-input" placeholder="당일 게스트팀 이름 입력">
+      <div style="font-size:13px;font-weight:700;color:var(--text-dark);margin:14px 0 8px;">코트 수 선택</div>
+      <input type="hidden" id="ex-setup-court-count" value="1">
+      <div class="ex-result-row" style="margin-top:0;">
+        <button id="ex-court-opt-1" class="ex-result-btn ex-court-count-btn active" onclick="selectExCourtCountOption(this,1)">1</button>
+        <button id="ex-court-opt-2" class="ex-result-btn ex-court-count-btn" onclick="selectExCourtCountOption(this,2)">2</button>
+        <button id="ex-court-opt-3" class="ex-result-btn ex-court-count-btn" onclick="selectExCourtCountOption(this,3)">3</button>
+        <button id="ex-court-opt-4" class="ex-result-btn ex-court-count-btn" onclick="selectExCourtCountOption(this,4)">4</button>
+        <button id="ex-court-opt-5" class="ex-result-btn ex-court-count-btn" onclick="selectExCourtCountOption(this,5)">5</button>
+        <button id="ex-court-opt-direct" class="ex-result-btn ex-court-count-btn" onclick="selectExCourtCountOption(this,'direct')">직접입력</button>
+      </div>
+      <div id="ex-court-custom-wrap" style="display:none; margin-top:8px;">
+        <input id="ex-court-custom-input" class="ex-club-search-input" type="number" min="1" step="1" value="1" placeholder="코트 수 입력" oninput="syncExCourtCustomInput()">
+      </div>
       <div style="font-size:13px;font-weight:700;color:var(--text-dark);margin:18px 0 10px;">승리 방식</div>
       <div class="ex-victory-cards">
         <label class="ex-victory-card selected" onclick="selectVictoryMode(this,'wins')">
@@ -2433,6 +2470,31 @@
     </div>
   </div>
 
+  <div id="ex-admin-modal" class="ex-guest-modal-overlay" style="display:none;">
+    <div class="ex-guest-modal-box">
+      <div style="font-size:18px;font-weight:700;color:var(--text-dark);margin-bottom:16px;text-align:center;">교류전 운영</div>
+      <button class="ex-save-btn" onclick="openExchangeActiveAdminModal()" style="margin-bottom:8px;">진행중 교류전 정리</button>
+      <button class="ex-save-btn" onclick="openExchangeHistoryAdminModal()" style="margin-bottom:8px;">종료된 교류전 기록 관리</button>
+      <button class="ex-finish-btn" onclick="closeExchangeAdminModal()">닫기</button>
+    </div>
+  </div>
+
+  <div id="ex-active-admin-modal" class="ex-guest-modal-overlay" style="display:none;">
+    <div class="ex-guest-modal-box" style="max-width:520px; width:92vw;">
+      <div style="font-size:18px;font-weight:700;color:var(--text-dark);margin-bottom:12px;text-align:center;">진행중 교류전 정리</div>
+      <div id="ex-active-admin-list" style="max-height:50vh; overflow:auto; margin-bottom:10px;"></div>
+      <button class="ex-finish-btn" onclick="closeExchangeActiveAdminModal()">닫기</button>
+    </div>
+  </div>
+
+  <div id="ex-history-admin-modal" class="ex-guest-modal-overlay" style="display:none;">
+    <div class="ex-guest-modal-box" style="max-width:520px; width:92vw;">
+      <div style="font-size:18px;font-weight:700;color:var(--text-dark);margin-bottom:12px;text-align:center;">종료된 교류전 기록 관리</div>
+      <div id="ex-history-admin-list" style="max-height:50vh; overflow:auto; margin-bottom:10px;"></div>
+      <button class="ex-finish-btn" onclick="closeExchangeHistoryAdminModal()">닫기</button>
+    </div>
+  </div>
+
   <!-- ✅ v5.0 exchange.js -->
   <script src="js/exchange_engine.js"></script>
   <script src="js/exchange_view.js"></script>
@@ -2442,6 +2504,25 @@
     function selectVictoryMode(el, mode) {
       document.querySelectorAll('.ex-victory-card').forEach(c => c.classList.remove('selected'));
       el.classList.add('selected');
+    }
+    function selectExCourtCountOption(el, value) {
+      document.querySelectorAll('.ex-court-count-btn').forEach(b => b.classList.remove('active'));
+      if (el) el.classList.add('active');
+      const hidden = $('ex-setup-court-count');
+      const wrap = $('ex-court-custom-wrap');
+      if (value === 'direct') {
+        if (wrap) wrap.style.display = 'block';
+        const n = parseInt(($('ex-court-custom-input') || {}).value || '1', 10);
+        if (hidden) hidden.value = (Number.isFinite(n) && n > 0) ? String(n) : '1';
+      } else {
+        if (hidden) hidden.value = String(value);
+        if (wrap) wrap.style.display = 'none';
+      }
+    }
+    function syncExCourtCustomInput() {
+      const hidden = $('ex-setup-court-count');
+      const n = parseInt(($('ex-court-custom-input') || {}).value || '1', 10);
+      if (hidden) hidden.value = (Number.isFinite(n) && n > 0) ? String(n) : '1';
     }
     // 검색 탭 전환
     function switchExSearchTab(tab) {

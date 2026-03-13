@@ -2,6 +2,9 @@
 // EXCHANGE_VIEW.JS - 교류전 UI/렌더링
 // ========================================
 
+let exRecordMode = 'quick';
+let exQuickWinner = '';
+
 async function finishExchange() {
   if (isSimulation) {
     gsConfirm('시뮬레이션을 종료하시겠습니까?\n종료 후에는 점수 수정이 불가능합니다.', ok => {
@@ -49,6 +52,141 @@ function removeExchangeGuest(side, name) {
   if (side === 'A') exchangeGuestsA = exchangeGuestsA.filter(g => g.name !== name);
   else exchangeGuestsB = exchangeGuestsB.filter(g => g.name !== name);
   renderExchangePlayerPool(side);
+}
+
+function openExchangeAdminModal() {
+  const modal = $('ex-admin-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeExchangeAdminModal() {
+  const modal = $('ex-admin-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function openExchangeActiveAdminModal() {
+  const modal = $('ex-active-admin-modal');
+  if (modal) modal.style.display = 'flex';
+  await renderExchangeActiveAdminList();
+}
+
+function closeExchangeActiveAdminModal() {
+  const modal = $('ex-active-admin-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function forceFinishExchangeRecord(exchangeId) {
+  if (!exchangeId) return;
+  try {
+    const { ts } = nowISO();
+    await _exchangeRef(exchangeId, getActiveClubId()).update({ status: 'finished', finishedAt: ts });
+    await renderExchangeActiveAdminList();
+  } catch (e) {
+    console.error('[exchange] forceFinishExchangeRecord error:', e);
+    gsAlert('처리 실패');
+  }
+}
+
+function deleteActiveExchangeRecord(exchangeId) {
+  if (!exchangeId) return;
+  gsConfirm('해당 진행중 교류전을 삭제하시겠습니까?', async ok => {
+    if (!ok) return;
+    try {
+      await _exchangeRef(exchangeId, getActiveClubId()).delete();
+      await renderExchangeActiveAdminList();
+    } catch (e) {
+      console.error('[exchange] deleteActiveExchangeRecord error:', e);
+      gsAlert('삭제 실패');
+    }
+  });
+}
+
+async function renderExchangeActiveAdminList() {
+  const el = $('ex-active-admin-list');
+  if (!el) return;
+
+  const snap = await _exchangeColRef(getActiveClubId()).get();
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(ex => ex.status === 'active');
+  if (!items.length) {
+    el.innerHTML = '<p style="color:#8E8E93;text-align:center;padding:18px 0;">진행중(active) 교류전 기록이 없습니다.</p>';
+    return;
+  }
+
+  const clubAName = currentClub?.clubName || 'A클럽';
+  el.innerHTML = items.map(ex => {
+    const date = ex.date || '';
+    const clubBName = ex.clubBName || 'B클럽';
+    const score = ex.victoryMode === 'score'
+      ? `${Number(ex.scoreA || 0).toFixed(1)} : ${Number(ex.scoreB || 0).toFixed(1)}`
+      : `${Number(ex.winsA || 0)} : ${Number(ex.winsB || 0)}`;
+    const safeId = String(ex.id || '').replace(/'/g, "\\'");
+    return `
+      <div style="padding:10px; border:1px solid #ececec; border-radius:10px; margin-bottom:8px; display:flex; gap:10px; align-items:center; justify-content:space-between;">
+        <div style="min-width:0;">
+          <div style="font-size:12px; color:#8E8E93;">${escapeHtml(date)}</div>
+          <div style="font-size:14px; font-weight:700; color:var(--text-dark);">${escapeHtml(clubAName)} vs ${escapeHtml(clubBName)}</div>
+          <div style="font-size:13px; color:#444;">현재 스코어 ${escapeHtml(score)}</div>
+        </div>
+        <div style="display:flex; gap:6px; flex:0 0 auto;">
+          <button class="ex-save-btn" style="width:auto; padding:8px 10px; margin:0;" onclick="forceFinishExchangeRecord('${safeId}')">강제 종료</button>
+          <button class="ex-finish-btn" style="width:auto; padding:8px 10px; margin:0;" onclick="deleteActiveExchangeRecord('${safeId}')">삭제</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function openExchangeHistoryAdminModal() {
+  const modal = $('ex-history-admin-modal');
+  if (modal) modal.style.display = 'flex';
+  await renderExchangeHistoryAdminList();
+}
+
+function closeExchangeHistoryAdminModal() {
+  const modal = $('ex-history-admin-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function deleteExchangeHistoryRecord(exchangeId) {
+  if (!exchangeId) return;
+  gsConfirm('해당 교류전 기록을 삭제하시겠습니까?', async ok => {
+    if (!ok) return;
+    try {
+      await _exchangeRef(exchangeId, getActiveClubId()).delete();
+      await renderExchangeHistoryAdminList();
+    } catch (e) {
+      console.error('[exchange] deleteExchangeHistoryRecord error:', e);
+      gsAlert('삭제 실패');
+    }
+  });
+}
+
+async function renderExchangeHistoryAdminList() {
+  const el = $('ex-history-admin-list');
+  if (!el) return;
+
+  const items = await fetchExchangeHistory(getActiveClubId());
+  if (!Array.isArray(items) || items.length === 0) {
+    el.innerHTML = '<p style="color:#8E8E93;text-align:center;padding:18px 0;">종료된 교류전 기록이 없습니다.</p>';
+    return;
+  }
+
+  const clubAName = currentClub?.clubName || 'A클럽';
+  el.innerHTML = items.map(ex => {
+    const date = ex.date || '';
+    const clubBName = ex.clubBName || 'B클럽';
+    const score = ex.victoryMode === 'score'
+      ? `${Number(ex.scoreA || 0).toFixed(1)} : ${Number(ex.scoreB || 0).toFixed(1)}`
+      : `${Number(ex.winsA || 0)} : ${Number(ex.winsB || 0)}`;
+    return `
+      <div style="padding:10px; border:1px solid #ececec; border-radius:10px; margin-bottom:8px; display:flex; gap:10px; align-items:center; justify-content:space-between;">
+        <div style="min-width:0;">
+          <div style="font-size:12px; color:#8E8E93;">${escapeHtml(date)}</div>
+          <div style="font-size:14px; font-weight:700; color:var(--text-dark);">${escapeHtml(clubAName)} vs ${escapeHtml(clubBName)}</div>
+          <div style="font-size:13px; color:#444;">최종스코어 ${escapeHtml(score)}</div>
+        </div>
+        <button class="ex-finish-btn" style="width:auto; padding:8px 10px; margin:0; flex:0 0 auto;" onclick="deleteExchangeHistoryRecord('${String(ex.id || '').replace(/'/g, "\\'")}')">삭제</button>
+      </div>`;
+  }).join('');
 }
 
 function openExchange() {
@@ -106,6 +244,7 @@ function renderExchangeView() {
     if ($('ex-start-area')) $('ex-start-area').style.display = 'block';
     if ($('ex-game-area')) $('ex-game-area').style.display = 'none';
   }
+  renderExRecordModeUI();
 }
 
 function renderExchangeScoreBar() {
@@ -317,6 +456,7 @@ async function confirmExchangeSetup() {
   const clubBName = ($('ex-setup-club-b-name') || {}).value || '';
   if (!clubBName.trim()) { gsAlert('상대 클럽을 선택하거나 입력해주세요.'); return; }
 
+  const courtCount = Math.max(1, parseInt(($('ex-setup-court-count') || {}).value || '1', 10) || 1);
   const victoryMode = document.querySelector('input[name="ex-victory-mode"]:checked')?.value || 'wins';
   const handicapEnabled = ($('ex-handicap-toggle') || {}).checked || false;
 
@@ -325,6 +465,7 @@ async function confirmExchangeSetup() {
     clubBName: clubBName.trim(),
     clubBId: exSetupSelectedClubId || null,
     isClubBTemp: !exSetupSelectedClubId,
+    courtCount,
     victoryMode, handicapEnabled,
   });
 }
@@ -419,8 +560,12 @@ function showExchangeHint(side, msg) {
 }
 
 function renderExchangePickedPlayers() {
-  if ($('ex-picked-home')) $('ex-picked-home').textContent = exPickedHome.join(' + ') || '선택 없음';
-  if ($('ex-picked-away')) $('ex-picked-away').textContent = exPickedAway.join(' + ') || '선택 없음';
+  const homeText = exPickedHome.join(' + ') || '선택 없음';
+  const awayText = exPickedAway.join(' + ') || '선택 없음';
+  if ($('ex-picked-home')) $('ex-picked-home').textContent = homeText;
+  if ($('ex-picked-away')) $('ex-picked-away').textContent = awayText;
+  if ($('ex-quick-card-home')) $('ex-quick-card-home').textContent = homeText;
+  if ($('ex-quick-card-away')) $('ex-quick-card-away').textContent = awayText;
 }
 
 function setExMatchCategory(category) {
@@ -431,11 +576,51 @@ function setExMatchCategory(category) {
   ['singles', 'doubles'].forEach(c => { const btn = $(`ex-cat-${c}`); if (btn) btn.classList.toggle('active', c === category); });
 }
 
+function setExRecordMode(mode) {
+  exRecordMode = mode === 'score' ? 'score' : 'quick';
+  if (exRecordMode === 'score') exQuickWinner = '';
+  renderExRecordModeUI();
+}
+
+function setExQuickWinner(side) {
+  exQuickWinner = side === 'away' ? 'away' : 'home';
+  renderExRecordModeUI();
+}
+
+function renderExRecordModeUI() {
+  $('ex-record-mode-quick')?.classList.toggle('active', exRecordMode === 'quick');
+  $('ex-record-mode-score')?.classList.toggle('active', exRecordMode === 'score');
+  if ($('ex-picked-display-wrap')) $('ex-picked-display-wrap').style.display = exRecordMode === 'score' ? 'flex' : 'none';
+  if ($('ex-quick-matchup-card')) $('ex-quick-matchup-card').style.display = exRecordMode === 'quick' ? 'block' : 'none';
+  if ($('ex-score-area')) $('ex-score-area').style.display = exRecordMode === 'score' ? 'block' : 'none';
+
+  const homeCard = $('ex-quick-card-home');
+  if (homeCard) {
+    const active = exQuickWinner === 'home';
+    homeCard.style.background = active ? 'var(--aussie-blue)' : '#fff';
+    homeCard.style.borderColor = active ? 'var(--aussie-blue)' : '#d9d9d9';
+    homeCard.style.color = active ? '#fff' : 'var(--text-dark)';
+  }
+  const awayCard = $('ex-quick-card-away');
+  if (awayCard) {
+    const active = exQuickWinner === 'away';
+    awayCard.style.background = active ? 'var(--roland-clay)' : '#fff';
+    awayCard.style.borderColor = active ? 'var(--roland-clay)' : '#d9d9d9';
+    awayCard.style.color = active ? '#fff' : 'var(--text-dark)';
+  }
+}
+
 async function saveExchangeResult() {
   if (!currentUserAuth || !currentLoggedPlayer) { requireAuth(() => saveExchangeResult()); return; }
 
-  const hs = ($('ex-score-home') || {}).value;
-  const as = ($('ex-score-away') || {}).value;
+  if (exRecordMode === 'quick' && !exQuickWinner) { gsAlert('승리팀을 선택해주세요!'); return; }
+
+  const hs = exRecordMode === 'quick'
+    ? (exQuickWinner === 'home' ? '1' : (exQuickWinner === 'away' ? '0' : ''))
+    : (($('ex-score-home') || {}).value);
+  const as = exRecordMode === 'quick'
+    ? (exQuickWinner === 'home' ? '0' : (exQuickWinner === 'away' ? '1' : ''))
+    : (($('ex-score-away') || {}).value);
   if (!hs || !as || hs == as) { gsAlert('점수를 확인해주세요!'); return; }
 
   const max = exMatchCategory === 'doubles' ? 2 : 1;
@@ -459,20 +644,22 @@ async function saveExchangeResult() {
 
   if (isSimulation) {
     const pts = calcExchangePoints(logEntry, activeExchange);
-    updateExchangeAggregateLocal(pts);
+    updateExchangeAggregateLocal(pts, logEntry.winner);
     renderExchangeScoreBar();
     gsAlert('✅ 시뮬레이션 저장! (실제 데이터 반영 안됨)');
   } else {
-    const ok = await saveExchangeGame(logEntry, exMatchCategory, resultType, 'A');
+    const ok = await saveExchangeGame(logEntry, exMatchCategory, resultType, activeExchange?.clubSideHome || 'A');
     if (!ok) return;
     await pushDataOnly();
     gsAlert('저장!');
   }
 
   exPickedHome = []; exPickedAway = [];
+  exQuickWinner = '';
   $('ex-score-home').value = '';
   $('ex-score-away').value = '';
   renderExchangePickedPlayers();
+  renderExRecordModeUI();
   showExchangeHint('A', '');
   showExchangeHint('B', '');
 }
