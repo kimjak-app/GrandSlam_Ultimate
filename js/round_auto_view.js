@@ -1127,7 +1127,7 @@ function roundAutoBuildTurnWithStats(turnNo, status, statsRef, mutateRealStats) 
   const eligiblePool = roundAutoGetSelectedEligiblePool();
 
   if (eligiblePool.length < requiredPlayers) {
-    gsAlert('참가자 수가 부족합니다. 코트 수를 줄이거나 참가자를 더 선택해주세요.');
+    alert('참가자 수가 부족합니다. 코트 수를 줄이거나 참가자를 더 선택해주세요.');
     return null;
   }
 
@@ -1183,7 +1183,7 @@ function roundAutoBuildTurnWithStats(turnNo, status, statsRef, mutateRealStats) 
   }
 
   if (!matches.length) {
-    gsAlert('현재 옵션으로 생성 가능한 대진이 없습니다. 선수/팀 구성을 조정하거나 [남 vs 여 매치 허용]을 켜주세요.');
+    alert('현재 옵션으로 생성 가능한 대진이 없습니다. 선수/팀 구성을 조정하거나 [남 vs 여 매치 허용]을 켜주세요.');
     return null;
   }
 
@@ -1313,19 +1313,19 @@ function roundAutoOpenAddGuestModal() {
   gsEditName('', ({ name, gender }) => {
     const cleanName = (name || '').trim();
     if (!cleanName) {
-      gsAlert('이름을 입력해줘');
+      alert('이름을 입력해줘');
       return;
     }
 
     const clubNames = roundAutoGetClubPlayers().map(p => p.name);
     if (clubNames.includes(cleanName)) {
-      gsAlert('기존 회원과 이름이 같아. 다른 이름으로 해줘');
+      alert('기존 회원과 이름이 같아. 다른 이름으로 해줘');
       return;
     }
 
     const guestNames = (roundAutoState.oneTimeGuests || []).map(g => g.name);
     if (guestNames.includes(cleanName)) {
-      gsAlert('이미 추가된 게스트야');
+      alert('이미 추가된 게스트야');
       return;
     }
 
@@ -1820,43 +1820,81 @@ function roundAutoReasonText(match) {
   return tags.join(' · ');
 }
 
-// ✅ v5.41: 이 턴 재생성
+// ✅ v5.891: 이 턴 재생성 — 결과 입력된 경기 보존, 미완료 경기만 재생성
 function roundAutoRegenerateCurrentTurn() {
-  gsConfirm('현재 턴 대진표를 취소하고 재생성할까요?\n(결과 입력된 경기도 초기화됩니다)', ok => {
-    if (!ok) return;
-    roundAutoSyncStateFromCurrentUI();
-    const turns = roundAutoState.turns || [];
-    const activeIdx = turns.findIndex(t => t?.status === 'active');
-    if (activeIdx < 0) { gsAlert('활성 턴이 없습니다.'); return; }
-    const activeTurnNo = turns[activeIdx].turnNo;
-    const prevTurns = turns.slice(0, activeIdx).filter(t => t?.status !== 'preview');
-    roundAutoState.turns = prevTurns;
-    const freshStats = {};
-    prevTurns.forEach(turn => {
-      (turn.matches || []).forEach(match => {
-        [...(match.home || []), ...(match.away || [])].forEach(name => {
-          if (!freshStats[name]) freshStats[name] = { played: 0, rested: 0, restStreak: 0, lastTurnPlayed: null, consecutiveCount: 0 };
-          freshStats[name].played += 1;
-          freshStats[name].restStreak = 0;
-          freshStats[name].lastTurnPlayed = turn.turnNo;
-        });
-      });
+  if (!confirm('현재 턴 대진표를 재생성할까요?\n(미완료 경기만 재생성되며, 결과 입력된 경기는 유지됩니다)')) return;
+  roundAutoSyncStateFromCurrentUI();
+  const turns = roundAutoState.turns || [];
+  const activeIdx = turns.findIndex(t => t?.status === 'active');
+  if (activeIdx < 0) { gsAlert('활성 턴이 없습니다.'); return; }
+  const activeTurn = turns[activeIdx];
+  const activeTurnNo = activeTurn.turnNo;
+  const prevTurns = turns.slice(0, activeIdx).filter(t => t?.status !== 'preview');
+
+  // ✅ v5.891: 결과 입력된 경기 보존 (winner !== null)
+  const doneMatches = (activeTurn.matches || []).filter(m => m.winner !== null && m.winner !== undefined);
+
+  // prevTurns + doneMatches 기반으로 sessionStats 재계산
+  const freshStats = {};
+  const accumulateStat = (name, turnNo) => {
+    if (!freshStats[name]) freshStats[name] = { played: 0, rested: 0, restStreak: 0, lastTurnPlayed: null, consecutiveCount: 0 };
+    freshStats[name].played += 1;
+    freshStats[name].restStreak = 0;
+    freshStats[name].lastTurnPlayed = turnNo;
+  };
+  prevTurns.forEach(turn => {
+    (turn.matches || []).forEach(match => {
+      [...(match.home || []), ...(match.away || [])].forEach(name => accumulateStat(name, turn.turnNo));
     });
-    roundAutoState.sessionStats = freshStats;
-    const realStats = JSON.parse(JSON.stringify(freshStats));
-    const newActiveTurn = roundAutoBuildTurnWithStats(activeTurnNo, 'active', realStats, true);
-    if (!newActiveTurn) { gsAlert('현재 인원으로 대진 생성이 불가능합니다. 참가자 설정을 확인해주세요.'); return; }
-    const simulatedStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
-    const previewTurn = roundAutoBuildTurnWithStats(activeTurnNo + 1, 'preview', simulatedStats, false);
-    roundAutoState.turns = previewTurn ? [...prevTurns, newActiveTurn, previewTurn] : [...prevTurns, newActiveTurn];
-    roundAutoState.turnNo = activeTurnNo;
-    const normalized = roundAutoNormalizeTurnsState(roundAutoState);
-    roundAutoState = normalized.state;
-    roundAutoRenderMatches();
-    roundAutoRenderRanking();
-    roundAutoRenderPersonalRanking();
-    saveRoundAutoState();
   });
+  doneMatches.forEach(match => {
+    [...(match.home || []), ...(match.away || [])].forEach(name => accumulateStat(name, activeTurnNo));
+  });
+
+  roundAutoState.sessionStats = freshStats;
+
+  // 바뀐 조건(코트 수·참가 선수) 기준으로 미완료 대진만 새로 생성
+  const realStats = JSON.parse(JSON.stringify(freshStats));
+
+  // 이미 완료된 경기에 출전 중인 선수는 새 대진에서 제외
+  const donePlayerNames = new Set(doneMatches.flatMap(m => [...(m.home || []), ...(m.away || [])]));
+
+  // roundAutoBuildTurnWithStats 호출 전 완료 선수 임시 제외
+  const originalPool = roundAutoState.players ? [...roundAutoState.players] : null;
+  if (originalPool) {
+    roundAutoState.players = originalPool.filter(p => !donePlayerNames.has(p.name || p));
+  }
+
+  const newTurnPartial = roundAutoBuildTurnWithStats(activeTurnNo, 'active', realStats, true);
+
+  // 풀 복원
+  if (originalPool) roundAutoState.players = originalPool;
+
+  // 완료 경기 + 새 대진 합쳐서 active 턴 구성
+  const mergedMatches = newTurnPartial
+    ? [...doneMatches, ...(newTurnPartial.matches || [])]
+    : [...doneMatches];
+
+  if (!newTurnPartial && doneMatches.length === 0) {
+    gsAlert('현재 인원으로 대진 생성이 불가능합니다. 참가자 설정을 확인해주세요.');
+    return;
+  }
+
+  const newActiveTurn = { ...activeTurn, matches: mergedMatches, status: 'active' };
+
+  roundAutoState.sessionStats = freshStats;
+  const simulatedStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
+  const previewTurn = roundAutoBuildTurnWithStats(activeTurnNo + 1, 'preview', simulatedStats, false);
+  roundAutoState.turns = previewTurn
+    ? [...prevTurns, newActiveTurn, previewTurn]
+    : [...prevTurns, newActiveTurn];
+  roundAutoState.turnNo = activeTurnNo;
+  const normalized = roundAutoNormalizeTurnsState(roundAutoState);
+  roundAutoState = normalized.state;
+  roundAutoRenderMatches();
+  roundAutoRenderRanking();
+  roundAutoRenderPersonalRanking();
+  saveRoundAutoState();
 }
 
 function roundAutoRegeneratePreview() {

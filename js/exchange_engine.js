@@ -1,4 +1,4 @@
-﻿// ========================================
+// ========================================
 // EXCHANGE_ENGINE.JS - 교류전 데이터/계산 엔진
 // ========================================
 
@@ -13,14 +13,12 @@ let activeExchange        = null;
 let isSimulation          = false;
 let exchangeGuestsA       = [];
 let exchangeGuestsB       = [];
-let exchangeClubAPlayers  = [];
 let exchangeClubBPlayers  = [];
 let exchangeCurrentTab    = 'game';
 let exPickedHome          = [];
 let exPickedAway          = [];
+let exMatchCategory       = 'singles';
 let exSetupSelectedClubId = null;
-let exQuickCourts         = [];
-let exQuickTarget         = { courtNo: 1, slot: 'home' };
 
 function _exchangeColRef(clubId) {
   return _clubRef(clubId || getActiveClubId()).collection('exchanges');
@@ -40,10 +38,8 @@ async function createExchange(config) {
     clubBId: config.clubBId || null,
     clubBName: config.clubBName,
     isClubBTemp: config.isClubBTemp || false,
-    courtCount: Math.max(1, Number(config.courtCount) || 1),
     victoryMode: config.victoryMode,
     handicapEnabled: config.handicapEnabled,
-    clubSideHome: config.clubSideHome || 'A',
     status: 'ongoing',
     gameIds: [],
     scoreA: 0, scoreB: 0,
@@ -156,23 +152,6 @@ async function updateExchangeAggregate(exchange, logEntry, points) {
     activeExchange.scoreA += deltaA;
     activeExchange.scoreB += deltaB;
     if (aWin) activeExchange.winsA++; else activeExchange.winsB++;
-    if (isSingles) {
-      if (aWin) {
-        activeExchange.singlesWinsA++;
-        activeExchange.singlesLossB++;
-      } else {
-        activeExchange.singlesWinsB++;
-        activeExchange.singlesLossA++;
-      }
-    } else {
-      if (aWin) {
-        activeExchange.doublesWinsA++;
-        activeExchange.doublesLossB++;
-      } else {
-        activeExchange.doublesWinsB++;
-        activeExchange.doublesLossA++;
-      }
-    }
   } catch (e) {
     console.error('[exchange] updateExchangeAggregate error:', e);
   }
@@ -203,10 +182,7 @@ async function saveExchangeGame(baseLogEntry, matchCategory, resultType, clubSid
 function getExchangePlayerHint(playerName) {
   if (!activeExchange) return '';
   const count = getPlayerExchangeMatchCount(activeExchange.id, playerName) + 1;
-  const isHome = exPickedHome.includes(playerName);
-  const isAway = exPickedAway.includes(playerName);
-  const isWinHint = isHome ? true : (isAway ? false : true);
-  const pt = calculateExchangePoint(isWinHint, count, activeExchange.handicapEnabled);
+  const pt = calculateExchangePoint(true, count, activeExchange.handicapEnabled);
   if (count >= 3 && activeExchange.handicapEnabled) {
     return `⚠ ${playerName} (${count}번째 출전) — 승리 시 ${pt}점 (핸디캡 적용)`;
   }
@@ -239,27 +215,25 @@ function getExchangeStatsForPlayer(playerName) {
   return { singleWin, singleLoss, doubleWin, doubleLoss, vsClubs };
 }
 
-function updateExchangeAggregateLocal(pts, winner, matchCategory) {
+function updateExchangeAggregateLocal(pts) {
   if (!activeExchange) return;
   const ex = activeExchange;
   const homeTotal = (pts.home || []).reduce((a, b) => a + b, 0);
   const awayTotal = (pts.away || []).reduce((a, b) => a + b, 0);
-  const homeWin = winner === 'home';
-  const category = matchCategory === 'singles' ? 'singles' : 'doubles';
+  const homeWin = homeTotal > awayTotal;
   ex.scoreA += homeTotal;
   ex.scoreB += awayTotal;
   if (homeWin) {
     ex.winsA++;
-    ex.singlesWinsA += category === 'singles' ? 1 : 0;
-    ex.doublesWinsA += category === 'doubles' ? 1 : 0;
-    ex.singlesLossB += category === 'singles' ? 1 : 0;
-    ex.doublesLossB += category === 'doubles' ? 1 : 0;
+    ex.singlesWinsA += exMatchCategory === 'singles' ? 1 : 0;
+    ex.doublesWinsA += exMatchCategory === 'doubles' ? 1 : 0;
+    ex.singlesLossB += exMatchCategory === 'singles' ? 1 : 0;
+    ex.doublesLossB += exMatchCategory === 'doubles' ? 1 : 0;
   } else {
     ex.winsB++;
-    ex.singlesWinsB += category === 'singles' ? 1 : 0;
-    ex.doublesWinsB += category === 'doubles' ? 1 : 0;
-    ex.singlesLossA += category === 'singles' ? 1 : 0;
-    ex.doublesLossA += category === 'doubles' ? 1 : 0;
+    ex.singlesWinsB += exMatchCategory === 'singles' ? 1 : 0;
+    ex.doublesWinsB += exMatchCategory === 'doubles' ? 1 : 0;
+    ex.singlesLossA += exMatchCategory === 'singles' ? 1 : 0;
+    ex.doublesLossA += exMatchCategory === 'doubles' ? 1 : 0;
   }
 }
-

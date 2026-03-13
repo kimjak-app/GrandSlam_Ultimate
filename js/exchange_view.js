@@ -2,222 +2,6 @@
 // EXCHANGE_VIEW.JS - 교류전 UI/렌더링
 // ========================================
 
-let exRecordMode = 'quick';
-let exQuickWinner = '';
-let exCourtCountInputMode = 'preset';
-
-function getExCourtCount() {
-  if (activeExchange && Number(activeExchange.courtCount) > 0) return Math.max(1, Number(activeExchange.courtCount) || 1);
-  const inputValue = Number(($('ex-view-court-custom-input') || {}).value);
-  return Math.max(1, inputValue || 1);
-}
-
-function syncExCourtCountUI() {
-  const courtCount = getExCourtCount();
-  const usePreset = exCourtCountInputMode !== 'custom' && courtCount >= 1 && courtCount <= 5;
-  const directBtn = $('ex-view-court-direct-btn');
-  const input = $('ex-view-court-custom-input');
-  document.querySelectorAll('#ex-view-court-tabs .ex-view-court-count-btn').forEach(btn => {
-    const isActive = usePreset && Number(btn.dataset.court) === courtCount;
-    btn.style.background = isActive ? 'var(--aussie-blue)' : '#f3f4f6';
-    btn.style.color = isActive ? '#fff' : '#333';
-  });
-  if (directBtn) {
-    const active = !usePreset;
-    directBtn.style.background = active ? 'var(--aussie-blue)' : '#fff';
-    directBtn.style.color = active ? '#fff' : '#333';
-  }
-  if (input) {
-    input.style.display = usePreset ? 'none' : 'block';
-    input.value = usePreset ? '' : String(courtCount);
-  }
-}
-
-function setExCourtCount(count) {
-  const next = Math.max(1, Number(count) || 1);
-  exCourtCountInputMode = 'preset';
-  if (activeExchange) activeExchange.courtCount = next;
-  const input = $('ex-view-court-custom-input');
-  if (input) input.value = '';
-  syncExCourtCountUI();
-  persistExchangeCourtCount(next);
-  syncExQuickCourtState();
-  renderExRecordModeUI();
-}
-
-function openExCourtCountDirectInput() {
-  exCourtCountInputMode = 'custom';
-  syncExCourtCountUI();
-  $('ex-view-court-custom-input')?.focus();
-}
-
-function syncExViewCourtCountInput() {
-  const next = Math.max(1, Number(($('ex-view-court-custom-input') || {}).value) || 1);
-  exCourtCountInputMode = 'custom';
-  if (activeExchange) activeExchange.courtCount = next;
-  syncExCourtCountUI();
-  persistExchangeCourtCount(next);
-  syncExQuickCourtState();
-  renderExRecordModeUI();
-}
-
-function persistExchangeCourtCount(courtCount) {
-  if (!activeExchange?.id || isSimulation) return;
-  _exchangeRef(activeExchange.id).update({ courtCount }).catch(e => {
-    console.warn('[exchange] persistExchangeCourtCount error:', e);
-  });
-}
-
-function getExRequiredPlayersPerSide(matchType) {
-  return matchType === 'singles' ? 1 : 2;
-}
-
-function createExQuickCourt(courtNo, matchType = 'doubles') {
-  return { courtNo, matchType, home: [], away: [] };
-}
-
-function getExCourtMatchType(court) {
-  return court?.matchType === 'singles' ? 'singles' : 'doubles';
-}
-
-function getExScoreMatchType() {
-  return getExCourtMatchType(getExQuickCourt(1));
-}
-
-function getExQuickTarget() {
-  for (const court of exQuickCourts) {
-    const required = getExRequiredPlayersPerSide(getExCourtMatchType(court));
-    if ((court.home || []).length < required) return { courtNo: court.courtNo, slot: 'home' };
-    if ((court.away || []).length < required) return { courtNo: court.courtNo, slot: 'away' };
-  }
-  return null;
-}
-
-function syncExQuickTarget() {
-  exQuickTarget = getExQuickTarget() || { courtNo: 1, slot: 'home' };
-}
-
-function syncExQuickCourtState({ reset = false } = {}) {
-  const count = getExCourtCount();
-  const nextCourts = Array.from({ length: count }, (_, i) => {
-    const prev = !reset ? exQuickCourts.find(c => c.courtNo === i + 1) : null;
-    const matchType = prev ? getExCourtMatchType(prev) : 'doubles';
-    const required = getExRequiredPlayersPerSide(matchType);
-    return {
-      ...createExQuickCourt(i + 1, matchType),
-      home: prev ? (prev.home || []).slice(0, required) : [],
-      away: prev ? (prev.away || []).slice(0, required) : [],
-    };
-  });
-  exQuickCourts = nextCourts;
-  syncExQuickTarget();
-  renderExchangePickedPlayers();
-  renderExchangePlayerPool('A');
-  renderExchangePlayerPool('B');
-}
-
-function getExQuickAssignedKeys() {
-  const keys = new Set();
-  exQuickCourts.forEach(court => {
-    (court.home || []).forEach(name => keys.add(`A:${name}`));
-    (court.away || []).forEach(name => keys.add(`B:${name}`));
-  });
-  return keys;
-}
-
-function getExQuickCourt(courtNo) {
-  return exQuickCourts.find(c => c.courtNo === Number(courtNo));
-}
-
-function removeExQuickPlayer(courtNo, slot, name) {
-  const court = getExQuickCourt(courtNo);
-  if (!court) return;
-  const key = slot === 'away' ? 'away' : 'home';
-  court[key] = (court[key] || []).filter(v => v !== name);
-  syncExQuickTarget();
-  renderExchangePickedPlayers();
-  renderExchangePlayerPool('A');
-  renderExchangePlayerPool('B');
-}
-
-function exchangeQuickPickPlayer(side, name) {
-  const target = getExQuickTarget();
-  if (!target) {
-    gsAlert('모든 코트가 완성되었습니다. 승리팀을 먼저 선택해주세요.');
-    return;
-  }
-
-  const targetSide = target.slot === 'home' ? 'A' : 'B';
-  if (side !== targetSide) return;
-
-  const court = getExQuickCourt(target.courtNo);
-  if (!court) return;
-
-  const listKey = side === 'A' ? 'home' : 'away';
-  const assignedKeys = getExQuickAssignedKeys();
-  const uniqueKey = `${side}:${name}`;
-  const currentList = court[listKey] || [];
-  const required = getExRequiredPlayersPerSide(getExCourtMatchType(court));
-
-  if (currentList.includes(name)) {
-    court[listKey] = currentList.filter(v => v !== name);
-  } else {
-    if (assignedKeys.has(uniqueKey)) return;
-    if (currentList.length >= required) return;
-    court[listKey] = [...currentList, name];
-    showExchangeHint(side, getExchangePlayerHint(name));
-  }
-
-  syncExQuickTarget();
-  renderExchangePickedPlayers();
-  renderExchangePlayerPool('A');
-  renderExchangePlayerPool('B');
-}
-
-function setExQuickCourtMatchType(courtNo, matchType) {
-  const court = getExQuickCourt(courtNo);
-  if (!court) return;
-  const nextType = matchType === 'singles' ? 'singles' : 'doubles';
-  if (getExCourtMatchType(court) === nextType) return;
-
-  const hadPlayers = (court.home || []).length || (court.away || []).length;
-  court.matchType = nextType;
-  court.home = [];
-  court.away = [];
-  court.winner = null;
-  court.homeScore = null;
-  court.awayScore = null;
-  syncExQuickTarget();
-  renderExchangePickedPlayers();
-  renderExchangePlayerPool('A');
-  renderExchangePlayerPool('B');
-  if (hadPlayers) gsAlert(`코트${courtNo} 경기유형 변경으로 해당 코트 배정을 초기화했습니다.`);
-}
-
-function resetExQuickCourt(courtNo) {
-  const court = getExQuickCourt(courtNo);
-  if (!court) return;
-  court.home = [];
-  court.away = [];
-  court.winner = null;
-  court.homeScore = null;
-  court.awayScore = null;
-  syncExQuickTarget();
-  renderExchangePickedPlayers();
-  renderExchangePlayerPool('A');
-  renderExchangePlayerPool('B');
-  showExchangeHint('A', '');
-  showExchangeHint('B', '');
-}
-
-function confirmCancelExQuickCourt(courtNo) {
-  gsConfirm(
-    '이 코트 경기를 취소하시겠습니까?\n선수 선택이 초기화됩니다.',
-    ok => { if (ok) resetExQuickCourt(courtNo); },
-    { title: '경기 취소', okText: '경기 취소', cancelText: '취소' }
-  );
-}
-
 async function finishExchange() {
   if (isSimulation) {
     gsConfirm('시뮬레이션을 종료하시겠습니까?\n종료 후에는 점수 수정이 불가능합니다.', ok => {
@@ -267,141 +51,6 @@ function removeExchangeGuest(side, name) {
   renderExchangePlayerPool(side);
 }
 
-function openExchangeAdminModal() {
-  const modal = $('ex-admin-modal');
-  if (modal) modal.style.display = 'flex';
-}
-
-function closeExchangeAdminModal() {
-  const modal = $('ex-admin-modal');
-  if (modal) modal.style.display = 'none';
-}
-
-async function openExchangeActiveAdminModal() {
-  const modal = $('ex-active-admin-modal');
-  if (modal) modal.style.display = 'flex';
-  await renderExchangeActiveAdminList();
-}
-
-function closeExchangeActiveAdminModal() {
-  const modal = $('ex-active-admin-modal');
-  if (modal) modal.style.display = 'none';
-}
-
-async function forceFinishExchangeRecord(exchangeId) {
-  if (!exchangeId) return;
-  try {
-    const { ts } = nowISO();
-    await _exchangeRef(exchangeId, getActiveClubId()).update({ status: 'finished', finishedAt: ts });
-    await renderExchangeActiveAdminList();
-  } catch (e) {
-    console.error('[exchange] forceFinishExchangeRecord error:', e);
-    gsAlert('처리 실패');
-  }
-}
-
-function deleteActiveExchangeRecord(exchangeId) {
-  if (!exchangeId) return;
-  gsConfirm('해당 진행중 교류전을 삭제하시겠습니까?', async ok => {
-    if (!ok) return;
-    try {
-      await _exchangeRef(exchangeId, getActiveClubId()).delete();
-      await renderExchangeActiveAdminList();
-    } catch (e) {
-      console.error('[exchange] deleteActiveExchangeRecord error:', e);
-      gsAlert('삭제 실패');
-    }
-  });
-}
-
-async function renderExchangeActiveAdminList() {
-  const el = $('ex-active-admin-list');
-  if (!el) return;
-
-  const snap = await _exchangeColRef(getActiveClubId()).get();
-  const items = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(ex => ex.status === 'active');
-  if (!items.length) {
-    el.innerHTML = '<p style="color:#8E8E93;text-align:center;padding:18px 0;">진행중(active) 교류전 기록이 없습니다.</p>';
-    return;
-  }
-
-  const clubAName = currentClub?.clubName || 'A클럽';
-  el.innerHTML = items.map(ex => {
-    const date = ex.date || '';
-    const clubBName = ex.clubBName || 'B클럽';
-    const score = ex.victoryMode === 'score'
-      ? `${Number(ex.scoreA || 0).toFixed(1)} : ${Number(ex.scoreB || 0).toFixed(1)}`
-      : `${Number(ex.winsA || 0)} : ${Number(ex.winsB || 0)}`;
-    const safeId = String(ex.id || '').replace(/'/g, "\\'");
-    return `
-      <div style="padding:10px; border:1px solid #ececec; border-radius:10px; margin-bottom:8px; display:flex; gap:10px; align-items:center; justify-content:space-between;">
-        <div style="min-width:0;">
-          <div style="font-size:12px; color:#8E8E93;">${escapeHtml(date)}</div>
-          <div style="font-size:14px; font-weight:700; color:var(--text-dark);">${escapeHtml(clubAName)} vs ${escapeHtml(clubBName)}</div>
-          <div style="font-size:13px; color:#444;">현재 스코어 ${escapeHtml(score)}</div>
-        </div>
-        <div style="display:flex; gap:6px; flex:0 0 auto;">
-          <button class="ex-save-btn" style="width:auto; padding:8px 10px; margin:0;" onclick="forceFinishExchangeRecord('${safeId}')">강제 종료</button>
-          <button class="ex-finish-btn" style="width:auto; padding:8px 10px; margin:0;" onclick="deleteActiveExchangeRecord('${safeId}')">삭제</button>
-        </div>
-      </div>`;
-  }).join('');
-}
-
-async function openExchangeHistoryAdminModal() {
-  const modal = $('ex-history-admin-modal');
-  if (modal) modal.style.display = 'flex';
-  await renderExchangeHistoryAdminList();
-}
-
-function closeExchangeHistoryAdminModal() {
-  const modal = $('ex-history-admin-modal');
-  if (modal) modal.style.display = 'none';
-}
-
-function deleteExchangeHistoryRecord(exchangeId) {
-  if (!exchangeId) return;
-  gsConfirm('해당 교류전 기록을 삭제하시겠습니까?', async ok => {
-    if (!ok) return;
-    try {
-      await _exchangeRef(exchangeId, getActiveClubId()).delete();
-      await renderExchangeHistoryAdminList();
-    } catch (e) {
-      console.error('[exchange] deleteExchangeHistoryRecord error:', e);
-      gsAlert('삭제 실패');
-    }
-  });
-}
-
-async function renderExchangeHistoryAdminList() {
-  const el = $('ex-history-admin-list');
-  if (!el) return;
-
-  const items = await fetchExchangeHistory(getActiveClubId());
-  if (!Array.isArray(items) || items.length === 0) {
-    el.innerHTML = '<p style="color:#8E8E93;text-align:center;padding:18px 0;">종료된 교류전 기록이 없습니다.</p>';
-    return;
-  }
-
-  const clubAName = currentClub?.clubName || 'A클럽';
-  el.innerHTML = items.map(ex => {
-    const date = ex.date || '';
-    const clubBName = ex.clubBName || 'B클럽';
-    const score = ex.victoryMode === 'score'
-      ? `${Number(ex.scoreA || 0).toFixed(1)} : ${Number(ex.scoreB || 0).toFixed(1)}`
-      : `${Number(ex.winsA || 0)} : ${Number(ex.winsB || 0)}`;
-    return `
-      <div style="padding:10px; border:1px solid #ececec; border-radius:10px; margin-bottom:8px; display:flex; gap:10px; align-items:center; justify-content:space-between;">
-        <div style="min-width:0;">
-          <div style="font-size:12px; color:#8E8E93;">${escapeHtml(date)}</div>
-          <div style="font-size:14px; font-weight:700; color:var(--text-dark);">${escapeHtml(clubAName)} vs ${escapeHtml(clubBName)}</div>
-          <div style="font-size:13px; color:#444;">최종스코어 ${escapeHtml(score)}</div>
-        </div>
-        <button class="ex-finish-btn" style="width:auto; padding:8px 10px; margin:0; flex:0 0 auto;" onclick="deleteExchangeHistoryRecord('${String(ex.id || '').replace(/'/g, "\\'")}')">삭제</button>
-      </div>`;
-  }).join('');
-}
-
 function openExchange() {
   showView('exchange');
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -439,15 +88,13 @@ function renderExchangeView() {
     if ($('ex-game-area')) $('ex-game-area').style.display = 'block';
     if ($('ex-scoreboard')) $('ex-scoreboard').style.display = 'block';
     renderExchangeScoreBar();
-    if (Array.isArray(players) && players.length) exchangeClubAPlayers = [...players];
     renderExchangePlayerPool('A');
-    if (activeExchange.clubAId) loadClubAPlayers(activeExchange.clubAId);
     if (!activeExchange.isClubBTemp && activeExchange.clubBId) {
       loadClubBPlayers(activeExchange.clubBId);
     } else {
       renderExchangePlayerPool('B');
     }
-    if ($('ex-club-label-a') && currentClub) $('ex-club-label-a').textContent = (currentClub.clubName || currentClub.name || '홈 클럽') + ' 선수';
+    if ($('ex-club-label-a') && currentClub) $('ex-club-label-a').textContent = currentClub.clubName + ' 선수';
     if ($('ex-club-label-b')) $('ex-club-label-b').textContent = activeExchange.clubBName + ' 선수';
 
     const guideEl = $('ex-result-guide');
@@ -455,20 +102,16 @@ function renderExchangeView() {
       const guides = { wins: '승리 팀에 1승을 추가합니다. (점수는 기록용)', score: '양 팀의 득점을 합산하여 전체 스코어에 반영합니다.' };
       guideEl.textContent = guides[activeExchange.victoryMode] || guides.wins;
     }
-    exCourtCountInputMode = (Number(activeExchange.courtCount) >= 1 && Number(activeExchange.courtCount) <= 5) ? 'preset' : 'custom';
   } else {
     if ($('ex-start-area')) $('ex-start-area').style.display = 'block';
     if ($('ex-game-area')) $('ex-game-area').style.display = 'none';
   }
-  syncExCourtCountUI();
-  syncExQuickCourtState();
-  renderExRecordModeUI();
 }
 
 function renderExchangeScoreBar() {
   if (!activeExchange) return;
   const ex = activeExchange;
-  const clubAName = currentClub?.clubName || currentClub?.name || '홈 클럽';
+  const clubAName = currentClub?.clubName || '홈 클럽';
   const clubBName = ex.clubBName || '원정 클럽';
   const scoreA = ex.victoryMode === 'score' ? ex.scoreA.toFixed(1) : ex.winsA;
   const scoreB = ex.victoryMode === 'score' ? ex.scoreB.toFixed(1) : ex.winsB;
@@ -493,66 +136,25 @@ function animateScoreUpdate(elId) {
   el.classList.add('score-flash');
 }
 
-function _makePlayerChip(side, p, isGuest, idx, opts = {}) {
+function _makePlayerChip(side, p, isGuest, idx) {
   const gIcon = p.gender === 'F'
     ? '<span style="font-size:12px;color:#E8437A;vertical-align:middle;">♀</span>'
     : '<span style="font-size:12px;color:#3A7BD5;vertical-align:middle;">♂</span>';
   const chkId = isGuest ? `ex-chk-${side}-g-${p.name}` : `ex-chk-${side}-${p.name}`;
   const label = isGuest ? `[당일] ${gIcon}${p.name}` : `${gIcon}${p.name}<span class="p-rank">${idx + 1}위</span>`;
-  const cls = `${isGuest ? 'p-label day-guest-label' : 'p-label'}${opts.disabled ? ' ex-player-disabled' : ''}`;
-  const checked = opts.checked ? ' checked' : '';
-  const disabled = opts.disabled ? ' disabled' : '';
-  const title = opts.title ? ` title="${escapeHtml(opts.title)}"` : '';
-  return `<input type="checkbox" id="${chkId}" class="p-chk" value="${escapeHtml(p.name)}"${checked}${disabled} onclick="exchangePickPlayer('${side}', '${p.name}')">` +
-         `<label for="${chkId}" class="${cls}"${title}>${label}</label>`;
+  const cls = isGuest ? 'p-label day-guest-label' : 'p-label';
+  return `<input type="checkbox" id="${chkId}" class="p-chk" value="${p.name}" onclick="exchangePickPlayer('${side}', '${p.name}')">` +
+         `<label for="${chkId}" class="${cls}">${label}</label>`;
 }
 
 function renderExchangePlayerPool(side) {
   const el = $(`ex-pool-${side}`);
   if (!el) return;
-  const clubPlayers = side === 'A'
-    ? (((players || []).length ? players : exchangeClubAPlayers) || [])
-    : exchangeClubBPlayers;
+  const clubPlayers = side === 'A' ? (players || []) : exchangeClubBPlayers;
   const guests = side === 'A' ? exchangeGuestsA : exchangeGuestsB;
-  const target = exRecordMode === 'quick' ? getExQuickTarget() : null;
-  const targetSide = target ? (target.slot === 'home' ? 'A' : 'B') : null;
-  const activeCourt = target ? getExQuickCourt(target.courtNo) : null;
-  const currentSelected = exRecordMode === 'quick' && activeCourt
-    ? (side === 'A' ? (activeCourt.home || []) : (activeCourt.away || []))
-    : (side === 'A' ? exPickedHome : exPickedAway);
-  const assigned = getExQuickAssignedKeys();
-
-  const renderChip = (p, i, isGuest) => {
-    const key = `${side}:${p.name}`;
-    const isChecked = currentSelected.includes(p.name);
-    const disabled = exRecordMode === 'quick' && (
-      side !== targetSide ||
-      (assigned.has(key) && !isChecked)
-    );
-    const title = disabled && !target
-      ? '모든 코트가 완성되었습니다. 승리팀을 선택해주세요.'
-      : (disabled && side !== targetSide
-        ? `현재 입력은 ${targetSide === 'A' ? '홈팀' : '어웨이팀'} 선수 차례입니다.`
-        : (disabled ? '다른 코트에 이미 배정된 선수입니다.' : ''));
-    return _makePlayerChip(side, p, isGuest, i, { checked: isChecked, disabled, title });
-  };
-
   el.innerHTML =
-    clubPlayers.map((p, i) => renderChip(p, i, false)).join('') +
-    guests.map(p => renderChip(p, 0, true)).join('');
-}
-
-async function loadClubAPlayers(clubAId) {
-  if (!clubAId) { exchangeClubAPlayers = []; return; }
-  try {
-    exchangeClubAPlayers = await _fsGetPlayers(clubAId);
-    renderExchangePlayerPool('A');
-    const label = $('ex-club-label-a');
-    if (label && currentClub) label.textContent = (currentClub.clubName || currentClub.name || '홈 클럽') + ' 선수';
-  } catch (e) {
-    console.error('[exchange] loadClubAPlayers error:', e);
-    exchangeClubAPlayers = [];
-  }
+    clubPlayers.map((p, i) => _makePlayerChip(side, p, false, i)).join('') +
+    guests.map(p => _makePlayerChip(side, p, true, 0)).join('');
 }
 
 async function loadClubBPlayers(clubBId) {
@@ -715,21 +317,15 @@ async function confirmExchangeSetup() {
   const clubBName = ($('ex-setup-club-b-name') || {}).value || '';
   if (!clubBName.trim()) { gsAlert('상대 클럽을 선택하거나 입력해주세요.'); return; }
 
-  const courtCount = Math.max(1, parseInt(($('ex-setup-court-count') || {}).value || '1', 10) || 1);
   const victoryMode = document.querySelector('input[name="ex-victory-mode"]:checked')?.value || 'wins';
   const handicapEnabled = ($('ex-handicap-toggle') || {}).checked || false;
-  const homeSideVal = document.querySelector('input[name="ex-home-side"]:checked')?.value || 'home';
-  // clubSideHome: 우리 클럽이 홈이면 'A', 원정이면 'B'
-  const clubSideHome = homeSideVal === 'home' ? 'A' : 'B';
 
   closeExchangeSetupModal();
   await createExchange({
     clubBName: clubBName.trim(),
     clubBId: exSetupSelectedClubId || null,
     isClubBTemp: !exSetupSelectedClubId,
-    courtCount,
     victoryMode, handicapEnabled,
-    clubSideHome,
   });
 }
 
@@ -794,12 +390,7 @@ function confirmExchangeGuest() {
 }
 
 function exchangePickPlayer(side, name) {
-  if (exRecordMode === 'quick') {
-    exchangeQuickPickPlayer(side, name);
-    return;
-  }
-
-  const max = getExRequiredPlayersPerSide(getExScoreMatchType());
+  const max = exMatchCategory === 'doubles' ? 2 : 1;
   const target = side === 'A' ? exPickedHome : exPickedAway;
 
   if (target.includes(name)) {
@@ -828,209 +419,59 @@ function showExchangeHint(side, msg) {
 }
 
 function renderExchangePickedPlayers() {
-  const homeText = exRecordMode === 'quick'
-    ? (() => {
-        const target = getExQuickTarget();
-        const court = target ? getExQuickCourt(target.courtNo) : null;
-        return (court?.home || []).join(' + ') || '선택 없음';
-      })()
-    : (exPickedHome.join(' + ') || '선택 없음');
-  const awayText = exRecordMode === 'quick'
-    ? (() => {
-        const target = getExQuickTarget();
-        const court = target ? getExQuickCourt(target.courtNo) : null;
-        return (court?.away || []).join(' + ') || '선택 없음';
-      })()
-    : (exPickedAway.join(' + ') || '선택 없음');
-  if ($('ex-picked-home')) $('ex-picked-home').textContent = homeText;
-  if ($('ex-picked-away')) $('ex-picked-away').textContent = awayText;
-  renderExQuickMatchupCards();
-  renderExRecordModeUI();
+  if ($('ex-picked-home')) $('ex-picked-home').textContent = exPickedHome.join(' + ') || '선택 없음';
+  if ($('ex-picked-away')) $('ex-picked-away').textContent = exPickedAway.join(' + ') || '선택 없음';
 }
 
-function renderExQuickMatchupCards() {
-  const wrap = $('ex-quick-courts');
-  if (!wrap) return;
-
-  syncExQuickTarget();
-  const target = getExQuickTarget();
-  let html = '';
-
-  exQuickCourts.forEach(court => {
-    const matchType = getExCourtMatchType(court);
-    const required = getExRequiredPlayersPerSide(matchType);
-    const home = court.home || [];
-    const away = court.away || [];
-    const homeReady = home.length === required;
-    const awayReady = away.length === required;
-    const isFull = homeReady && awayReady;
-    const typeLabel = matchType === 'singles' ? '● 단식 경기중' : '● 복식 경기중';
-    const typeClass = matchType === 'singles' ? ' singles' : ' doubles';
-    const homeGuide = required === 1 ? '홈팀 선수 선택' : `홈팀 선수 선택 (${required}명)`;
-    const awayGuide = required === 1 ? '어웨이팀 선수 선택' : `어웨이팀 선수 선택 (${required}명)`;
-    const isTargetCourt = target && target.courtNo === court.courtNo;
-    const waitingText = !target
-      ? '승리팀 선택 대기'
-      : (isTargetCourt
-          ? (target.slot === 'home' ? homeGuide : awayGuide)
-          : '다른 코트 입력 중');
-    const actionHtml = isFull
-      ? `<div class="ex-court-win-row">
-           <button class="ex-court-win-btn home" onclick="saveExchangeQuickCourtResult(${court.courtNo}, 'home')">홈 승</button>
-           <button class="ex-court-win-btn away" onclick="saveExchangeQuickCourtResult(${court.courtNo}, 'away')">어웨이 승</button>
-         </div>`
-      : `<div class="ex-court-waiting">${waitingText}</div>`;
-    html += `
-      <div class="ex-court-match-card">
-        <div class="ex-court-match-header">
-          <div class="ex-court-match-header-left">
-            <div class="ex-court-match-title">코트${court.courtNo}</div>
-            <span class="ex-court-match-status${typeClass}">${typeLabel}</span>
-          </div>
-          <div class="ex-court-match-header-actions">
-            <button class="ex-court-type-btn singles${matchType === 'singles' ? ' active' : ''}" onclick="setExQuickCourtMatchType(${court.courtNo}, 'singles')">단식</button>
-            <button class="ex-court-type-btn doubles${matchType === 'doubles' ? ' active' : ''}" onclick="setExQuickCourtMatchType(${court.courtNo}, 'doubles')">복식</button>
-            <button class="ex-court-type-btn cancel" onclick="confirmCancelExQuickCourt(${court.courtNo})">경기취소</button>
-          </div>
-        </div>
-        <div class="ex-court-match-body">
-          <div class="ex-court-slot${isTargetCourt && target?.slot === 'home' ? ' active' : ''}">
-            <div class="ex-court-slot-label">HOME</div>
-            <div class="ex-court-slot-players">
-              ${home.length
-                ? home.map(name => `<button class="ex-slot-player-chip" onclick="removeExQuickPlayer(${court.courtNo}, 'home', '${String(name).replace(/'/g, "\\'")}')">${escapeHtml(name)} <span>✕</span></button>`).join('')
-                : `<span class="ex-court-slot-empty">${homeGuide}</span>`}
-            </div>
-          </div>
-          <div class="ex-court-match-vs">VS</div>
-          <div class="ex-court-slot${isTargetCourt && target?.slot === 'away' ? ' active' : ''}">
-            <div class="ex-court-slot-label away">AWAY</div>
-            <div class="ex-court-slot-players">
-              ${away.length
-                ? away.map(name => `<button class="ex-slot-player-chip away" onclick="removeExQuickPlayer(${court.courtNo}, 'away', '${String(name).replace(/'/g, "\\'")}')">${escapeHtml(name)} <span>✕</span></button>`).join('')
-                : `<span class="ex-court-slot-empty">${awayGuide}</span>`}
-            </div>
-          </div>
-        </div>
-        ${actionHtml}
-      </div>`;
-  });
-
-  wrap.innerHTML = html;
-}
-
-function setExRecordMode(mode) {
-  exRecordMode = mode === 'score' ? 'score' : 'quick';
-  if (exRecordMode === 'score') exQuickWinner = '';
-  renderExchangePlayerPool('A');
-  renderExchangePlayerPool('B');
+function setExMatchCategory(category) {
+  exMatchCategory = category;
+  exPickedHome = [];
+  exPickedAway = [];
   renderExchangePickedPlayers();
-  renderExRecordModeUI();
-}
-
-function setExQuickWinner(side) {
-  exQuickWinner = side === 'away' ? 'away' : 'home';
-  renderExRecordModeUI();
-}
-
-function renderExRecordModeUI() {
-  $('ex-record-mode-quick')?.classList.toggle('active', exRecordMode === 'quick');
-  $('ex-record-mode-score')?.classList.toggle('active', exRecordMode === 'score');
-  if ($('ex-picked-display-wrap')) $('ex-picked-display-wrap').style.display = exRecordMode === 'score' ? 'flex' : 'none';
-  if ($('ex-quick-matchup-card')) $('ex-quick-matchup-card').style.display = exRecordMode === 'quick' ? 'block' : 'none';
-  if ($('ex-score-area')) $('ex-score-area').style.display = exRecordMode === 'score' ? 'block' : 'none';
-  if ($('ex-save-result-btn')) $('ex-save-result-btn').style.display = exRecordMode === 'score' ? 'flex' : 'none';
-}
-
-async function persistExchangeMatch(logEntry, matchCategory, resultType) {
-  if (resultType !== 'cancelled') {
-    applyMatchToPlayers(logEntry.type, [...logEntry.home], [...logEntry.away], logEntry.winner);
-  }
-
-  if (isSimulation) {
-    const pts = calcExchangePoints(logEntry, activeExchange);
-    updateExchangeAggregateLocal(pts, logEntry.winner, matchCategory);
-    renderExchangeScoreBar();
-    return true;
-  }
-
-  const ok = await saveExchangeGame(logEntry, matchCategory, resultType, activeExchange.clubSideHome || 'A');
-  if (!ok) return false;
-  await pushDataOnly();
-  return true;
-}
-
-async function saveExchangeQuickCourtResult(courtNo, winnerKey) {
-  if (!currentUserAuth || !currentLoggedPlayer) { requireAuth(() => saveExchangeQuickCourtResult(courtNo, winnerKey)); return; }
-  const court = getExQuickCourt(courtNo);
-  if (!court) return;
-
-  const matchType = getExCourtMatchType(court);
-  const required = getExRequiredPlayersPerSide(matchType);
-  if ((court.home || []).length !== required || (court.away || []).length !== required) {
-    gsAlert('해당 코트의 선수를 먼저 모두 배정해주세요.');
-    return;
-  }
-
-  const resultType = 'normal';
-  const winner = winnerKey === 'away' ? 'away' : 'home';
-  const homeScore = resultType === 'cancelled' ? 0 : (winner === 'home' ? 1 : 0);
-  const awayScore = resultType === 'cancelled' ? 0 : (winner === 'away' ? 1 : 0);
-  const { ts, ds } = nowISO();
-  const logEntry = {
-    id: `${ts}-${courtNo}-${Math.floor(Math.random() * 100000)}`,
-    ts, date: ds,
-    type: matchType === 'doubles' ? 'double' : 'single',
-    home: [...court.home],
-    away: [...court.away],
-    hs: homeScore,
-    as: awayScore,
-    winner,
-  };
-
-  const ok = await persistExchangeMatch(logEntry, matchType, resultType);
-  if (!ok) return;
-
-  resetExQuickCourt(courtNo);
+  ['singles', 'doubles'].forEach(c => { const btn = $(`ex-cat-${c}`); if (btn) btn.classList.toggle('active', c === category); });
 }
 
 async function saveExchangeResult() {
   if (!currentUserAuth || !currentLoggedPlayer) { requireAuth(() => saveExchangeResult()); return; }
-  const scoreMatchType = getExScoreMatchType();
 
-  if (exRecordMode === 'quick' && !exQuickWinner) { gsAlert('승리팀을 선택해주세요!'); return; }
-
-  const hs = exRecordMode === 'quick'
-    ? (exQuickWinner === 'home' ? '1' : (exQuickWinner === 'away' ? '0' : ''))
-    : (($('ex-score-home') || {}).value);
-  const as = exRecordMode === 'quick'
-    ? (exQuickWinner === 'home' ? '0' : (exQuickWinner === 'away' ? '1' : ''))
-    : (($('ex-score-away') || {}).value);
+  const hs = ($('ex-score-home') || {}).value;
+  const as = ($('ex-score-away') || {}).value;
   if (!hs || !as || hs == as) { gsAlert('점수를 확인해주세요!'); return; }
 
-  const max = getExRequiredPlayersPerSide(scoreMatchType);
+  const max = exMatchCategory === 'doubles' ? 2 : 1;
   if (exPickedHome.length !== max || exPickedAway.length !== max) { gsAlert('선수를 모두 선택해주세요!'); return; }
 
   const homeScore = parseInt(hs, 10);
   const awayScore = parseInt(as, 10);
   const { ts, ds } = nowISO();
-  const resultType = 'normal';
+  const resultType = document.querySelector('input[name="ex-result-type"]:checked')?.value || 'normal';
 
   const logEntry = {
     id: `${ts}-${Math.floor(Math.random() * 100000)}`,
     ts, date: ds,
-    type: scoreMatchType === 'doubles' ? 'double' : 'single',
+    type: exMatchCategory === 'doubles' ? 'double' : 'single',
     home: [...exPickedHome], away: [...exPickedAway],
     hs: homeScore, as: awayScore,
     winner: homeScore > awayScore ? 'home' : 'away',
   };
-  const ok = await persistExchangeMatch(logEntry, scoreMatchType, resultType);
-  if (!ok) return;
+
+  applyMatchToPlayers(logEntry.type, [...exPickedHome], [...exPickedAway], logEntry.winner);
+
+  if (isSimulation) {
+    const pts = calcExchangePoints(logEntry, activeExchange);
+    updateExchangeAggregateLocal(pts);
+    renderExchangeScoreBar();
+    gsAlert('✅ 시뮬레이션 저장! (실제 데이터 반영 안됨)');
+  } else {
+    const ok = await saveExchangeGame(logEntry, exMatchCategory, resultType, 'A');
+    if (!ok) return;
+    await pushDataOnly();
+    gsAlert('저장!');
+  }
 
   exPickedHome = []; exPickedAway = [];
-  exQuickWinner = '';
-  if ($('ex-score-home')) $('ex-score-home').value = '';
-  if ($('ex-score-away')) $('ex-score-away').value = '';
+  $('ex-score-home').value = '';
+  $('ex-score-away').value = '';
   renderExchangePickedPlayers();
   showExchangeHint('A', '');
   showExchangeHint('B', '');
