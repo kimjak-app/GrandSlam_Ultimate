@@ -1127,7 +1127,7 @@ function roundAutoBuildTurnWithStats(turnNo, status, statsRef, mutateRealStats) 
   const eligiblePool = roundAutoGetSelectedEligiblePool();
 
   if (eligiblePool.length < requiredPlayers) {
-    alert('참가자 수가 부족합니다. 코트 수를 줄이거나 참가자를 더 선택해주세요.');
+    gsAlert('참가자 수가 부족합니다. 코트 수를 줄이거나 참가자를 더 선택해주세요.');
     return null;
   }
 
@@ -1183,7 +1183,7 @@ function roundAutoBuildTurnWithStats(turnNo, status, statsRef, mutateRealStats) 
   }
 
   if (!matches.length) {
-    alert('현재 옵션으로 생성 가능한 대진이 없습니다. 선수/팀 구성을 조정하거나 [남 vs 여 매치 허용]을 켜주세요.');
+    gsAlert('현재 옵션으로 생성 가능한 대진이 없습니다. 선수/팀 구성을 조정하거나 [남 vs 여 매치 허용]을 켜주세요.');
     return null;
   }
 
@@ -1313,19 +1313,19 @@ function roundAutoOpenAddGuestModal() {
   gsEditName('', ({ name, gender }) => {
     const cleanName = (name || '').trim();
     if (!cleanName) {
-      alert('이름을 입력해줘');
+      gsAlert('이름을 입력해줘');
       return;
     }
 
     const clubNames = roundAutoGetClubPlayers().map(p => p.name);
     if (clubNames.includes(cleanName)) {
-      alert('기존 회원과 이름이 같아. 다른 이름으로 해줘');
+      gsAlert('기존 회원과 이름이 같아. 다른 이름으로 해줘');
       return;
     }
 
     const guestNames = (roundAutoState.oneTimeGuests || []).map(g => g.name);
     if (guestNames.includes(cleanName)) {
-      alert('이미 추가된 게스트야');
+      gsAlert('이미 추가된 게스트야');
       return;
     }
 
@@ -1822,39 +1822,41 @@ function roundAutoReasonText(match) {
 
 // ✅ v5.41: 이 턴 재생성
 function roundAutoRegenerateCurrentTurn() {
-  if (!confirm('현재 턴 대진표를 취소하고 재생성할까요?\n(결과 입력된 경기도 초기화됩니다)')) return;
-  roundAutoSyncStateFromCurrentUI();
-  const turns = roundAutoState.turns || [];
-  const activeIdx = turns.findIndex(t => t?.status === 'active');
-  if (activeIdx < 0) { gsAlert('활성 턴이 없습니다.'); return; }
-  const activeTurnNo = turns[activeIdx].turnNo;
-  const prevTurns = turns.slice(0, activeIdx).filter(t => t?.status !== 'preview');
-  roundAutoState.turns = prevTurns;
-  const freshStats = {};
-  prevTurns.forEach(turn => {
-    (turn.matches || []).forEach(match => {
-      [...(match.home || []), ...(match.away || [])].forEach(name => {
-        if (!freshStats[name]) freshStats[name] = { played: 0, rested: 0, restStreak: 0, lastTurnPlayed: null, consecutiveCount: 0 };
-        freshStats[name].played += 1;
-        freshStats[name].restStreak = 0;
-        freshStats[name].lastTurnPlayed = turn.turnNo;
+  gsConfirm('현재 턴 대진표를 취소하고 재생성할까요?\n(결과 입력된 경기도 초기화됩니다)', ok => {
+    if (!ok) return;
+    roundAutoSyncStateFromCurrentUI();
+    const turns = roundAutoState.turns || [];
+    const activeIdx = turns.findIndex(t => t?.status === 'active');
+    if (activeIdx < 0) { gsAlert('활성 턴이 없습니다.'); return; }
+    const activeTurnNo = turns[activeIdx].turnNo;
+    const prevTurns = turns.slice(0, activeIdx).filter(t => t?.status !== 'preview');
+    roundAutoState.turns = prevTurns;
+    const freshStats = {};
+    prevTurns.forEach(turn => {
+      (turn.matches || []).forEach(match => {
+        [...(match.home || []), ...(match.away || [])].forEach(name => {
+          if (!freshStats[name]) freshStats[name] = { played: 0, rested: 0, restStreak: 0, lastTurnPlayed: null, consecutiveCount: 0 };
+          freshStats[name].played += 1;
+          freshStats[name].restStreak = 0;
+          freshStats[name].lastTurnPlayed = turn.turnNo;
+        });
       });
     });
+    roundAutoState.sessionStats = freshStats;
+    const realStats = JSON.parse(JSON.stringify(freshStats));
+    const newActiveTurn = roundAutoBuildTurnWithStats(activeTurnNo, 'active', realStats, true);
+    if (!newActiveTurn) { gsAlert('현재 인원으로 대진 생성이 불가능합니다. 참가자 설정을 확인해주세요.'); return; }
+    const simulatedStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
+    const previewTurn = roundAutoBuildTurnWithStats(activeTurnNo + 1, 'preview', simulatedStats, false);
+    roundAutoState.turns = previewTurn ? [...prevTurns, newActiveTurn, previewTurn] : [...prevTurns, newActiveTurn];
+    roundAutoState.turnNo = activeTurnNo;
+    const normalized = roundAutoNormalizeTurnsState(roundAutoState);
+    roundAutoState = normalized.state;
+    roundAutoRenderMatches();
+    roundAutoRenderRanking();
+    roundAutoRenderPersonalRanking();
+    saveRoundAutoState();
   });
-  roundAutoState.sessionStats = freshStats;
-  const realStats = JSON.parse(JSON.stringify(freshStats));
-  const newActiveTurn = roundAutoBuildTurnWithStats(activeTurnNo, 'active', realStats, true);
-  if (!newActiveTurn) { gsAlert('현재 인원으로 대진 생성이 불가능합니다. 참가자 설정을 확인해주세요.'); return; }
-  const simulatedStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
-  const previewTurn = roundAutoBuildTurnWithStats(activeTurnNo + 1, 'preview', simulatedStats, false);
-  roundAutoState.turns = previewTurn ? [...prevTurns, newActiveTurn, previewTurn] : [...prevTurns, newActiveTurn];
-  roundAutoState.turnNo = activeTurnNo;
-  const normalized = roundAutoNormalizeTurnsState(roundAutoState);
-  roundAutoState = normalized.state;
-  roundAutoRenderMatches();
-  roundAutoRenderRanking();
-  roundAutoRenderPersonalRanking();
-  saveRoundAutoState();
 }
 
 function roundAutoRegeneratePreview() {

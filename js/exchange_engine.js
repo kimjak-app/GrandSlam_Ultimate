@@ -13,12 +13,14 @@ let activeExchange        = null;
 let isSimulation          = false;
 let exchangeGuestsA       = [];
 let exchangeGuestsB       = [];
+let exchangeClubAPlayers  = [];
 let exchangeClubBPlayers  = [];
 let exchangeCurrentTab    = 'game';
 let exPickedHome          = [];
 let exPickedAway          = [];
-let exMatchCategory       = 'doubles';
 let exSetupSelectedClubId = null;
+let exQuickCourts         = [];
+let exQuickTarget         = { courtNo: 1, slot: 'home' };
 
 function _exchangeColRef(clubId) {
   return _clubRef(clubId || getActiveClubId()).collection('exchanges');
@@ -236,26 +238,27 @@ function getExchangeStatsForPlayer(playerName) {
   return { singleWin, singleLoss, doubleWin, doubleLoss, vsClubs };
 }
 
-function updateExchangeAggregateLocal(pts, winner) {
+function updateExchangeAggregateLocal(pts, winner, matchCategory) {
   if (!activeExchange) return;
   const ex = activeExchange;
   const homeTotal = (pts.home || []).reduce((a, b) => a + b, 0);
   const awayTotal = (pts.away || []).reduce((a, b) => a + b, 0);
   const homeWin = winner === 'home';
+  const category = matchCategory === 'singles' ? 'singles' : 'doubles';
   ex.scoreA += homeTotal;
   ex.scoreB += awayTotal;
   if (homeWin) {
     ex.winsA++;
-    ex.singlesWinsA += exMatchCategory === 'singles' ? 1 : 0;
-    ex.doublesWinsA += exMatchCategory === 'doubles' ? 1 : 0;
-    ex.singlesLossB += exMatchCategory === 'singles' ? 1 : 0;
-    ex.doublesLossB += exMatchCategory === 'doubles' ? 1 : 0;
+    ex.singlesWinsA += category === 'singles' ? 1 : 0;
+    ex.doublesWinsA += category === 'doubles' ? 1 : 0;
+    ex.singlesLossB += category === 'singles' ? 1 : 0;
+    ex.doublesLossB += category === 'doubles' ? 1 : 0;
   } else {
     ex.winsB++;
-    ex.singlesWinsB += exMatchCategory === 'singles' ? 1 : 0;
-    ex.doublesWinsB += exMatchCategory === 'doubles' ? 1 : 0;
-    ex.singlesLossA += exMatchCategory === 'singles' ? 1 : 0;
-    ex.doublesLossA += exMatchCategory === 'doubles' ? 1 : 0;
+    ex.singlesWinsB += category === 'singles' ? 1 : 0;
+    ex.doublesWinsB += category === 'doubles' ? 1 : 0;
+    ex.singlesLossA += category === 'singles' ? 1 : 0;
+    ex.doublesLossA += category === 'doubles' ? 1 : 0;
   }
 }
 
