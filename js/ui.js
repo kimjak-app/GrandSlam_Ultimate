@@ -25,13 +25,20 @@ function gsAlertClose() {
 
 // ✅ v3.820: 커스텀 Confirm (confirm() 대체) - 콜백 방식
 var _gsConfirmCallback = null;
-function gsConfirm(msg, cb) {
+function gsConfirm(msg, cb, options) {
+  const opts = options && typeof options === 'object' ? options : {};
+  $('gsConfirmTitle').textContent = opts.title || '확인';
   $('gsConfirmMsg').textContent = msg;
+  $('gsConfirmOkBtn').textContent = opts.okText || '확인';
+  $('gsConfirmCancelBtn').textContent = opts.cancelText || '취소';
   $('gsConfirmModal').style.display = 'flex';
   _gsConfirmCallback = cb || null;
 }
 function gsConfirmResolve(result) {
   $('gsConfirmModal').style.display = 'none';
+  $('gsConfirmTitle').textContent = '확인';
+  $('gsConfirmOkBtn').textContent = '확인';
+  $('gsConfirmCancelBtn').textContent = '취소';
   if (_gsConfirmCallback) { _gsConfirmCallback(result); _gsConfirmCallback = null; }
 }
 
