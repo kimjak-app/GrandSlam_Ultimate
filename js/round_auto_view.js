@@ -2205,8 +2205,8 @@ function roundAutoRenderMatches() {
     const previewTurn = turns.find(t => t.status === 'preview');
     if (activeTurn) {
       const renderTeam = team => (Array.isArray(team)
-        ? team.map(n => roundAutoPlayerLabelWithGender(n, '')).join(roundAutoIsSingles() ? ' vs ' : ' & ')
-        : roundAutoPlayerLabelWithGender(team, ''));
+        ? team.map(n => roundAutoPlayerLabel(n, '')).join(roundAutoIsSingles() ? ' vs ' : ' / ')
+        : roundAutoPlayerLabel(team, ''));
       const cards = [];
       for (let courtNo = 1; courtNo <= (Number(roundAutoState.courtCount) || 1); courtNo += 1) {
         const liveMatch = roundAutoGetLiveMatchByCourt(activeTurn, courtNo);
@@ -2311,8 +2311,8 @@ function roundAutoRenderMatches() {
 
   if (activeTurnSingle) {
     const renderTeamSingle = team => (Array.isArray(team)
-      ? team.map(n => roundAutoPlayerLabelWithGender(n, '')).join(roundAutoIsSingles() ? ' vs ' : ' & ')
-      : roundAutoPlayerLabelWithGender(team, ''));
+      ? team.map(n => roundAutoPlayerLabel(n, '')).join(roundAutoIsSingles() ? ' vs ' : ' / ')
+      : roundAutoPlayerLabel(team, ''));
 
     // ✅ v5.863: isNextCourt 조건 제거 — 2번째 이후 경기도 정상 렌더링
     const liveMatch = (activeTurnSingle.matches || []).find(m => m.winner == null)

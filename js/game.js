@@ -139,7 +139,7 @@ function updateSimpleTeamsUI() {
       : '<span class="material-symbols-outlined" style="font-size:12px;color:#3A7BD5;vertical-align:middle;">male</span>';
   };
   const teamLabel = (names) => names.length
-    ? names.map(n => gIcon(n) + ' ' + displayName(n)).join(' & ')
+    ? names.map(n => displayName(n)).join(' / ')
     : '-';
 
   let html = '';
