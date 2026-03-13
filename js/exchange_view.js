@@ -718,6 +718,9 @@ async function confirmExchangeSetup() {
   const courtCount = Math.max(1, parseInt(($('ex-setup-court-count') || {}).value || '1', 10) || 1);
   const victoryMode = document.querySelector('input[name="ex-victory-mode"]:checked')?.value || 'wins';
   const handicapEnabled = ($('ex-handicap-toggle') || {}).checked || false;
+  const homeSideVal = document.querySelector('input[name="ex-home-side"]:checked')?.value || 'home';
+  // clubSideHome: 우리 클럽이 홈이면 'A', 원정이면 'B'
+  const clubSideHome = homeSideVal === 'home' ? 'A' : 'B';
 
   closeExchangeSetupModal();
   await createExchange({
@@ -726,6 +729,7 @@ async function confirmExchangeSetup() {
     isClubBTemp: !exSetupSelectedClubId,
     courtCount,
     victoryMode, handicapEnabled,
+    clubSideHome,
   });
 }
 
@@ -950,7 +954,7 @@ async function persistExchangeMatch(logEntry, matchCategory, resultType) {
     return true;
   }
 
-  const ok = await saveExchangeGame(logEntry, matchCategory, resultType, activeExchange?.clubSideHome || 'A');
+  const ok = await saveExchangeGame(logEntry, matchCategory, resultType, activeExchange.clubSideHome || 'A');
   if (!ok) return false;
   await pushDataOnly();
   return true;

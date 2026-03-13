@@ -43,6 +43,7 @@ async function createExchange(config) {
     courtCount: Math.max(1, Number(config.courtCount) || 1),
     victoryMode: config.victoryMode,
     handicapEnabled: config.handicapEnabled,
+    clubSideHome: config.clubSideHome || 'A',
     status: 'ongoing',
     gameIds: [],
     scoreA: 0, scoreB: 0,
