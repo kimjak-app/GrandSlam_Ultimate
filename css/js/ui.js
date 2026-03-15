@@ -1,0 +1,247 @@
+function checkMasterPin(callback) {
+  if (masterUnlocked) { if (callback) callback(true); return; }
+  _masterPinCallback = callback || null;
+  const modal = $('clubPinModal');
+  // 모달 타이틀 텍스트 변경
+  const titleEl = modal.querySelector('div[style*="font-size:15px"]');
+  if (titleEl) titleEl.textContent = '총괄 관리자 비밀번호를 입력하세요';
+  modal.dataset.mode = 'master';
+  modal.style.display = 'flex';
+  $('clubPinInput').value = '';
+  setTimeout(() => $('clubPinInput').focus(), 100);
+}
+
+// ✅ v3.820: 커스텀 Alert (alert() 대체)
+var _gsAlertCallback = null;
+function gsAlert(msg, cb) {
+  $('gsAlertMsg').textContent = msg;
+  $('gsAlertModal').style.display = 'flex';
+  _gsAlertCallback = cb || null;
+}
+function gsAlertClose() {
+  $('gsAlertModal').style.display = 'none';
+  if (_gsAlertCallback) { _gsAlertCallback(); _gsAlertCallback = null; }
+}
+
+// ✅ v3.820: 커스텀 Confirm (confirm() 대체) - 콜백 방식
+var _gsConfirmCallback = null;
+function gsConfirm(msg, cb, options) {
+  const opts = options && typeof options === 'object' ? options : {};
+  $('gsConfirmTitle').textContent = opts.title || '확인';
+  $('gsConfirmMsg').textContent = msg;
+  $('gsConfirmOkBtn').textContent = opts.okText || '확인';
+  $('gsConfirmCancelBtn').textContent = opts.cancelText || '취소';
+  $('gsConfirmModal').style.display = 'flex';
+  _gsConfirmCallback = cb || null;
+}
+function gsConfirmResolve(result) {
+  $('gsConfirmModal').style.display = 'none';
+  $('gsConfirmTitle').textContent = '확인';
+  $('gsConfirmOkBtn').textContent = '확인';
+  $('gsConfirmCancelBtn').textContent = '취소';
+  if (_gsConfirmCallback) { _gsConfirmCallback(result); _gsConfirmCallback = null; }
+}
+
+// ✅ v3.8191: 클럽 관리자 비번 확인 - 커스텀 모달 (prompt 대체)
+var _clubPinCallback = null;
+
+function checkClubPin(callback) {
+  if (masterUnlocked) { callback(true); return; }
+  _clubPinCallback = callback;
+  const modal = $('clubPinModal');
+  modal.style.display = 'flex';
+  $('clubPinInput').value = '';
+  setTimeout(() => $('clubPinInput').focus(), 100);
+}
+
+function confirmClubPin() {
+  const input = $('clubPinInput').value;
+  const modal = $('clubPinModal');
+  // ✅ v4.86: MASTER_PIN 빈 문자열일 때 기본값 0707 사용
+  const masterPin = (typeof MASTER_PIN !== 'undefined' && MASTER_PIN !== '') ? MASTER_PIN : '0707';
+  const isMasterMode = modal.dataset.mode === 'master';
+  modal.style.display = 'none';
+  modal.dataset.mode = '';
+  $('clubPinInput').value = '';
+
+  // 모달 타이틀 원래대로 복원
+  const titleEl = modal.querySelector('div[style*="font-size:15px"]');
+  if (titleEl) titleEl.textContent = '관리자 비밀번호를 입력하세요';
+
+  if (isMasterMode) {
+    // 마스터 PIN 확인
+    if (input === masterPin) { masterUnlocked = true; if (_masterPinCallback) _masterPinCallback(true); }
+    else { if (input !== '') gsAlert('비밀번호가 틀렸습니다!'); if (_masterPinCallback) _masterPinCallback(false); }
+    _masterPinCallback = null;
+  } else {
+    // 클럽 관리자 PIN 확인
+    if (input === masterPin) { masterUnlocked = true; if (_clubPinCallback) _clubPinCallback(true); }
+    else if (input === ADMIN_PIN) { if (_clubPinCallback) _clubPinCallback(true); }
+    else { if (input !== '') gsAlert('비밀번호가 틀렸습니다!'); if (_clubPinCallback) _clubPinCallback(false); }
+    _clubPinCallback = null;
+  }
+}
+
+function cancelClubPin() {
+  const modal = $('clubPinModal');
+  modal.style.display = 'none';
+  modal.dataset.mode = '';
+  $('clubPinInput').value = '';
+  // 모달 타이틀 원래대로 복원
+  const titleEl = modal.querySelector('div[style*="font-size:15px"]');
+  if (titleEl) titleEl.textContent = '관리자 비밀번호를 입력하세요';
+  if (_masterPinCallback) { _masterPinCallback(false); _masterPinCallback = null; }
+  if (_clubPinCallback) { _clubPinCallback(false); _clubPinCallback = null; }
+}
+
+// ========================================
+// HELPER FUNCTIONS
+// ========================================
+
+const $ = (id) => document.getElementById(id);
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[m]));
+}
+
+// ✅ v3.692: 공통 선수 옵션(UI) 생성기 (checkbox/radio 공용)
+function createPlayerOption({ inputType, nameAttr, id, value, checked, onClick, labelText, isGuest, showRank, rankText }) {
+  const safeValue = escapeHtml(value);
+  const checkedAttr = checked ? "checked" : "";
+  const onClickAttr = onClick ? `onclick="${onClick}"` : "";
+  const guestClass = isGuest ? " guest-label" : "";
+  const rankHtml = showRank ? `<span class="p-rank">${escapeHtml(rankText || "")}</span>` : "";
+  return `
+      <input type="${inputType}" name="${escapeHtml(nameAttr)}" id="${escapeHtml(id)}" class="p-chk" value="${safeValue}" ${checkedAttr} ${onClickAttr}>
+      <label for="${escapeHtml(id)}" class="p-label${guestClass}">${labelText}${rankHtml}</label>
+    `;
+}
+
+
+function displayName(name) {
+  return escapeHtml(name);
+}
+
+function displayNameWithLevel(name, level) {
+  const safeName = displayName(name);
+  const lv = (typeof level === 'string' ? level : String(level || '')).trim();
+  return lv ? `${safeName}(${escapeHtml(lv)})` : safeName;
+}
+
+function findPlayerLevel(name) {
+  if (!Array.isArray(players)) return '';
+  const player = players.find(p => p && p.name === name);
+  if (!player || player.level == null) return '';
+  return String(player.level).trim();
+}
+
+function shuffleArray(array) {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function gsEditName(defaultVal, cb, options) {
+  const inputEl = $('gsEditNameInput');
+  inputEl.value = defaultVal || '';
+  if (options && options.placeholder) inputEl.placeholder = options.placeholder;
+  const titleEl = document.getElementById('gsEditNameTitle');
+  if (titleEl) titleEl.textContent = (options && options.title) ? options.title : '실명 대조';
+
+  const genderRow = $('gsEditNameGenderRow');
+  const genderM = $('gsEditNameGenderM');
+  const genderF = $('gsEditNameGenderF');
+  let selectedGender = (options && options.defaultGender) || 'M';
+  const setGenderBtn = (btn, active) => {
+    if (!btn) return;
+    btn.style.background = active ? 'var(--wimbledon-sage)' : '#f3f4f6';
+    btn.style.color = active ? '#fff' : '#333';
+    btn.style.borderColor = active ? 'var(--wimbledon-sage)' : '#ddd';
+  };
+  if (genderRow) {
+    genderRow.style.display = (options && options.showGender) ? 'flex' : 'none';
+    if (options && options.showGender) {
+      setGenderBtn(genderM, selectedGender === 'M');
+      setGenderBtn(genderF, selectedGender === 'F');
+      if (genderM) genderM.onclick = () => { selectedGender = 'M'; setGenderBtn(genderM, true); setGenderBtn(genderF, false); };
+      if (genderF) genderF.onclick = () => { selectedGender = 'F'; setGenderBtn(genderM, false); setGenderBtn(genderF, true); };
+    }
+  }
+
+  $('gsEditNameModal').style.display = 'flex';
+
+  _gsEditNameCallback = (val) => {
+    if (cb) {
+      if (options && options.returnObject) cb({ name: val, gender: selectedGender });
+      else cb(val);
+    }
+  };
+
+  let suggestionsEl = $('gsEditNameSuggestions');
+  if (!suggestionsEl) {
+    suggestionsEl = document.createElement('div');
+    suggestionsEl.id = 'gsEditNameSuggestions';
+    suggestionsEl.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; max-height:120px; overflow-y:auto;';
+    inputEl.parentNode.insertBefore(suggestionsEl, inputEl.nextSibling);
+  }
+
+  const hideSuggestions = !!(options && options.hideSuggestions);
+  suggestionsEl.style.display = hideSuggestions ? 'none' : 'flex';
+  suggestionsEl.innerHTML = '';
+
+  const names = (options && options.suggestions) ? options.suggestions : [];
+  function renderSuggestions(query) {
+    if (hideSuggestions) return;
+    const filtered = query
+      ? names.filter(n => n.includes(query))
+      : names;
+    suggestionsEl.innerHTML = filtered.map(n =>
+      `<button type="button" onclick="document.getElementById('gsEditNameInput').value='${n.replace(/'/g, "\'")}'; document.getElementById('gsEditNameSuggestions').querySelectorAll('button').forEach(b=>b.style.background='#f0f0f0'); this.style.background='#d0e8ff';"
+          style="padding:5px 10px; border:1px solid #ddd; border-radius:20px; background:#f0f0f0; font-size:12px; cursor:pointer; white-space:nowrap;">${n}</button>`
+    ).join('');
+  }
+  renderSuggestions('');
+
+  inputEl.oninput = () => renderSuggestions(inputEl.value.trim());
+
+  setTimeout(() => { inputEl.select(); inputEl.focus(); }, 100);
+}
+function gsEditNameConfirm() {
+  const val = $('gsEditNameInput').value;
+  $('gsEditNameModal').style.display = 'none';
+  if (_gsEditNameCallback) { _gsEditNameCallback(val); _gsEditNameCallback = null; }
+}
+function gsEditNameCancel() {
+  $('gsEditNameModal').style.display = 'none';
+  _gsEditNameCallback = null;
+}
+
+function setStatus(html) {
+  const el = $('status');
+  if (!el) return;
+  el.innerHTML = html || '';
+}
+
+
+function applyAutofit(scopeEl) {
+  const root = scopeEl || document;
+  const cells = root.querySelectorAll('[data-autofit="1"]');
+  cells.forEach(el => {
+    if (!el) return;
+
+    el.classList.add('autofit-cell');
+    el.classList.remove('wrap-mode');
+
+    const over = (el.scrollWidth > el.clientWidth + 1);
+    if (over) {
+      el.classList.add('wrap-mode'); // 2줄 허용 + 글자 살짝 축소
+    }
+  });
+}
+
+function applyAutofitAllTables() {
+  document.querySelectorAll('.tennis-table').forEach(t => applyAutofit(t));
+}

@@ -626,32 +626,113 @@ async function roundAutoHandleSingleCourtDone(matchId) {
   const match = (activeTurn.matches || []).find(m => m.id === matchId);
   if (!match || (match.winner !== 'home' && match.winner !== 'away')) return;
 
+  // 1. 중복 실행 방지
   if (match._courtDoneInFlight) return;
   match._courtDoneInFlight = true;
 
   try {
+    // 2. sessionStats 즉시 동기 업데이트 (다음 대진 생성 전에 반드시)
     match.committed = true;
     match.ts = Date.now();
+    const eligiblePool = roundAutoGetSelectedEligiblePool();
+    const matchPlayerNames = new Set([
+      ...(Array.isArray(match.home) ? match.home : [match.home]),
+      ...(Array.isArray(match.away) ? match.away : [match.away]),
+    ]);
+    const activePlayers = eligiblePool.filter(p => matchPlayerNames.has(p.name));
+    const statsRef = roundAutoState.sessionStats && typeof roundAutoState.sessionStats === 'object'
+      ? roundAutoState.sessionStats : {};
+    roundAutoApplyTurnParticipation(activePlayers, eligiblePool, activeTurn.turnNo, statsRef);
+    roundAutoState.sessionStats = statsRef;
 
-    const turns = roundAutoState.turns || [];
-    const activeIdx = turns.findIndex(t => t?.status === 'active');
-    const prevTurns = activeIdx >= 0
-      ? turns.slice(0, activeIdx).filter(t => t?.status !== 'preview')
-      : [];
-    const doneMatches = (activeTurn.matches || []).filter(m => m && (m.winner === 'home' || m.winner === 'away'));
-    const rebuilt = rebuildSingleCourtState({
-      context: 'handleSingleCourtDone',
-      activeTurnNo: Number(activeTurn.turnNo) || Number(roundAutoState.turnNo) || 1,
-      prevTurns,
-      doneMatches,
-      eligiblePool: roundAutoGetSelectedEligiblePool(),
-      baselineStats: roundAutoState.sessionStats, // ✅ [FIX] 누적 stats 보존 — 재계산 없이 전달
-    });
+    // 3. 전체 인원으로 다음 대진 즉시 생성 후 현재 경기에 투입
+    // (미리보기 유무 관계없이 전체 eligiblePool 기준으로 직접 생성)
+    const isSingles = roundAutoIsSingles();
+    const requiredCount = isSingles ? 2 : 4;
+    const freshStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
 
-    roundAutoState.turns = rebuilt.turns;
-    roundAutoState.turnNo = rebuilt.turnNo;
-    roundAutoState.sessionStats = rebuilt.sessionStats;
+    // 전체 인원으로 다음 대진 직접 생성
+    // roundAutoChooseFairSingleCourtSetup 반환: { activePlayers: [p,p,p,p], pairing: { home:[p,p], away:[p,p] } }
+    let nextHome = null;
+    let nextAway = null;
 
+    if (eligiblePool.length >= requiredCount) {
+      if (isSingles) {
+        const singles = roundAutoGenerateSinglesTurn(eligiblePool, 1, activeTurn.turnNo, freshStats);
+        if (singles && singles.length > 0) {
+          nextHome = singles[0].home;
+          nextAway = singles[0].away;
+        }
+      } else {
+        const setup = roundAutoChooseFairSingleCourtSetup(eligiblePool, activeTurn.turnNo, freshStats);
+        if (setup && setup.pairing) {
+          nextHome = setup.pairing.home.map(p => p.name);
+          nextAway = setup.pairing.away.map(p => p.name);
+        }
+      }
+    }
+
+    roundAutoState.turns = roundAutoState.turns.filter(t => t?.status !== 'preview');
+
+    if (!nextHome || !nextAway) {
+      // 인원 부족 — 투입 없음, 미리보기도 없음 (UI에서 생성 불가 표시)
+    } else {
+      // 3. 다음 경기 현재 활성 턴에 투입
+      const newMatch = {
+        id: `ra-${activeTurn.turnNo}-court1-next-${Date.now()}`,
+        turnNo: activeTurn.turnNo,
+        courtNo: 1,
+        home: nextHome,
+        away: nextAway,
+        winner: null,
+        committed: false,
+        isNextCourt: true,
+      };
+      roundAutoAssignCourtGameSeq(newMatch, roundAutoCreateCourtGameSeqTracker());
+      activeTurn.matches.push(newMatch);
+
+      // 4. 미리보기: 방금 투입된 경기 참여자 제외한 대기 선수만으로 시도
+      const newMatchPlayerNames = new Set([...nextHome, ...nextAway]);
+      const waitingPool = eligiblePool.filter(p => !newMatchPlayerNames.has(p.name));
+
+      if (waitingPool.length >= requiredCount) {
+        const previewStats = JSON.parse(JSON.stringify(roundAutoState.sessionStats || {}));
+        let previewHome = null;
+        let previewAway = null;
+
+        if (isSingles) {
+          const previewSingles = roundAutoGenerateSinglesTurn(waitingPool, 1, activeTurn.turnNo + 1, previewStats);
+          if (previewSingles && previewSingles.length > 0) {
+            previewHome = previewSingles[0].home;
+            previewAway = previewSingles[0].away;
+          }
+        } else {
+          const previewSetup = roundAutoChooseFairSingleCourtSetup(waitingPool, activeTurn.turnNo + 1, previewStats);
+          if (previewSetup && previewSetup.pairing) {
+            previewHome = previewSetup.pairing.home.map(p => p.name);
+            previewAway = previewSetup.pairing.away.map(p => p.name);
+          }
+        }
+
+        if (previewHome && previewAway) {
+          roundAutoState.turns.push({
+            turnNo: activeTurn.turnNo + 1,
+            status: 'preview',
+            matches: [{
+              id: `ra-preview-${activeTurn.turnNo + 1}-1`,
+              turnNo: activeTurn.turnNo + 1,
+              courtNo: 1,
+              home: previewHome,
+              away: previewAway,
+              winner: null,
+            }],
+          });
+        }
+      }
+      // 대기 선수 부족이면 미리보기 없음 — UI에서 "생성 불가" 표시
+    }
+
+    // 5. 정규화 및 렌더링
     const normalized = roundAutoNormalizeTurnsState(roundAutoState);
     roundAutoState = normalized.state;
     roundAutoRenderMatches();
@@ -659,6 +740,7 @@ async function roundAutoHandleSingleCourtDone(matchId) {
     roundAutoRenderPersonalRanking();
     saveRoundAutoState();
 
+    // 6. 커밋 fire-and-forget
     roundAutoCommitSingleMatchToGlobalLog(activeTurn, match).catch(() => {});
 
   } finally {
@@ -816,46 +898,32 @@ function roundAutoStartSession() {
   roundAutoState.previewVariant = 0;
 
   const activeTurnNo = (Number(roundAutoState.turnNo) || 0) + 1;
-
-  if ((Number(roundAutoState.courtCount) || 1) <= 1) {
-    // ✅ [FIX] startSession은 초기화 경로 — baselineStats 전달하지 않아야
-    // rebuildSingleCourtState 내부에서 baseline 재계산 + sessionStats 초기화 실행됨
-    const rebuilt = rebuildSingleCourtState({
-      context: 'startSessionSingle',
-      activeTurnNo,
-      prevTurns: [],
-      doneMatches: [],
-      eligiblePool: roundAutoGetSelectedEligiblePool(),
-    });
-    if (!rebuilt.activeTurn || !Array.isArray(rebuilt.activeTurn.matches) || !rebuilt.activeTurn.matches.length) {
-      gsAlert('현재 인원으로 대진 생성이 불가능합니다. 참가자 설정을 확인해주세요.');
-      return null;
-    }
-    roundAutoState.turns = rebuilt.turns;
-    roundAutoState.turnNo = rebuilt.turnNo;
-    roundAutoState.sessionStats = rebuilt.sessionStats;
-    const normalized = roundAutoNormalizeTurnsState(roundAutoState);
-    roundAutoState = normalized.state;
-    roundAutoRenderMatches();
-    roundAutoRenderRanking();
-    roundAutoRenderPersonalRanking();
-    saveRoundAutoState();
-    return rebuilt.activeTurn;
-  }
-
   const realStats = roundAutoCloneSessionStats();
   const activeTurn = roundAutoBuildTurnWithStats(activeTurnNo, 'active', realStats, true);
   if (!activeTurn) return null;
 
   const nextTurns = [activeTurn];
-  console.debug('[round-auto][preview-rebuild][start-session-multi]', {
-    selectedPlayersLength: Array.isArray(roundAutoState.selectedPlayers) ? roundAutoState.selectedPlayers.length : 0,
-    eligiblePoolLength: roundAutoGetSelectedEligiblePool().length,
-    courtCountUsed: Number(roundAutoState.courtCount) || 1,
-    requiredPlayers: (Number(roundAutoState.courtCount) || 1) * (roundAutoIsSingles() ? 2 : 4),
-  });
-  const previewTurn = roundAutoBuildAllCourtPreviews(activeTurn, activeTurn._planningStats);
-  if (previewTurn) nextTurns.push(previewTurn);
+  if ((Number(roundAutoState.courtCount) || 1) <= 1) {
+    const previewTurnNo = activeTurnNo + 1;
+    const simulatedStats = roundAutoCloneSessionStats(activeTurn._planningStats);
+    console.debug('[round-auto][preview-rebuild][start-session-single]', {
+      selectedPlayersLength: Array.isArray(roundAutoState.selectedPlayers) ? roundAutoState.selectedPlayers.length : 0,
+      eligiblePoolLength: roundAutoGetSelectedEligiblePool().length,
+      courtCountUsed: Number(roundAutoState.courtCount) || 1,
+      requiredPlayers: (Number(roundAutoState.courtCount) || 1) * (roundAutoIsSingles() ? 2 : 4),
+    });
+    const previewTurn = roundAutoBuildTurnWithStats(previewTurnNo, 'preview', simulatedStats, false);
+    if (previewTurn) nextTurns.push(previewTurn);
+  } else {
+    console.debug('[round-auto][preview-rebuild][start-session-multi]', {
+      selectedPlayersLength: Array.isArray(roundAutoState.selectedPlayers) ? roundAutoState.selectedPlayers.length : 0,
+      eligiblePoolLength: roundAutoGetSelectedEligiblePool().length,
+      courtCountUsed: Number(roundAutoState.courtCount) || 1,
+      requiredPlayers: (Number(roundAutoState.courtCount) || 1) * (roundAutoIsSingles() ? 2 : 4),
+    });
+    const previewTurn = roundAutoBuildAllCourtPreviews(activeTurn, activeTurn._planningStats);
+    if (previewTurn) nextTurns.push(previewTurn);
+  }
 
   roundAutoState.turns = nextTurns;
   roundAutoState.turnNo = activeTurnNo;
@@ -927,185 +995,6 @@ function roundAutoApplyTurnParticipation(activePlayers, eligiblePool, turnNo, st
     stat.rested += 1;
     stat.restStreak += 1;
   });
-}
-
-
-function roundAutoBuildSingleCourtSeqBaseTurns(prevTurns, activeTurnNo, doneMatches) {
-  const baseTurns = Array.isArray(prevTurns)
-    ? prevTurns.filter(turn => turn?.status !== 'preview')
-    : [];
-  const preservedDoneMatches = Array.isArray(doneMatches)
-    ? doneMatches.filter(match => match && (match.winner === 'home' || match.winner === 'away'))
-    : [];
-  if (preservedDoneMatches.length) {
-    baseTurns.push({
-      turnNo: activeTurnNo,
-      status: 'done',
-      matches: preservedDoneMatches,
-    });
-  }
-  return baseTurns;
-}
-
-function roundAutoValidateSingleCourtPool(eligiblePool, activeTurnNo, contextLabel) {
-  const pool = Array.isArray(eligiblePool) ? eligiblePool : [];
-  const requiredPlayers = roundAutoIsSingles() ? 2 : 4;
-  if (pool.length < requiredPlayers) {
-    console.debug('[round-auto][single-court-pool-invalid]', {
-      context: contextLabel,
-      activeTurnNo,
-      eligiblePoolLength: pool.length,
-      requiredPlayers,
-      selectedPlayersLength: Array.isArray(roundAutoState.selectedPlayers) ? roundAutoState.selectedPlayers.length : 0,
-    });
-    return { ok: false, requiredPlayers };
-  }
-  return { ok: true, requiredPlayers };
-}
-
-function roundAutoValidateSingleCourtMatch(match, eligiblePool) {
-  if (!match) return false;
-  const requiredPlayers = roundAutoIsSingles() ? 2 : 4;
-  const home = Array.isArray(match.home) ? match.home.slice() : [match.home];
-  const away = Array.isArray(match.away) ? match.away.slice() : [match.away];
-  if (!home.length || !away.length) return false;
-  const names = [...home, ...away].filter(Boolean);
-  if (names.length !== requiredPlayers) return false;
-  if ((new Set(names)).size !== names.length) return false;
-  const eligibleNames = new Set((Array.isArray(eligiblePool) ? eligiblePool : []).map(p => p.name));
-  if (!names.every(name => eligibleNames.has(name))) return false;
-  if ((Number(match.courtNo) || 0) !== 1) return false;
-  if (match.winner === 'home' || match.winner === 'away') return false;
-  return true;
-}
-
-function rebuildSingleCourtState(options = {}) {
-  const activeTurnNo = Number(options.activeTurnNo) || ((Number(roundAutoState.turnNo) || 0) + 1);
-  const prevTurns = Array.isArray(options.prevTurns)
-    ? options.prevTurns.filter(turn => turn?.status !== 'preview')
-    : [];
-  const doneMatches = Array.isArray(options.doneMatches)
-    ? options.doneMatches.filter(match => match && (match.winner === 'home' || match.winner === 'away'))
-    : [];
-  const eligiblePool = Array.isArray(options.eligiblePool)
-    ? options.eligiblePool
-    : roundAutoGetSelectedEligiblePool();
-  const poolCheck = roundAutoValidateSingleCourtPool(
-    eligiblePool,
-    activeTurnNo,
-    options.context || 'single-court-rebuild'
-  );
-  const seqBaseTurns = roundAutoBuildSingleCourtSeqBaseTurns(prevTurns, activeTurnNo, doneMatches);
-  const baselineStats = options.baselineStats && typeof options.baselineStats === 'object'
-    ? roundAutoCloneSessionStats(options.baselineStats)
-    : roundAutoRebuildSessionStatsBaseline(eligiblePool, seqBaseTurns);
-
-  // ✅ [FIX] 외부에서 baselineStats를 명시적으로 넘긴 경우(누적 유지 경로)엔 덮어쓰지 않음
-  // 세션 시작/초기화 경로에서만 내부 재계산값으로 초기화
-  if (!options.baselineStats) {
-    roundAutoState.sessionStats = roundAutoCloneSessionStats(baselineStats);
-  }
-
-  const courtSeqTracker = roundAutoCreateCourtGameSeqTracker(seqBaseTurns);
-  const regenStamp = Date.now();
-  let nextCurrentMatch = null;
-  let nextPlanningStats = roundAutoCloneSessionStats(roundAutoState.sessionStats);
-
-  if (poolCheck.ok) {
-    const activeDraft = roundAutoBuildTurnWithStats(activeTurnNo, 'active', nextPlanningStats, true, {
-      eligiblePool,
-      courtCount: 1,
-    });
-
-    const draftMatch = activeDraft && Array.isArray(activeDraft.matches)
-      ? activeDraft.matches.find(match => match && (match.winner !== 'home' && match.winner !== 'away'))
-      : null;
-
-    if (draftMatch) {
-      nextCurrentMatch = {
-        ...draftMatch,
-        id: `ra-single-${activeTurnNo}-1-${regenStamp}`,
-        turnNo: activeTurnNo,
-        courtNo: 1,
-        winner: null,
-        committed: false,
-        nextCourtAssigned: false,
-        ts: undefined,
-        logId: undefined,
-        _courtDoneInFlight: false,
-      };
-      delete nextCurrentMatch.courtGameSeq;
-      roundAutoAssignCourtGameSeq(nextCurrentMatch, courtSeqTracker);
-      const validStage1 = roundAutoValidateSingleCourtMatch(nextCurrentMatch, eligiblePool);
-      const validStage2 = validStage1
-        && roundAutoValidateSingleCourtMatch({
-          ...nextCurrentMatch,
-          home: Array.isArray(nextCurrentMatch.home) ? nextCurrentMatch.home.slice() : [nextCurrentMatch.home],
-          away: Array.isArray(nextCurrentMatch.away) ? nextCurrentMatch.away.slice() : [nextCurrentMatch.away],
-        }, eligiblePool);
-      if (!(validStage1 && validStage2)) {
-        nextCurrentMatch = null;
-      }
-    }
-  }
-
-  const activeMatches = nextCurrentMatch ? [...doneMatches, nextCurrentMatch] : [...doneMatches];
-  const unresolvedMatches = activeMatches.filter(match => match && (match.winner !== 'home' && match.winner !== 'away'));
-  const prunedActiveMatches = unresolvedMatches.length > 1
-    ? [...doneMatches, unresolvedMatches[0]]
-    : activeMatches;
-
-  const activeTurn = {
-    turnNo: activeTurnNo,
-    matches: prunedActiveMatches,
-    status: nextCurrentMatch ? 'active' : 'done',
-    _planningStats: roundAutoCloneSessionStats(nextPlanningStats),
-  };
-
-  let previewTurn = null;
-  if (nextCurrentMatch) {
-    const previewStats = roundAutoCloneSessionStats(activeTurn._planningStats);
-    const previewDraft = roundAutoBuildTurnWithStats(activeTurnNo + 1, 'preview', previewStats, false, {
-      eligiblePool,
-      courtCount: 1,
-    });
-    if (previewDraft && Array.isArray(previewDraft.matches) && previewDraft.matches.length) {
-      const previewMatch = {
-        ...previewDraft.matches[0],
-        id: `ra-preview-${activeTurnNo + 1}-1-${regenStamp}`,
-        turnNo: activeTurnNo + 1,
-        courtNo: 1,
-        winner: null,
-        committed: false,
-        nextCourtAssigned: false,
-      };
-      delete previewMatch.courtGameSeq;
-      if (roundAutoValidateSingleCourtMatch(previewMatch, eligiblePool)) {
-        previewTurn = {
-          turnNo: activeTurnNo + 1,
-          status: 'preview',
-          matches: [previewMatch],
-          _planningStats: roundAutoCloneSessionStats(previewStats),
-        };
-      }
-    }
-  }
-
-  const nextTurns = previewTurn
-    ? [...prevTurns, activeTurn, previewTurn]
-    : [...prevTurns, activeTurn];
-
-  return {
-    turns: nextTurns,
-    turnNo: activeTurnNo,
-    sessionStats: roundAutoCloneSessionStats(roundAutoState.sessionStats),
-    activeTurn,
-    previewTurn,
-    eligiblePool,
-    seqBaseTurns,
-    courtSeqTracker,
-    baselineStats: roundAutoCloneSessionStats(baselineStats),
-  };
 }
 
 function roundAutoRebuildSessionStatsBaseline(eligiblePool, completedTurns = []) {
@@ -2114,32 +2003,10 @@ function roundAutoRegenerateCurrentTurn() {
     const activeTurn = turns[activeIdx];
     const activeTurnNo = activeTurn.turnNo;
     const prevTurns = turns.slice(0, activeIdx).filter(t => t?.status !== 'preview');
-    const doneMatches = (activeTurn.matches || []).filter(m => m && (m.winner === 'home' || m.winner === 'away'));
+
+    const doneMatches = (activeTurn.matches || []).filter(m => m.winner === 'home' || m.winner === 'away');
     const eligiblePool = roundAutoGetSelectedEligiblePool();
     const targetCourtCount = Math.max(1, Number(roundAutoState.courtCount) || 1);
-
-    if (targetCourtCount <= 1) {
-      // ✅ regenerate도 기록 보존 경로 — baselineStats 전달해서 sessionStats 덮어쓰기 방지
-      const rebuilt = rebuildSingleCourtState({
-        context: 'regenerateCurrentTurnSingle',
-        activeTurnNo,
-        prevTurns,
-        doneMatches,
-        eligiblePool,
-        baselineStats: roundAutoState.sessionStats,
-      });
-      roundAutoState.turns = rebuilt.turns;
-      roundAutoState.turnNo = rebuilt.turnNo;
-      roundAutoState.sessionStats = rebuilt.sessionStats;
-      const normalized = roundAutoNormalizeTurnsState(roundAutoState);
-      roundAutoState = normalized.state;
-      roundAutoRenderMatches();
-      roundAutoRenderRanking();
-      roundAutoRenderPersonalRanking();
-      saveRoundAutoState();
-      return;
-    }
-
     const baselineTurns = [
       ...prevTurns.filter(t => t?.status === 'done'),
       { turnNo: activeTurnNo, matches: doneMatches },
@@ -2204,7 +2071,11 @@ function roundAutoRegenerateCurrentTurn() {
       targetCourtCount,
       replanningPoolLength: eligiblePool.length,
     });
-    const previewTurn = roundAutoBuildAllCourtPreviews(newActiveTurn, simulatedStats, { courtCount: targetCourtCount });
+    const previewTurn = targetCourtCount > 1
+      ? roundAutoBuildAllCourtPreviews(newActiveTurn, simulatedStats, { courtCount: targetCourtCount })
+      : roundAutoBuildTurnWithStats(activeTurnNo + 1, 'preview', simulatedStats, false, {
+        courtCount: targetCourtCount,
+      });
     roundAutoState.turns = previewTurn
       ? [...prevTurns, newActiveTurn, previewTurn]
       : [...prevTurns, newActiveTurn];
