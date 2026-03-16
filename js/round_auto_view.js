@@ -2190,6 +2190,257 @@ function roundAutoSetWinner(matchId, side) {
   });
 }
 
+
+function roundAutoBoardNormalizePlayers(value) {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).map(item => typeof item === 'string' ? item : (item?.name || '')).filter(Boolean);
+  }
+  if (typeof value === 'string' && value.trim()) return [value.trim()];
+  if (value && typeof value === 'object') {
+    if (Array.isArray(value.players)) return roundAutoBoardNormalizePlayers(value.players);
+    if (Array.isArray(value.members)) return roundAutoBoardNormalizePlayers(value.members);
+    if (typeof value.name === 'string' && value.name.trim()) return [value.name.trim()];
+  }
+  return [];
+}
+
+function roundAutoBoardExtractSidePlayers(match, side) {
+  if (!match) return [];
+  const altKeys = side === 'home'
+    ? ['team1', 'left', 'a', 'player1', 'players1', 'homeTeam', 'homePlayers', 'teamA']
+    : ['team2', 'right', 'b', 'player2', 'players2', 'awayTeam', 'awayPlayers', 'teamB'];
+  const candidates = [match[side], ...altKeys.map(key => match[key])];
+  for (const value of candidates) {
+    const arr = roundAutoBoardNormalizePlayers(value);
+    if (arr.length) return arr;
+  }
+  if (Array.isArray(match.players) && match.players.length) {
+    const list = roundAutoBoardNormalizePlayers(match.players);
+    if (roundAutoIsSingles()) return side === 'home' ? list.slice(0, 1) : list.slice(1, 2);
+    return side === 'home' ? list.slice(0, 2) : list.slice(2, 4);
+  }
+  return [];
+}
+
+function roundAutoBoardRenderSideText(match, side) {
+  const names = roundAutoBoardExtractSidePlayers(match, side);
+  if (!names.length) return '';
+  return names.map(name => roundAutoPlayerLabel(name, '')).join(roundAutoIsSingles() ? ' vs ' : ' / ');
+}
+
+function roundAutoBoardHasTeams(match) {
+  return !!(roundAutoBoardRenderSideText(match, 'home') && roundAutoBoardRenderSideText(match, 'away'));
+}
+
+function roundAutoBoardGetTypeText(match) {
+  const rawType = String(match?.matchType || match?.type || roundAutoGetEventType() || '').toLowerCase();
+  const genderType = String(match?.genderType || match?.division || '').toLowerCase();
+  if (rawType === 'single' || rawType === 'singles') return '단식';
+  if (genderType === 'mixed') return '혼복';
+  if (genderType === 'female' || genderType === 'women') return '여복';
+  if (genderType === 'male' || genderType === 'men') return '남복';
+  return rawType === 'double' || rawType === 'doubles' || !rawType ? '복식' : '경기';
+}
+
+function roundAutoEnsureForecastModal() {
+  let modal = document.getElementById('round-auto-forecast-modal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'round-auto-forecast-modal';
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:760px; width:min(94vw, 760px);">
+      <div class="modal-header" style="display:flex; align-items:center; justify-content:center; gap:10px; text-align:center;">
+        <div style="font-weight:800; font-size:18px; color:#0f172a;">전체예상대진표</div>
+      </div>
+      <div class="modal-body" id="round-auto-forecast-modal-body" style="max-height:min(72vh, 760px); overflow:auto; background:#f8fafc;"></div>
+      <div class="modal-footer" style="justify-content:space-between; gap:8px;">
+        <div style="font-size:11px; color:#64748b; text-align:left; line-height:1.45; flex:1;">
+          호주색은 승리 팀, 회색은 패배 팀. 현재 진행 중인 경기는 기본 색으로 표시돼.
+        </div>
+        <button type="button" class="modal-btn modal-btn-primary" onclick="roundAutoCloseForecastModal()">
+          <span class="material-symbols-outlined btn-ico">done</span>확인
+        </button>
+      </div>
+    </div>`;
+  modal.addEventListener('click', evt => {
+    if (evt.target === modal) roundAutoCloseForecastModal();
+  });
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function roundAutoCloseForecastModal() {
+  const modal = document.getElementById('round-auto-forecast-modal');
+  if (modal) modal.classList.remove('active');
+}
+
+function roundAutoBuildForecastTurns(depth = 4) {
+  const courtCount = Math.max(1, Number(roundAutoState?.courtCount) || 1);
+  const turns = Array.isArray(roundAutoState?.turns) ? roundAutoState.turns : [];
+  const realTurns = turns.filter(turn => turn?.status !== 'preview');
+  const latestTurnNo = realTurns.reduce((max, turn) => Math.max(max, Number(turn?.turnNo) || 0), Number(roundAutoState?.turnNo) || 0);
+  const courtSeqTracker = roundAutoCreateCourtGameSeqTracker(realTurns);
+  const forecastTurns = [];
+  const statsRef = roundAutoCloneSessionStats(roundAutoState?.sessionStats || {});
+  const snapshot = {
+    nextMatchType: roundAutoState?.nextMatchType,
+    mixedStreak: roundAutoState?.mixedStreak,
+    matchupHistory: JSON.parse(JSON.stringify(roundAutoState?.matchupHistory || {})),
+    partnerHistory: JSON.parse(JSON.stringify(roundAutoState?.partnerHistory || {})),
+    previewVariant: roundAutoState?.previewVariant,
+  };
+  const originalAlert = typeof gsAlert === 'function' ? gsAlert : null;
+
+  try {
+    if (typeof window !== 'undefined' && originalAlert) window.gsAlert = () => {};
+    let nextTurnNo = latestTurnNo + 1;
+    for (let i = 0; i < depth; i += 1) {
+      const turn = roundAutoBuildTurnWithStats(nextTurnNo, 'preview', statsRef, true, { courtCount });
+      if (!turn || !Array.isArray(turn.matches) || !turn.matches.length) break;
+      turn.matches = turn.matches
+        .filter(match => roundAutoBoardHasTeams(match))
+        .map(match => {
+          const cloned = JSON.parse(JSON.stringify(match));
+          roundAutoAssignCourtGameSeq(cloned, courtSeqTracker);
+          return cloned;
+        });
+      if (!turn.matches.length) break;
+      forecastTurns.push(turn);
+      nextTurnNo += 1;
+    }
+  } catch (err) {
+    console.error('[round-auto][forecast-modal] forecast build failed:', err);
+  } finally {
+    if (typeof window !== 'undefined' && originalAlert) window.gsAlert = originalAlert;
+    roundAutoState.nextMatchType = snapshot.nextMatchType;
+    roundAutoState.mixedStreak = snapshot.mixedStreak;
+    roundAutoState.matchupHistory = snapshot.matchupHistory;
+    roundAutoState.partnerHistory = snapshot.partnerHistory;
+    roundAutoState.previewVariant = snapshot.previewVariant;
+  }
+
+  return forecastTurns;
+}
+
+function roundAutoBuildCourtBoardData(options = {}) {
+  const courtCount = Math.max(1, Number(roundAutoState?.courtCount) || 1);
+  const minCardsPerCourt = Math.max(1, Number(options.minCardsPerCourt) || 5);
+  const board = Array.from({ length: courtCount }, (_, idx) => ({ courtNo: idx + 1, matches: [] }));
+  const turns = Array.isArray(roundAutoState?.turns) ? roundAutoState.turns : [];
+  const realTurns = turns
+    .filter(turn => turn?.status !== 'preview')
+    .slice()
+    .sort((a, b) => (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0));
+
+  realTurns.forEach(turn => {
+    (Array.isArray(turn?.matches) ? turn.matches : [])
+      .filter(match => match && roundAutoBoardHasTeams(match) && Number(match?.courtNo) >= 1)
+      .slice()
+      .sort((a, b) => (Number(a?.courtGameSeq) || 0) - (Number(b?.courtGameSeq) || 0) || (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0))
+      .forEach(match => {
+        const courtNo = Number(match?.courtNo) || 0;
+        if (courtNo < 1 || courtNo > courtCount) return;
+        board[courtNo - 1].matches.push({
+          ...JSON.parse(JSON.stringify(match)),
+          boardStatus: (match.winner === 'home' || match.winner === 'away') ? 'done' : 'live',
+        });
+      });
+  });
+
+  const forecastTurns = roundAutoBuildForecastTurns(Math.max(minCardsPerCourt, 5));
+  for (const turn of forecastTurns) {
+    (Array.isArray(turn?.matches) ? turn.matches : []).forEach(match => {
+      const courtNo = Number(match?.courtNo) || 0;
+      if (courtNo < 1 || courtNo > courtCount) return;
+      if (board[courtNo - 1].matches.length >= minCardsPerCourt) return;
+      board[courtNo - 1].matches.push({
+        ...JSON.parse(JSON.stringify(match)),
+        boardStatus: 'forecast',
+      });
+    });
+    if (board.every(court => court.matches.length >= minCardsPerCourt)) break;
+  }
+
+  return board.map(court => ({
+    courtNo: court.courtNo,
+    matches: court.matches.slice(0, Math.max(minCardsPerCourt, court.matches.length)),
+  }));
+}
+
+function roundAutoRenderForecastModalBody(boardData) {
+  const escapeHtml = value => roundAutoEscape(value == null ? '' : String(value));
+  const getStatusChip = match => {
+    if (match?.boardStatus === 'done') return { label: '완료', style: 'background:#64748b; color:#fff;' };
+    if (match?.boardStatus === 'live') return { label: '진행중', style: 'background:var(--wimbledon-sage); color:#fff;' };
+    return { label: '예정', style: 'background:var(--roland-clay); color:#fff;' };
+  };
+  const renderVersusLine = match => {
+    const homeText = escapeHtml(roundAutoBoardRenderSideText(match, 'home') || '미정');
+    const awayText = escapeHtml(roundAutoBoardRenderSideText(match, 'away') || '미정');
+    const homeWinner = match?.winner === 'home';
+    const awayWinner = match?.winner === 'away';
+    const isDone = homeWinner || awayWinner;
+    const renderTeamPill = (text, state) => {
+      let bg = '#ffffff';
+      let fg = '#0f172a';
+      let border = '1px solid #e2e8f0';
+      if (state === 'winner') {
+        bg = 'var(--aussie-blue)';
+        fg = '#ffffff';
+        border = '1px solid var(--aussie-blue)';
+      } else if (state === 'loser') {
+        bg = '#e5e7eb';
+        fg = '#6b7280';
+        border = '1px solid #d1d5db';
+      }
+      return `<span style="display:inline-flex; align-items:center; max-width:100%; min-width:0; padding:8px 10px; border-radius:12px; background:${bg}; color:${fg}; border:${border}; font-size:13px; font-weight:800; line-height:1.35; white-space:normal; word-break:keep-all;">${text}</span>`;
+    };
+    const homeState = isDone ? (homeWinner ? 'winner' : 'loser') : 'normal';
+    const awayState = isDone ? (awayWinner ? 'winner' : 'loser') : 'normal';
+    return `
+      <div style="display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:nowrap; min-width:0;">
+        <div style="flex:1; min-width:0; text-align:right;">${renderTeamPill(homeText, homeState)}</div>
+        <div style="flex:0 0 auto; font-size:12px; font-weight:900; color:#94a3b8; letter-spacing:0.02em;">vs</div>
+        <div style="flex:1; min-width:0; text-align:left;">${renderTeamPill(awayText, awayState)}</div>
+      </div>`;
+  };
+  const emptyHtml = `
+    <div style="padding:18px 14px; border:1px dashed #cbd5e1; border-radius:14px; background:#fff; color:#94a3b8; font-size:12px; text-align:center;">
+      아직 표시할 경기 없음
+    </div>`;
+  return `
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      ${boardData.map(court => `
+        <div class="team-box" style="padding:0; overflow:hidden; border-radius:16px; border:1px solid #dbe4ea; box-shadow:0 8px 22px rgba(15,23,42,0.05);">
+          <div style="background:var(--wimbledon-sage); color:#fff; padding:12px 16px; font-size:15px; font-weight:800;">🎾 코트 ${court.courtNo}</div>
+          <div style="padding:14px; display:flex; flex-direction:column; gap:12px; background:#f8fafc;">
+            ${court.matches.length ? court.matches.map(match => {
+              const chip = getStatusChip(match);
+              const seq = Number(match?.courtGameSeq) || 0;
+              return `
+                <div style="padding:12px; border-radius:14px; background:#fff; border:1px solid #e5e7eb;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px;">
+                    <div style="font-size:13px; font-weight:800; color:#0f172a;">${seq > 0 ? `${seq}경기` : '예상 경기'} ${escapeHtml(roundAutoBoardGetTypeText(match))}</div>
+                    <span style="font-size:11px; font-weight:800; padding:4px 9px; border-radius:999px; ${chip.style}">${chip.label}</span>
+                  </div>
+                  ${renderVersusLine(match)}
+                </div>`;
+            }).join('') : emptyHtml}
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+function roundAutoOpenForecastModal() {
+  const modal = roundAutoEnsureForecastModal();
+  const body = document.getElementById('round-auto-forecast-modal-body');
+  if (!body) return;
+  const boardData = roundAutoBuildCourtBoardData({ minCardsPerCourt: 5 });
+  body.innerHTML = roundAutoRenderForecastModalBody(boardData);
+  modal.classList.add('active');
+}
+
 function roundAutoRenderMatches() {
   const list = document.getElementById('round-auto-match-list')
     || document.getElementById('roundAutoMatchList')
@@ -2316,12 +2567,18 @@ function roundAutoRenderMatches() {
           <div style="font-size:12px; color:#9ca3af; text-align:center; padding:8px 0;">인원 부족으로 생성 불가</div>
         </div>`;
     }
-    const rows = queueMatches.map((match, idx) => `
+    const rows = queueMatches.map((match, idx) => {
+      const reasonText = roundAutoReasonText(match);
+      return `
       <div style="display:flex; gap:8px; align-items:flex-start; padding:8px 0; ${idx > 0 ? 'border-top:1px dashed #e5e7eb;' : ''}">
         <div style="min-width:48px; font-size:12px; font-weight:800; color:#334155;">${idx + 1}순위</div>
-        <div style="flex:1; font-size:12px; color:#0f172a; font-weight:700; line-height:1.45;">${escapeHtml(getTypeText(match))} / ${escapeHtml(renderSideText(match, 'home'))} vs ${escapeHtml(renderSideText(match, 'away'))}</div>
+        <div style="flex:1;">
+          <div style="font-size:12px; color:#0f172a; font-weight:700; line-height:1.45;">${escapeHtml(getTypeText(match))} / ${escapeHtml(renderSideText(match, 'home'))} vs ${escapeHtml(renderSideText(match, 'away'))}</div>
+          ${reasonText ? `<div style="margin-top:4px; font-size:11px; color:#6b7280; line-height:1.4;"><span style="font-weight:700; color:#475569;">추천 이유</span><br>${escapeHtml(reasonText)}</div>` : ''}
+        </div>
         <span style="font-size:11px; font-weight:700; border-radius:999px; padding:3px 8px; ${previewBadgeStyle}">예정</span>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     return `
       <div style="margin-bottom:10px; padding:12px; border:1px dashed #d1d5db; border-radius:10px; background:#f9fafb;">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
@@ -2343,9 +2600,16 @@ function roundAutoRenderMatches() {
       for (let courtNo = 1; courtNo <= courtCount; courtNo += 1) currentCards.push(renderCurrentCourtCard(courtNo));
       list.innerHTML = `
         <div style="margin-bottom:12px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px;">
+            <div style="font-weight:700; font-size:13px; color:var(--wimbledon-sage);">이번 턴 대진표</div>
+            <button type="button" class="btn-main" onclick="roundAutoOpenForecastModal()"
+              style="width:auto; margin-top:0; background:var(--aussie-blue); font-size:12px; padding:8px 12px; white-space:nowrap; flex:0 0 auto;">
+              📋 전체예상대진표
+            </button>
+          </div>
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-            <div style="font-weight:700; font-size:13px; color:var(--wimbledon-sage);">현재 경기</div>
-            <span style="font-size:11px; color:#fff; background:var(--wimbledon-sage); border-radius:999px; padding:3px 8px;">코트별 독립 진행</span>
+            <div style="font-size:11px; color:#64748b; font-weight:700;">코트별 독립 진행</div>
+            <span style="font-size:11px; color:#fff; background:var(--wimbledon-sage); border-radius:999px; padding:3px 8px;">진행중</span>
           </div>
           ${currentCards.join('')}
           ${renderPreviewQueue()}
@@ -2360,8 +2624,14 @@ function roundAutoRenderMatches() {
 
     list.innerHTML = `
       <div style="margin-bottom:12px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-          <div style="font-weight:700; font-size:13px; color:var(--wimbledon-sage);">현재 경기</div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px;">
+          <div style="font-weight:700; font-size:13px; color:var(--wimbledon-sage);">이번 턴 대진표</div>
+          <button type="button" class="btn-main" onclick="roundAutoOpenForecastModal()"
+            style="width:auto; margin-top:0; background:var(--aussie-blue); font-size:12px; padding:8px 12px; white-space:nowrap; flex:0 0 auto;">
+            📋 전체예상대진표
+          </button>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:flex-end; margin-bottom:8px;">
           <span style="font-size:11px; color:#fff; background:var(--wimbledon-sage); border-radius:999px; padding:3px 8px;">진행중</span>
         </div>
         ${renderCurrentCourtCard(1)}
@@ -3130,3 +3400,26 @@ window.roundAutoConfirmManual = roundAutoConfirmManual;
 window.roundAutoManualAssignPlayer = roundAutoManualAssignPlayer;
 window.roundAutoManualRemovePlayer = roundAutoManualRemovePlayer;
 
+
+window.roundAutoOpenForecastModal = roundAutoOpenForecastModal;
+window.roundAutoCloseForecastModal = roundAutoCloseForecastModal;
+
+
+/* Forecast modal UI micro patch v3 */
+(function(){
+  try {
+    var style = document.createElement('style');
+    style.innerHTML = `
+    .forecast-confirm-btn{
+      width:50% !important;
+      padding:10px 14px;
+      margin:20px auto 0;
+      display:block;
+    }
+    .forecast-desc{
+      display:none !important;
+    }
+    `;
+    document.head.appendChild(style);
+  } catch (e) {}
+})();
