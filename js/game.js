@@ -142,6 +142,7 @@ function updateSimpleTeamsUI() {
     ? names.map(n => displayName(n)).join(' / ')
     : '-';
 
+  // ✅ v6.44: 코트카드 스타일을 라운드 자동생성 UI와 통일
   let html = '';
   for (let i = 0; i < gameCourtCount; i++) {
     const ct = courtTeams[i] || { home: [], away: [], winner: null };
@@ -149,20 +150,22 @@ function updateSimpleTeamsUI() {
     const homeReady = ct.home.length === max;
     const awayReady = ct.away.length === max;
     const canClick = homeReady && awayReady;
-    const courtLabel = `<div style="font-size:11px;color:#888;margin-bottom:6px;text-align:center;">코트 ${i + 1}</div>`;
-    const homeStyle = ct.winner === 'home' ? 'background:var(--wimbledon-sage);color:white;' : '';
-    const awayStyle = ct.winner === 'away' ? 'background:var(--wimbledon-sage);color:white;' : '';
+    const baseBtn = 'flex:1; min-height:40px; border-radius:10px; border:none; background:#d0846c; color:#fff; padding:10px 8px; font-size:13px; font-weight:700; text-align:center;';
+    const homeStyle = baseBtn + (ct.winner === 'home' ? ' background:var(--wimbledon-sage);' : '') + (homeReady ? '' : ' opacity:0.4;');
+    const awayStyle = baseBtn + (ct.winner === 'away' ? ' background:var(--wimbledon-sage);' : '') + (awayReady ? '' : ' opacity:0.4;');
     html += `
-      <div style="margin-bottom:12px;">
-        ${courtLabel}
-        <div style="display:flex;align-items:center;gap:8px;">
-          <button onclick="saveSimpleImmediate(${i},'home')"
-            class="opt-btn" style="flex:1;padding:14px 6px;font-size:13px;font-weight:700;${homeStyle}opacity:${homeReady ? '1' : '0.4'};"
-            ${canClick ? '' : 'disabled'}>${teamLabel(ct.home)}</button>
-          <div style="font-size:13px;font-weight:700;color:#888;flex-shrink:0;">vs</div>
-          <button onclick="saveSimpleImmediate(${i},'away')"
-            class="opt-btn" style="flex:1;padding:14px 6px;font-size:13px;font-weight:700;${awayStyle}opacity:${awayReady ? '1' : '0.4'};"
-            ${canClick ? '' : 'disabled'}>${teamLabel(ct.away)}</button>
+      <div style="padding:0; margin-bottom:14px; overflow:hidden; border-radius:14px; border:1px solid #e5e7eb;">
+        <div style="background:var(--wimbledon-sage); color:#fff; padding:10px 14px; font-weight:800; font-size:14px;">🎾 코트 ${i + 1}</div>
+        <div style="padding:12px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button onclick="saveSimpleImmediate(${i},'home')"
+              class="opt-btn" style="${homeStyle}"
+              ${canClick ? '' : 'disabled'}>${teamLabel(ct.home)}</button>
+            <div style="font-size:12px; font-weight:700; color:#94a3b8; flex-shrink:0;">vs</div>
+            <button onclick="saveSimpleImmediate(${i},'away')"
+              class="opt-btn" style="${awayStyle}"
+              ${canClick ? '' : 'disabled'}>${teamLabel(ct.away)}</button>
+          </div>
         </div>
       </div>`;
   }
