@@ -560,10 +560,7 @@ function roundAutoBuildAllCourtPreviews(activeTurn, planningStatsSource, options
 }
 
 async function roundAutoCommitSingleMatchToGlobalLog(activeTurn, match) {
-  if (typeof isPracticeMode !== 'undefined' && isPracticeMode === 'practice') {
-    gsAlert('⚠️ 현재 연습 모드입니다. 기록이 반영되지 않습니다.');
-    return false;
-  }
+  if (window.isPracticeMode === 'practice') return false;
   if (!activeTurn || !match) return false;
   if (match.committed) return true;
   if (match.winner !== 'home' && match.winner !== 'away') return false;
