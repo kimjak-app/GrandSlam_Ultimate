@@ -560,13 +560,14 @@ function roundAutoBuildAllCourtPreviews(activeTurn, planningStatsSource, options
 }
 
 async function roundAutoCommitSingleMatchToGlobalLog(activeTurn, match) {
-  if (typeof isPracticeMode !== 'undefined' && isPracticeMode === 'practice') {
-    gsAlert('⚠️ 현재 연습 모드입니다. 기록이 반영되지 않습니다.');
-    return false;
-  }
   if (!activeTurn || !match) return false;
   if (match.committed) return true;
   if (match.winner !== 'home' && match.winner !== 'away') return false;
+  // ✅ v6.442: 연습 모드 차단 — Firebase 저장 및 스탯 반영 스킵
+  if (typeof isPracticeMode !== 'undefined' && isPracticeMode === 'practice') {
+    match.committed = true;
+    return true;
+  }
 
   const runCommit = async () => {
     roundAutoState._commitInFlight = true;

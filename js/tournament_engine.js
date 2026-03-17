@@ -38,6 +38,6 @@ async function tournamentEngineCommitTournamentIfNeeded() {
     renderStatsPlayerList();
     setTimeout(applyAutofitAllTables, 0);
   } else {
-    gsAlert('토너먼트 결과 반영 실패 😵‍💫\n(네트워크/GAS 상태 확인 필요)');
+    gsAlert('토너먼트 결과 반영 실패 😵‍💫\n(네트워크/서버 상태 확인 필요)');
   }
 }
