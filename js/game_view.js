@@ -3,8 +3,8 @@
 // ========================================
 
 function renderPoolView() {
-  const members = players.filter(p => !p.isGuest && (!p.status || p.status === 'active')).sort((a, b) => (b.score || 0) - (a.score || 0));
-  const guests = players.filter(p => p.isGuest && !HIDDEN_PLAYERS.includes(p.name));
+  const members = players.filter(p => !p.isGuest && p.status !== 'inactive').sort((a, b) => (b.score || 0) - (a.score || 0));
+  const guests = players.filter(p => p.isGuest && !p.isOneTime);
 
   const hint = $('hint-1v2');
   if (hint) hint.style.display = 'none';
@@ -29,13 +29,13 @@ function renderPoolView() {
   html += '</div>';
 
   if (guests.length > 0) {
-    html += divider('GUEST LIST');
+    html += divider('준회원 LIST');
     html += '<div class="player-pool">';
     guests.forEach((p, i) => {
       const sel = (window.hT?.includes(p.name)) || (window.aT?.includes(p.name));
       const chkId = `pool_g_${i}`;
       html += `<input type="checkbox" id="${chkId}" class="p-chk" value="${escapeHtml(p.name)}" ${sel ? 'checked' : ''} onclick="pick('${escapeHtml(p.name).replace(/'/g, "&#39;")}')">`;
-      html += `<label for="${chkId}" class="p-label guest-label">[G] ${escapeHtml(p.name)}</label>`;
+      html += `<label for="${chkId}" class="p-label guest-label">[준] ${escapeHtml(p.name)}</label>`;
     });
     html += '</div>';
   }
@@ -78,12 +78,12 @@ function setMatchTypeView(t) {
 }
 
 function updatePlayerListView() {
-  const members = players.filter(p => !p.isGuest && (!p.status || p.status === 'active')).sort((a, b) => a.name.localeCompare(b.name));
-  const guests = players.filter(p => p.isGuest && (!p.status || p.status === 'active')).sort((a, b) => a.name.localeCompare(b.name));
+  const members = players.filter(p => !p.isGuest && p.status !== 'inactive').sort((a, b) => a.name.localeCompare(b.name));
+  const guests = players.filter(p => p.isGuest && p.status !== 'inactive').sort((a, b) => a.name.localeCompare(b.name));
 
   const rows = [...members, ...guests].map(p => {
     const safe = escapeHtml(p.name).replace(/'/g, '&#39;');
-    const typeLabel = p.isGuest ? '<span style="color:var(--text-gray);">게스트</span>' : '회원';
+    const typeLabel = p.isGuest ? '<span style="color:var(--text-gray);">준회원</span>' : '회원';
     const gIcon = p.gender === 'F'
       ? '<span class="material-symbols-outlined" style="font-size:15px; color:#E8437A; vertical-align:middle; margin-right:3px;">female</span>'
       : '<span class="material-symbols-outlined" style="font-size:15px; color:#3A7BD5; vertical-align:middle; margin-right:3px;">male</span>';

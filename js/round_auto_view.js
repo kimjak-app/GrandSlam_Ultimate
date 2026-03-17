@@ -222,7 +222,7 @@ function roundAutoGetClubPlayers() {
 
   return Array.isArray(players)
     ? players
-      .filter(p => !HIDDEN_PLAYERS.includes(p.name) && (!p.status || p.status === 'active'))
+      .filter(p => !HIDDEN_PLAYERS.includes(p.name) && !p.isGuest && (!p.status || p.status === 'active'))
       .map((p, idx) => ({ ...p, rank: rankMap[p.name] || p.rank || (idx + 1) }))
       .sort((a, b) => a.rank - b.rank)
     : [];
@@ -234,6 +234,29 @@ function roundAutoGetFilteredClubPlayers() {
     ? cfg.levelFilter
     : (Array.isArray(cfg.levels) ? cfg.levels : ['A', 'B', 'C']);
   return roundAutoGetClubPlayers().filter(p => {
+    const levelOk = levelFilter.includes((p.level || 'A'));
+    const genderOk = cfg.gender === 'all' || p.gender === cfg.gender;
+    return levelOk && genderOk;
+  });
+}
+
+function roundAutoGetAssociatePlayers() {
+  let rankMap = {};
+  try { rankMap = computeRanksByScoreOnly('score', 'wins', 'losses'); } catch (e) {}
+  return Array.isArray(players)
+    ? players
+      .filter(p => !HIDDEN_PLAYERS.includes(p.name) && p.isGuest && (!p.status || p.status === 'active'))
+      .map((p, idx) => ({ ...p, rank: rankMap[p.name] || p.rank || (idx + 1) }))
+      .sort((a, b) => a.rank - b.rank)
+    : [];
+}
+
+function roundAutoGetFilteredAssociatePlayers() {
+  const cfg = roundAutoState.config || {};
+  const levelFilter = Array.isArray(cfg.levelFilter)
+    ? cfg.levelFilter
+    : (Array.isArray(cfg.levels) ? cfg.levels : ['A', 'B', 'C']);
+  return roundAutoGetAssociatePlayers().filter(p => {
     const levelOk = levelFilter.includes((p.level || 'A'));
     const genderOk = cfg.gender === 'all' || p.gender === cfg.gender;
     return levelOk && genderOk;
@@ -563,7 +586,7 @@ async function roundAutoCommitSingleMatchToGlobalLog(activeTurn, match) {
   if (!activeTurn || !match) return false;
   if (match.committed) return true;
   if (match.winner !== 'home' && match.winner !== 'away') return false;
-  // ✅ v6.442: 연습 모드 차단 — Firebase 저장 및 스탯 반영 스킵
+  // ✅ v6.443: 연습 모드 차단 — Firebase 저장 및 스탯 반영 스킵
   if (typeof isPracticeMode !== 'undefined' && isPracticeMode === 'practice') {
     match.committed = true;
     return true;
@@ -978,12 +1001,13 @@ function roundAutoSyncStateFromCurrentUI() {
 }
 
 function roundAutoGetSelectedEligiblePool() {
-  const clubMap = new Map(roundAutoGetClubPlayers().map(p => [p.name, {
+  const allClub = [...roundAutoGetClubPlayers(), ...roundAutoGetAssociatePlayers()];
+  const clubMap = new Map(allClub.map(p => [p.name, {
     id: p.name,
     name: p.name,
     level: p.level || 'A',
     gender: p.gender || 'U',
-    isGuest: false,
+    isGuest: p.isGuest || false,
     rank: p.rank,
     dRank: p.dRank,
   }]));
@@ -1593,9 +1617,11 @@ async function initRoundAutoPlayerPool() {
   roundAutoRenderFilterUI();
 
   const filteredClubPlayers = roundAutoGetFilteredClubPlayers();
+  const filteredAssociates = roundAutoGetFilteredAssociatePlayers();
   const filteredGuests = roundAutoGetFilteredGuests();
   const existingNames = new Set([
     ...roundAutoGetClubPlayers().map(p => p.name),
+    ...roundAutoGetAssociatePlayers().map(p => p.name),
     ...(Array.isArray(roundAutoState.oneTimeGuests) ? roundAutoState.oneTimeGuests : []).map(g => g.name),
   ]);
   const filteredSelectedPlayers = roundAutoState.selectedPlayers.filter(name => existingNames.has(name));
@@ -1605,7 +1631,7 @@ async function initRoundAutoPlayerPool() {
   const playerPool = document.getElementById('round-auto-player-pool');
   if (!playerPool) return;
 
-  if (filteredClubPlayers.length === 0 && filteredGuests.length === 0) {
+  if (filteredClubPlayers.length === 0 && filteredAssociates.length === 0 && filteredGuests.length === 0) {
     playerPool.innerHTML = '<div style="font-size:12px; color:#999;">조건에 맞는 참가자가 없습니다.</div>';
     roundAutoRenderMatches();
     roundAutoRenderRanking();
@@ -1614,42 +1640,51 @@ async function initRoundAutoPlayerPool() {
     return;
   }
 
-  playerPool.innerHTML = `
-    <div class="player-pool">
-      ${filteredClubPlayers.map((player, idx) => {
+  const divider = label => `
+    <div style="width:100%; margin:10px 0 12px; border-top:1px dashed #ddd; position:relative;">
+      <span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:white; padding:0 10px; font-size:11px; color:#999; font-weight:bold;">${label}</span>
+    </div>`;
+
+  const memberHtml = filteredClubPlayers.map((player, idx) => {
     const id = `round-auto-player-${idx}`;
     const labelText = `${roundAutoGenderIcon(player)}${roundAutoPlayerLabel(player.name, player.level)}`;
-    if (typeof createPlayerOption === 'function') {
-      return createPlayerOption({
-        inputType: 'checkbox',
-        nameAttr: 'round-auto-player',
-        id,
-        value: player.name,
-        checked: roundAutoState.selectedPlayers.includes(player.name),
-        onClick: '',
-        labelText,
-        isGuest: false,
-        showRank: true,
-        rankText: `${player.rank}`,
-      });
-    }
-    return '';
-  }).join('')}
-    </div>
-    <div id="round-auto-guests-wrap" style="margin-top:12px; border-top:1px dashed #ddd; padding-top:10px;">
-      <div style="font-size:13px; font-weight:700; color:#666; margin-bottom:8px;">당일 게스트</div>
-      <div class="player-pool" id="round-auto-guest-pool">
-        ${filteredGuests.length ? filteredGuests.map((guest, idx) => {
+    return typeof createPlayerOption === 'function'
+      ? createPlayerOption({ inputType: 'checkbox', nameAttr: 'round-auto-player', id, value: player.name,
+          checked: roundAutoState.selectedPlayers.includes(player.name), onClick: '', labelText,
+          isGuest: false, showRank: true, rankText: `${player.rank}` })
+      : '';
+  }).join('');
+
+  const associateHtml = filteredAssociates.map((player, idx) => {
+    const id = `round-auto-assoc-${idx}`;
+    const labelText = `${roundAutoGenderIcon(player)}[준] ${roundAutoPlayerLabel(player.name, player.level)}`;
+    return typeof createPlayerOption === 'function'
+      ? createPlayerOption({ inputType: 'checkbox', nameAttr: 'round-auto-player', id, value: player.name,
+          checked: roundAutoState.selectedPlayers.includes(player.name), onClick: '', labelText,
+          isGuest: true, showRank: false, rankText: '' })
+      : '';
+  }).join('');
+
+  const guestHtml = filteredGuests.map((guest, idx) => {
     const id = `round-auto-guest-${idx}`;
     const checked = roundAutoState.selectedPlayers.includes(guest.name);
-    return createPlayerOption({
-      inputType: 'checkbox', nameAttr: 'round-auto-player', id, value: guest.name,
-      checked, onClick: '', labelText: `${roundAutoGenderIcon(guest)}[당일] ${roundAutoPlayerLabel(guest.name, guest.level)}`,
-      isGuest: true, showRank: false, rankText: ''
-    });
-  }).join('') : '<div style="font-size:12px; color:#999; white-space:nowrap;">당일 게스트가 없습니다.</div>'}
-      </div>
-    </div>
+    return typeof createPlayerOption === 'function'
+      ? createPlayerOption({ inputType: 'checkbox', nameAttr: 'round-auto-player', id, value: guest.name,
+          checked, onClick: '', labelText: `${roundAutoGenderIcon(guest)}[당일] ${roundAutoPlayerLabel(guest.name, guest.level)}`,
+          isGuest: true, showRank: false, rankText: '' })
+      : '';
+  }).join('');
+
+  playerPool.innerHTML = `
+    <div class="player-pool">${memberHtml}</div>
+    ${filteredAssociates.length > 0 ? `
+      ${divider('준회원 LIST')}
+      <div class="player-pool" id="round-auto-assoc-pool">${associateHtml}</div>
+    ` : ''}
+    ${filteredGuests.length > 0 ? `
+      ${divider('<span style="color:var(--aussie-blue);">당일 게스트</span>')}
+      <div class="player-pool" id="round-auto-guest-pool">${guestHtml}</div>
+    ` : ''}
   `;
 
   playerPool.querySelectorAll('input[type="checkbox"]').forEach(chk => {
@@ -2724,7 +2759,7 @@ function roundAutoManualAssignPlayer(name) {
 function roundAutoManualRemovePlayer(courtNo, name) {
   const court = roundAutoManualCourts.find(c => c.courtNo === courtNo);
   if (!court) return;
-  court.players = court.players.filter(n => n !== name);
+  court.players = court.players.filter(p => !p.isGuest && p.status !== 'inactive');
   roundAutoRenderManualCourts();
 }
 

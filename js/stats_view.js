@@ -747,11 +747,11 @@ function renderStatsPlayerList() {
 
   if (guests.length > 0) {
     html += '<div style="width:100%; margin:10px 0 15px; border-top:1px dashed #ddd; position:relative;">';
-    html += '<span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:#fff; padding:0 10px; font-size:11px; color:#999; font-weight:bold;">GUEST LIST</span>';
+    html += '<span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:#fff; padding:0 10px; font-size:11px; color:#999; font-weight:bold;">준회원 LIST</span>';
     html += '</div>';
     html += '<div class="player-pool">';
     guests.forEach((p, i) => {
-      html += createPlayerOption({ inputType: "radio", nameAttr: "statsPick", id: `stat_g_${i}`, value: p.name, checked: false, onClick: `viewStats('${escapeHtml(p.name).replace(/'/g, "&#39;")}')`, labelText: `[G] ${escapeHtml(displayName(p.name))}`, isGuest: true, showRank: false });
+      html += createPlayerOption({ inputType: "radio", nameAttr: "statsPick", id: `stat_g_${i}`, value: p.name, checked: false, onClick: `viewStats('${escapeHtml(p.name).replace(/'/g, "&#39;")}')`, labelText: `[준] ${escapeHtml(displayName(p.name))}`, isGuest: true, showRank: false });
     });
     html += '</div>';
   }

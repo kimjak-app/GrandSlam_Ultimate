@@ -247,7 +247,7 @@ function toggleGuest(n) {
   const p = GameEngine.toggleGuestState(n);
   if (!p) return;
   pushDataOnly(); updatePlayerList(); renderStatsPlayerList();
-  gsAlert(`${p.name}은(는) 이제 ${p.isGuest ? '게스트' : '회원'}입니다.`);
+  gsAlert(`${p.name}은(는) 이제 ${p.isGuest ? '준회원' : '정회원'}입니다.`);
 }
 
 async function toggleLevel(n) {

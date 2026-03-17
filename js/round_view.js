@@ -118,14 +118,14 @@ function roundViewInitRoundPlayerPool() {
   if (guests.length > 0) {
     html += '</div>';
     html += '<div style="width:100%; margin:10px 0 15px; border-top:1px dashed #ddd; position:relative;">';
-    html += '<span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:white; padding:0 10px; font-size:11px; color:#999; font-weight:bold;">GUEST LIST</span>';
+    html += '<span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:white; padding:0 10px; font-size:11px; color:#999; font-weight:bold;">준회원 LIST</span>';
     html += '</div>';
     html += '<div class="player-pool">';
     guests.forEach(p => {
       html += createPlayerOption({
         inputType: 'checkbox', nameAttr: 'round-player', id: `round-p-${p.name}`,
         value: p.name, checked: false, onClick: 'updateRoundCount(); checkRoundGenButton();',
-        labelText: displayNameWithLevel(p.name, p.level), isGuest: true, showRank: true, rankText: 'G'
+        labelText: displayNameWithLevel(p.name, p.level), isGuest: true, showRank: true, rankText: '준'
       });
     });
   }

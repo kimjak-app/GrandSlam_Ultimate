@@ -11,7 +11,45 @@
 // 1. 당일 게스트
 // ----------------------------------------
 
+function normalizeOneTimeGuestData(persist) {
+  let changed = false;
+  const movedNames = [];
+
+  const corrupted = players.filter(p => p && p.isGuest && p.isOneTime);
+  corrupted.forEach(p => {
+    const name = (p.name || '').trim();
+    if (!name) return;
+    if (!oneTimePlayers.includes(name)) {
+      oneTimePlayers.push(name);
+      movedNames.push(name);
+      changed = true;
+    }
+  });
+
+  const beforePlayers = players.length;
+  players = players.filter(p => !(p && p.isGuest && p.isOneTime));
+  if (players.length !== beforePlayers) changed = true;
+
+  const seen = new Set();
+  const nextOneTime = [];
+  (oneTimePlayers || []).forEach(name => {
+    const cleanName = String(name || '').trim();
+    if (!cleanName || seen.has(cleanName)) return;
+    seen.add(cleanName);
+    nextOneTime.push(cleanName);
+  });
+  if (nextOneTime.length !== oneTimePlayers.length) changed = true;
+  oneTimePlayers = nextOneTime;
+
+  if (persist && changed && typeof pushDataOnly === 'function') {
+    try { pushDataOnly(); } catch (e) { console.warn('oneTime guest cleanup save error:', e); }
+  }
+
+  return { changed, movedNames };
+}
+
 function addOneTimePlayer() {
+  normalizeOneTimeGuestData(false);
   gsEditName('', ({ name, gender }) => {
     const cleanName = (name || '').trim();
     if (!cleanName) return;
@@ -41,29 +79,6 @@ function addOneTimePlayer() {
       }
     }
 
-    const guestId = `g_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    players.push({
-      id: guestId,
-      name: cleanName,
-      isGuest: true,
-      isOneTime: true,
-      gender: gender || 'M',
-      level: 'A',
-      score: 0,
-      wins: 0,
-      losses: 0,
-      dScore: 0,
-      dWins: 0,
-      dLosses: 0,
-      sScore: 0,
-      sWins: 0,
-      sLosses: 0,
-      last: 0,
-      lastD: 0,
-      lastS: 0,
-      createdAt: Date.now(),
-    });
-
     oneTimePlayers.push(cleanName);
     _refreshPools();
   }, {
@@ -76,8 +91,13 @@ function addOneTimePlayer() {
   });
 }
 
-function removeOneTimePlayer(name) {
+function removeOneTimePlayer(name){
   oneTimePlayers = oneTimePlayers.filter(n => n !== name);
+  players = players.filter(p => !(p.name === name && p.isGuest && p.isOneTime));
+  pushDataOnly();
+  normalizeOneTimeGuestData(false);
+  oneTimePlayers = oneTimePlayers.filter(n => n !== name);
+  players = players.filter(p => !(p && p.name === name && p.isGuest && p.isOneTime));
   hT = hT.filter(n => n !== name);
   aT = aT.filter(n => n !== name);
   ldP = ldP.filter(n => n !== name);
@@ -85,6 +105,7 @@ function removeOneTimePlayer(name) {
   $('hN').innerText = hT.map(displayName).join(',');
   $('aN').innerText = aT.map(displayName).join(',');
   _refreshPools();
+  if (typeof pushDataOnly === 'function') pushDataOnly();
 }
 
 function _refreshPools() {
@@ -110,6 +131,7 @@ async function enterTreasurer() {
       }
     } catch (e) { console.warn('[treasurer] approved check error:', e); }
   }
+  normalizeOneTimeGuestData(true);
   showView('treasurer');
 }
 
@@ -665,8 +687,9 @@ function renderMemberHistoryTabs(tab) {
 function renderActiveMemberList() {
   const el = document.getElementById('mh-list');
   if (!el) return;
-  const actives  = players.filter(p => !p.isGuest && (!p.status || p.status === 'active'));
-  const dormants = players.filter(p => !p.isGuest && p.status === 'dormant');
+  const actives    = players.filter(p => !p.isGuest && (!p.status || p.status === 'active'));
+  const associates = players.filter(p => p.isGuest  && (!p.status || p.status === 'active'));
+  const dormants   = players.filter(p => !p.isGuest && p.status === 'dormant');
   let html = '';
 
   if (actives.length > 0) {
@@ -681,6 +704,23 @@ function renderActiveMemberList() {
         <div style="display:flex; gap:6px;">
           <button onclick="editJoinDate('${safe}')" style="padding:5px 9px; background:#E5E5EA; border:none; border-radius:8px; font-size:11px; cursor:pointer;">📅 가입일</button>
           <button onclick="setDormant('${safe}')" style="padding:5px 9px; background:#FF9500; color:#fff; border:none; border-radius:8px; font-size:11px; cursor:pointer;">😴 휴면</button>
+          <button onclick="setInactive('${safe}')" style="padding:5px 9px; background:var(--roland-clay); color:#fff; border:none; border-radius:8px; font-size:11px; cursor:pointer;">탈퇴</button>
+        </div>
+      </div>`;
+    });
+  }
+
+  if (associates.length > 0) {
+    html += `<div style="font-size:12px; font-weight:700; color:#669DB3; margin:12px 0 6px;">🔵 준회원 (${associates.length}명)</div>`;
+    associates.sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
+      const safe = escapeHtml(p.name).replace(/'/g, "&#39;");
+      html += `<div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#EEF4F8; border-radius:12px; margin-bottom:6px;">
+        <div>
+          <div style="font-size:14px; font-weight:600;">${escapeHtml(displayName(p.name))}</div>
+          <div style="font-size:11px; color:#669DB3; margin-top:2px;">준회원</div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button onclick="promoteToActive('${safe}')" style="padding:5px 9px; background:var(--wimbledon-sage); color:#fff; border:none; border-radius:8px; font-size:11px; cursor:pointer;">⬆️ 정회원</button>
           <button onclick="setInactive('${safe}')" style="padding:5px 9px; background:var(--roland-clay); color:#fff; border:none; border-radius:8px; font-size:11px; cursor:pointer;">탈퇴</button>
         </div>
       </div>`;
@@ -704,7 +744,7 @@ function renderActiveMemberList() {
     });
   }
 
-  if (!actives.length && !dormants.length) html = '<div style="text-align:center; padding:20px; color:var(--text-gray);">회원이 없습니다.</div>';
+  if (!actives.length && !associates.length && !dormants.length) html = '<div style="text-align:center; padding:20px; color:var(--text-gray);">회원이 없습니다.</div>';
   el.innerHTML = html;
 }
 
@@ -788,6 +828,7 @@ function setInactive(name) {
   const p = players.find(x => x.name === name);
   if (!p) return;
   gsEditName('', reason => {
+    p.isGuest    = false; // 준회원도 탈퇴 시 정회원 계보로 편입해 탈퇴 목록에 노출
     p.status     = 'inactive';
     p.leftAt     = new Date().toISOString().slice(0, 10);
     p.leftReason = (reason || '').trim() || '';
@@ -811,6 +852,20 @@ function restoreActive(name) {
     renderMemberHistoryTabs(window._memberHistoryTab || 'active');
     renderFeeTable();
     gsAlert(`${displayName(name)}님이 ${label} 처리됐습니다.`);
+  });
+}
+
+function promoteToActive(name) {
+  const p = players.find(x => x.name === name);
+  if (!p) return;
+  gsConfirm(`${displayName(name)}님을 정회원으로 전환할까요?\n\n• 준회원 → 정회원으로 변경됩니다`, ok => {
+    if (!ok) return;
+    p.isGuest = false;
+    if (!p.status || p.status === 'active') p.status = 'active';
+    p.joinedAt = p.joinedAt || new Date().toISOString().slice(0, 10);
+    pushDataOnly();
+    renderActiveMemberList();
+    gsAlert(`${displayName(name)}님이 정회원으로 전환됐습니다.`);
   });
 }
 

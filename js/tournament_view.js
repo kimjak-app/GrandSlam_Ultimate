@@ -25,11 +25,11 @@ function tournamentViewInitTournament() {
     </div>`;
 
   if (guests.length > 0) {
-    html += divider('GUEST LIST');
+    html += divider('준회원 LIST');
     html += '<div class="player-pool">';
     guests.forEach((p, i) => {
       html += `<input type="checkbox" id="tgp${i}" class="p-chk" value="${escapeHtml(p.name)}" onclick="tourPick(this)">`;
-      html += `<label for="tgp${i}" class="p-label guest-label" style="min-width:80px; flex:0 0 auto;">[G] ${escapeHtml(p.name)}</label>`;
+      html += `<label for="tgp${i}" class="p-label guest-label" style="min-width:80px; flex:0 0 auto;">[준] ${escapeHtml(p.name)}</label>`;
     });
     html += '</div>';
   }

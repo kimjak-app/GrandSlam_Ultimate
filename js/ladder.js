@@ -31,14 +31,14 @@
     // 2. 게스트 섹션 (게스트가 있을 때만 출력, ✅ v3.818: 1대2대결용 버튼 제외)
     if (guests.length > 0) {
       html += '<div style="width:100%; margin:10px 0 15px; border-top:1px dashed #ddd; position:relative;">';
-      html += '<span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:#fff; padding:0 10px; font-size:11px; color:#999; font-weight:bold;">GUEST LIST</span>';
+      html += '<span style="position:absolute; top:-10px; left:50%; transform:translateX(-50%); background:#fff; padding:0 10px; font-size:11px; color:#999; font-weight:bold;">준회원 LIST</span>';
       html += '</div>';
       html += '<div class="player-pool">';
       guests.forEach((p, i) => {
         const chkId = `ladder_g_${i}`;
         const isChecked = ldP.includes(p.name);
         html += `<input type="checkbox" id="${chkId}" class="p-chk" value="${escapeHtml(p.name)}" ${isChecked ? 'checked' : ''} onclick="tkL('${escapeHtml(p.name).replace(/'/g,"&#39;")}')">`;
-        html += `<label for="${chkId}" class="p-label guest-label">[G] ${escapeHtml(p.name)}</label>`;
+        html += `<label for="${chkId}" class="p-label guest-label">[준] ${escapeHtml(p.name)}</label>`;
       });
       html += '</div>';
     }
