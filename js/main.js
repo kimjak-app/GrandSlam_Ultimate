@@ -3,7 +3,7 @@
 // ========================================
 
 // ✅ 버전 상수 — 버전업 시 여기만 바꾸면 전체 반영
-const APP_VERSION = 'v6.52';
+const APP_VERSION = 'v6.53';
 
 
 // ----------------------------------------
@@ -498,7 +498,7 @@ function _calcHallOfFame(myName) {
   const fmtYear  = (y) => y ? `${y}년` : '–';
 
   // 동적 마일스톤 생성: 1·10·50·100 고정 + 100 이후 50단위 자동 확장
-  const FIXED_MILESTONES = [1, 10, 50, 100];
+  const FIXED_MILESTONES = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
   const dynamicMilestones = [...FIXED_MILESTONES];
   if (wins.length > 100) {
     let next = 150;
@@ -576,11 +576,11 @@ function _calcHallOfFame(myName) {
 }
 
 function milestoneEmoji(n) {
-  if (n === 1)  return 'firstWin';
-  if (n === 10) return 'star';
-  if (n === 50) return 'spark';
-  if (n < 200)  return 'trophy';
-  if (n < 500)  return 'crown';
+  if (n === 1)          return 'firstWin';
+  if (n === 50)         return 'trophy';
+  if (n % 100 === 0 && n <= 100) return 'trophy';
+  if (n < 200)          return 'star';
+  if (n < 500)          return 'crown';
   return 'trident';
 }
 
