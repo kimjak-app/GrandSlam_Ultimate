@@ -3,7 +3,7 @@
 // ========================================
 
 // ✅ 버전 상수 — 버전업 시 여기만 바꾸면 전체 반영
-const APP_VERSION = 'v6.51';
+const APP_VERSION = 'v6.52';
 
 
 // ----------------------------------------
@@ -576,18 +576,42 @@ function _calcHallOfFame(myName) {
 }
 
 function milestoneEmoji(n) {
-  if (n === 1)  return '🥇';
-  if (n === 10) return '⭐';
-  if (n === 50) return '🌟';
-  if (n < 200)  return '🏆';
-  if (n < 500)  return '👑';
-  return '🔱';
+  if (n === 1)  return 'firstWin';
+  if (n === 10) return 'star';
+  if (n === 50) return 'spark';
+  if (n < 200)  return 'trophy';
+  if (n < 500)  return 'crown';
+  return 'trident';
 }
 
-function _hofBadge(emoji, label, value, sub) {
+function hofIcon(type, size, color, isMuted) {
+  const px = size || 24;
+  const c = color || '#D4A24C';
+  const opacity = isMuted ? '0.45' : '1';
+  const icons = {
+    hall: '<path d="M12 2l7 3v4c0 4.7-2.9 8.8-7 10.2C7.9 17.8 5 13.7 5 9V5l7-3Zm0 2.2L7 6.3v2.6c0 3.6 2.1 6.8 5 8 2.9-1.2 5-4.4 5-8V6.3l-5-2.1Zm-2.2 4.3h4.4v1.6h-1.4v3.7h-1.6v-3.7H9.8V8.5Z"/>',
+    firstWin: '<path d="M9 4h6v2h-1v3.3a3.5 3.5 0 0 1-2 3.2V15h2v2H8v-2h2v-2.5a3.5 3.5 0 0 1-2-3.2V6H7V4h2Zm1 2v3.3a1.5 1.5 0 0 0 3 0V6h-3Z"/><path d="M17 5h2v2a3 3 0 0 1-3 3h-1V8h1a1 1 0 0 0 1-1V5ZM7 5v2a1 1 0 0 0 1 1h1v2H8a3 3 0 0 1-3-3V5h2Z"/>',
+    star: '<path d="m12 3 2.1 4.6 5 .6-3.7 3.5 1 5-4.4-2.5L7.6 17l1-5L5 8.2l5-.6L12 3Z"/>',
+    spark: '<path d="M12 2.5 14.2 8l5.8.5-4.4 3.8 1.3 5.7L12 15.1 7.1 18l1.3-5.7L4 8.5 9.8 8 12 2.5Z"/><path d="M18.8 3.8 20 6l2.2 1.2L20 8.4l-1.2 2.2-1.2-2.2-2.2-1.2L17.6 6l1.2-2.2Z"/>',
+    trophy: '<path d="M8 4h8v2h1a2 2 0 0 1 2 2v1a4 4 0 0 1-4 4h-.6A5.5 5.5 0 0 1 13 14.6V17h3v2H8v-2h3v-2.4A5.5 5.5 0 0 1 9.6 13H9a4 4 0 0 1-4-4V8a2 2 0 0 1 2-2h1V4Zm0 2v3a3.5 3.5 0 0 0 7 0V6H8Zm9 2v1a2 2 0 0 1-2 2V8h2Zm-10 0v3a2 2 0 0 1-2-2V8h2Z"/>',
+    crown: '<path d="m4 17 1.6-9 4.1 3.2L12 5l2.3 6.2L18.4 8 20 17H4Zm2.4-2h11.2l-.5-3.2-2.4 1.8L12 9.5l-2.7 4.1-2.4-1.8L6.4 15Z"/>',
+    trident: '<path d="M11 2h2v4.6l1.3-1.3 1.4 1.4-2.7 2.7V18h3v2H8v-2h3V9.4L8.3 6.7l1.4-1.4L11 6.6V2Zm6.5 1.8L20.8 7 19.4 8.4l-1.9-1.9-1.9 1.9L14.2 7l3.3-3.2Zm-11 0L9.8 7 8.4 8.4 6.5 6.5 4.6 8.4 3.2 7l3.3-3.2Z"/>',
+    rate: '<path d="M5 17h14v2H3V5h2v12Zm2-3.5 2.8-2.8 2.2 2.2L17 8h2v2h-1.2l-4.8 4.8-2.2-2.2L8.4 15 7 13.5Z"/>',
+    wins: '<path d="M7 18h10v2H7v-2Zm5-16 6 3v4c0 4.3-2.5 8.1-6 9.6C8.5 17.1 6 13.3 6 9V5l6-3Zm0 2.2L8 6.3v2.6c0 3.1 1.7 5.9 4 7 2.3-1.1 4-3.9 4-7V6.3l-4-2.1Z"/>',
+    streak: '<path d="M13 2 6 13h4l-1 9 7-11h-4l1-9Z"/>',
+    calendarWeek: '<path d="M7 2h2v2h6V2h2v2h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2Zm12 8H5v8h14v-8ZM5 8h14V6H5v2Z"/>',
+    calendarMonth: '<path d="M7 2h2v2h6V2h2v2h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2Zm12 6H5v10h14V8Zm-9 3h2v2h-2v-2Zm4 0h2v2h-2v-2Zm-4 4h2v2h-2v-2Zm4 0h2v2h-2v-2Z"/>',
+    calendarYear: '<path d="M6 3h12a2 2 0 0 1 2 2v14H4V5a2 2 0 0 1 2-2Zm12 6H6v8h12V9ZM8 5H6v2h12V5h-2v1h-2V5h-4v1H8V5Z"/>',
+    close: '<path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4 6.4 5Z"/>'
+  };
+  const svg = icons[type] || icons.trophy;
+  return `<span style="display:inline-flex; align-items:center; justify-content:center; width:${px}px; height:${px}px; color:${c}; opacity:${opacity}; flex-shrink:0; line-height:1; vertical-align:middle;"><svg viewBox="0 0 24 24" width="${px}" height="${px}" fill="currentColor" aria-hidden="true">${svg}</svg></span>`;
+}
+
+function _hofBadge(icon, label, value, sub) {
   return `<div style="background:#fff; border-radius:14px; padding:12px 14px; box-shadow:0 2px 8px rgba(0,0,0,0.07); margin-bottom:10px;">
     <div style="display:flex; align-items:center; gap:10px;">
-      <div style="font-size:28px; line-height:1; flex-shrink:0;">${emoji}</div>
+      <div style="line-height:1; flex-shrink:0;">${icon}</div>
       <div style="flex:1; min-width:0;">
         <div style="font-size:10px; color:#999; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:3px;">${label}</div>
         <div style="font-size:15px; font-weight:800; color:#1a1a2e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${value}</div>
@@ -597,15 +621,15 @@ function _hofBadge(emoji, label, value, sub) {
   </div>`;
 }
 
-function _hofMilestoneBadge(emoji, label, info) {
+function _hofMilestoneBadge(iconType, label, info) {
   if (!info) return `<div style="background:#f5f5f5; border-radius:14px; padding:12px 14px; margin-bottom:10px; opacity:0.45;">
     <div style="display:flex; align-items:center; gap:10px;">
-      <div style="font-size:28px; line-height:1; flex-shrink:0; filter:grayscale(1);">${emoji}</div>
+      <div style="line-height:1; flex-shrink:0;">${hofIcon(iconType, 28, '#D4A24C', true)}</div>
       <div><div style="font-size:10px; color:#bbb; font-weight:700; letter-spacing:1px;">${label}</div>
       <div style="font-size:13px; color:#ccc; font-weight:600;">아직 달성 전</div></div>
     </div></div>`;
   const partnerTxt = info.partner ? ` · 파트너: ${info.partner}` : '';
-  return _hofBadge(emoji, label, `vs ${info.opps}`, `${info.date}${partnerTxt}`);
+  return _hofBadge(hofIcon(iconType, 28, '#D4A24C'), label, `vs ${info.opps}`, `${info.date}${partnerTxt}`);
 }
 
 function _renderHallOfFamePreview(_snapClubId) {
@@ -624,7 +648,7 @@ function _renderHallOfFamePreview(_snapClubId) {
   const items = [];
 
   if (hof.milestoneMap[1]) items.push(`<div style="flex-shrink:0; background:#FFF8E8; border:1.5px solid #F0D080; border-radius:14px; padding:10px 14px; min-width:130px; text-align:center;">
-    <div style="font-size:22px;">🥇</div>
+    <div>${hofIcon('firstWin', 22, '#C17A5A')}</div>
     <div style="font-size:10px; color:#C17A5A; font-weight:700; margin-top:4px;">첫 승리</div>
     <div style="font-size:12px; font-weight:800; color:#1a1a2e; margin-top:2px;">${hof.milestoneMap[1].date}</div>
   </div>`);
@@ -636,20 +660,20 @@ function _renderHallOfFamePreview(_snapClubId) {
     const info  = hof.milestoneMap[latestMilestone];
     const emoji = milestoneEmoji(latestMilestone);
     items.push(`<div style="flex-shrink:0; background:#EEF6FF; border:1.5px solid #90C0E8; border-radius:14px; padding:10px 14px; min-width:130px; text-align:center;">
-      <div style="font-size:22px;">${emoji}</div>
+      <div>${hofIcon(emoji, 22, '#3A7BD5')}</div>
       <div style="font-size:10px; color:#3A7BD5; font-weight:700; margin-top:4px;">${latestMilestone}승 달성</div>
       <div style="font-size:12px; font-weight:800; color:#1a1a2e; margin-top:2px;">${info.date}</div>
     </div>`);
   }
 
   if (hof.bestRateMonth) items.push(`<div style="flex-shrink:0; background:#F0FBF4; border:1.5px solid #90D0A8; border-radius:14px; padding:10px 14px; min-width:130px; text-align:center;">
-    <div style="font-size:22px;">🏆</div>
+    <div>${hofIcon('rate', 22, '#5D9C76')}</div>
     <div style="font-size:10px; color:#5D9C76; font-weight:700; margin-top:4px;">최고 승률의 달</div>
     <div style="font-size:12px; font-weight:800; color:#1a1a2e; margin-top:2px;">${hof.fmtMonth(hof.bestRateMonth.key)} · ${hof.bestRateMonth.rate}%</div>
   </div>`);
 
   if (hof.bestWinsWeek) items.push(`<div style="flex-shrink:0; background:#F8F0FF; border:1.5px solid #C0A0E0; border-radius:14px; padding:10px 14px; min-width:130px; text-align:center;">
-    <div style="font-size:22px;">🎖️</div>
+    <div>${hofIcon('wins', 22, '#8B6B9A')}</div>
     <div style="font-size:10px; color:#8B6B9A; font-weight:700; margin-top:4px;">최다승 주</div>
     <div style="font-size:12px; font-weight:800; color:#1a1a2e; margin-top:2px;">${hof.fmtWeek(hof.bestWinsWeek.key)} · ${hof.bestWinsWeek.w}승</div>
   </div>`);
@@ -721,17 +745,17 @@ function openHallOfFameModal() {
     _hofMilestoneBadge(milestoneEmoji(n), `${n === 1 ? '첫 승리' : n + '승'} 달성`, hof.milestoneMap[n])
   ).join('');
 
-  const milestones = section('🥇 승리 마일스톤', '#C17A5A', milestoneBadges);
+  const milestones = section(`${hofIcon('firstWin', 14, '#C17A5A')} 승리 마일스톤`, '#C17A5A', milestoneBadges);
 
-  const rates = section('📈 최고 승률', '#3A7BD5',
-    _hofBadge('📅', '최고 승률의 주',   hof.bestRateWeek  ? `${hof.fmtWeek(hof.bestRateWeek.key)} · ${hof.bestRateWeek.rate}%`   : '기록 없음', hof.bestRateWeek  ? fmtStat(hof.bestRateWeek)  : null) +
-    _hofBadge('🗓️', '최고 승률의 달',   hof.bestRateMonth ? `${hof.fmtMonth(hof.bestRateMonth.key)} · ${hof.bestRateMonth.rate}%` : '기록 없음', hof.bestRateMonth ? fmtStat(hof.bestRateMonth) : null) +
-    _hofBadge('📆', '최고 승률의 연도', hof.bestRateYear  ? `${hof.fmtYear(hof.bestRateYear.key)} · ${hof.bestRateYear.rate}%`   : '기록 없음', hof.bestRateYear  ? fmtStat(hof.bestRateYear)  : null));
+  const rates = section(`${hofIcon('rate', 14, '#3A7BD5')} 최고 승률`, '#3A7BD5',
+    _hofBadge(hofIcon('calendarWeek',  24, '#3A7BD5'), '최고 승률의 주',   hof.bestRateWeek  ? `${hof.fmtWeek(hof.bestRateWeek.key)} · ${hof.bestRateWeek.rate}%`   : '기록 없음', hof.bestRateWeek  ? fmtStat(hof.bestRateWeek)  : null) +
+    _hofBadge(hofIcon('calendarMonth', 24, '#3A7BD5'), '최고 승률의 달',   hof.bestRateMonth ? `${hof.fmtMonth(hof.bestRateMonth.key)} · ${hof.bestRateMonth.rate}%` : '기록 없음', hof.bestRateMonth ? fmtStat(hof.bestRateMonth) : null) +
+    _hofBadge(hofIcon('calendarYear',  24, '#3A7BD5'), '최고 승률의 연도', hof.bestRateYear  ? `${hof.fmtYear(hof.bestRateYear.key)} · ${hof.bestRateYear.rate}%`   : '기록 없음', hof.bestRateYear  ? fmtStat(hof.bestRateYear)  : null));
 
-  const mostWins = section('🎖️ 최다 승수', '#5D9C76',
-    _hofBadge('🔥', '최다승 주',   hof.bestWinsWeek  ? `${hof.fmtWeek(hof.bestWinsWeek.key)} · ${hof.bestWinsWeek.w}승`   : '기록 없음', hof.bestWinsWeek  ? fmtStat(hof.bestWinsWeek)  : null) +
-    _hofBadge('💪', '최다승 달',   hof.bestWinsMonth ? `${hof.fmtMonth(hof.bestWinsMonth.key)} · ${hof.bestWinsMonth.w}승` : '기록 없음', hof.bestWinsMonth ? fmtStat(hof.bestWinsMonth) : null) +
-    _hofBadge('👑', '최다승 연도', hof.bestWinsYear  ? `${hof.fmtYear(hof.bestWinsYear.key)} · ${hof.bestWinsYear.w}승`   : '기록 없음', hof.bestWinsYear  ? fmtStat(hof.bestWinsYear)  : null));
+  const mostWins = section(`${hofIcon('wins', 14, '#5D9C76')} 최다 승수`, '#5D9C76',
+    _hofBadge(hofIcon('calendarWeek',  24, '#5D9C76'), '최다승 주',   hof.bestWinsWeek  ? `${hof.fmtWeek(hof.bestWinsWeek.key)} · ${hof.bestWinsWeek.w}승`   : '기록 없음', hof.bestWinsWeek  ? fmtStat(hof.bestWinsWeek)  : null) +
+    _hofBadge(hofIcon('calendarMonth', 24, '#5D9C76'), '최다승 달',   hof.bestWinsMonth ? `${hof.fmtMonth(hof.bestWinsMonth.key)} · ${hof.bestWinsMonth.w}승` : '기록 없음', hof.bestWinsMonth ? fmtStat(hof.bestWinsMonth) : null) +
+    _hofBadge(hofIcon('calendarYear',  24, '#5D9C76'), '최다승 연도', hof.bestWinsYear  ? `${hof.fmtYear(hof.bestWinsYear.key)} · ${hof.bestWinsYear.w}승`   : '기록 없음', hof.bestWinsYear  ? fmtStat(hof.bestWinsYear)  : null));
 
   // 연승 극복기 섹션
   const fmtStreakOpps = (opps) => {
@@ -742,13 +766,13 @@ function openHallOfFameModal() {
   };
 
   const winStreakContent = hof.bestWinStreak
-    ? _hofBadge('🔥', `최고 연승 · ${hof.bestWinStreak.count}연승`,
+    ? _hofBadge(hofIcon('streak', 24, '#8B6B9A'), `최고 연승 · ${hof.bestWinStreak.count}연승`,
         `${hof.bestWinStreak.startDate} ~ ${hof.bestWinStreak.endDate}`,
         `상대: ${fmtStreakOpps(hof.bestWinStreak.opps)}`)
     : `<div style="background:#f5f5f5; border-radius:14px; padding:12px 14px; margin-bottom:10px; opacity:0.45; font-size:13px; color:#bbb; font-weight:600;">기록 없음</div>`;
 
   const loseStreakContent = hof.bestLoseStreak
-    ? _hofBadge('💪', `최고 연패 극복 · ${hof.bestLoseStreak.count}연패`,
+    ? _hofBadge(hofIcon('streak', 24, '#8B6B9A'), `최고 연패 극복 · ${hof.bestLoseStreak.count}연패`,
         `${hof.bestLoseStreak.startDate} ~ ${hof.bestLoseStreak.endDate}`,
         `연패 상대: ${fmtStreakOpps(hof.bestLoseStreak.opps)}` +
         (hof.bestLoseStreak.breakInfo
@@ -756,7 +780,7 @@ function openHallOfFameModal() {
           : ' · 극복 기록 없음'))
     : `<div style="background:#f5f5f5; border-radius:14px; padding:12px 14px; margin-bottom:10px; opacity:0.45; font-size:13px; color:#bbb; font-weight:600;">기록 없음</div>`;
 
-  const streaks = section('⚡ 연승 / 연패 극복기', '#8B6B9A', winStreakContent + loseStreakContent);
+  const streaks = section(`${hofIcon('streak', 14, '#8B6B9A')} 연승 / 연패 극복기`, '#8B6B9A', winStreakContent + loseStreakContent);
 
   body.innerHTML = summary + milestones + streaks + rates + mostWins;
 }
