@@ -3,7 +3,7 @@
 // ========================================
 
 // ✅ 버전 상수 — 버전업 시 여기만 바꾸면 전체 반영
-const APP_VERSION = 'v6.4439';
+const APP_VERSION = 'v6.51';
 
 
 // ----------------------------------------
@@ -672,7 +672,29 @@ function openHallOfFameModal() {
   modal.style.display = 'block';
   document.body.style.overflow = 'hidden';
 
+  // ✅ v6.5: matchLog 전체 재계산 + Firebase 캐시 병합
   const hof = _calcHallOfFame(myName);
+  if (hof && typeof hofHistory !== 'undefined') {
+    // 마일스톤 병합 — matchLog 페이징 누락 기록 복원
+    if (hofHistory.milestones && hofHistory.milestones[myName]) {
+      const cached = hofHistory.milestones[myName];
+      hof.milestones.forEach(n => {
+        if (!hof.milestoneMap[n] && cached[n]) {
+          hof.milestoneMap[n] = cached[n];
+        }
+      });
+    }
+    // streaks 병합 — 캐시의 최고 기록이 현재 계산값보다 크면 캐시 우선
+    if (hofHistory.streaks && hofHistory.streaks[myName]) {
+      const cs = hofHistory.streaks[myName];
+      if (cs.bestWin  && (!hof.bestWinStreak  || cs.bestWin.count  > hof.bestWinStreak.count)) {
+        hof.bestWinStreak  = cs.bestWin;
+      }
+      if (cs.bestLose && (!hof.bestLoseStreak || cs.bestLose.count > hof.bestLoseStreak.count)) {
+        hof.bestLoseStreak = cs.bestLose;
+      }
+    }
+  }
 
   // 계산 완료 후 clubId 재확인
   if (_snapClubId !== null && (typeof getActiveClubId === 'function' ? getActiveClubId() : null) !== _snapClubId) {

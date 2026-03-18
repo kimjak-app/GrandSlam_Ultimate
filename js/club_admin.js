@@ -245,10 +245,10 @@ function activateClub(club, doSync) {
     if (savedFee) { monthlyFeeAmount = parseInt(savedFee) || 0; }
   }
 
-  // 클럽 전환 시 데이터 즉시 초기화
+  // ✅ v6.5: clearClubState로 클럽별 격리 초기화 + 전역변수 동기화
   if (typeof currentLoggedPlayer !== 'undefined') currentLoggedPlayer = null;
-  players = [];
-  matchLog = [];
+  if (typeof clearClubState === 'function') clearClubState(club.clubId);
+  else { players = []; matchLog = []; }
   courtNotices = [];
   announcements = [];
   oneTimePlayers = [];

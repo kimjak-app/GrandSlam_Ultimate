@@ -37,13 +37,61 @@ const MATCH_TYPE = {
   TEAM: "team"
 };
 
-// Player 객체 필드:
-//   gender: 'M' | 'F'
-//   level: 'A' | 'B' | 'C' (기본값 'A')
-//   mScore/mWins/mLosses/lastM: 혼복 전용
-//   attributes: 종목별 확장용 { sport, preferredPosition }
-var players = [];
+// Player 객체 필드:\n//   gender: 'M' | 'F'\n//   level: 'A' | 'B' | 'C' (기본값 'A')\n//   mScore/mWins/mLosses/lastM: 혼복 전용\n//   attributes: 종목별 확장용 { sport, preferredPosition }\nvar players = [];
 var matchLog = [];
+
+// ========================================
+// v6.5: 클럽별 state 격리 레이어
+// players/matchLog는 아래 함수를 통해 클럽별로 격리 관리됨
+// 기존 전역변수는 호환성을 위해 유지 — getter/setter가 동기화
+// ========================================
+var _clubStateMap = {};
+
+function _getClubState(clubId) {
+  if (!clubId) return null;
+  if (!_clubStateMap[clubId]) {
+    _clubStateMap[clubId] = { players: [], matchLog: [] };
+  }
+  return _clubStateMap[clubId];
+}
+
+function setClubPlayers(clubId, arr) {
+  const state = _getClubState(clubId);
+  if (!state) return;
+  state.players = arr;
+  // 현재 활성 클럽이면 전역변수도 동기화 (기존 코드 호환)
+  if ((typeof getActiveClubId === 'function' ? getActiveClubId() : null) === clubId) {
+    players = state.players;
+  }
+}
+
+function setClubMatchLog(clubId, arr) {
+  const state = _getClubState(clubId);
+  if (!state) return;
+  state.matchLog = arr;
+  if ((typeof getActiveClubId === 'function' ? getActiveClubId() : null) === clubId) {
+    matchLog = state.matchLog;
+  }
+}
+
+function getClubPlayers(clubId) {
+  const state = _getClubState(clubId);
+  return state ? state.players : [];
+}
+
+function getClubMatchLog(clubId) {
+  const state = _getClubState(clubId);
+  return state ? state.matchLog : [];
+}
+
+function clearClubState(clubId) {
+  if (!clubId) return;
+  _clubStateMap[clubId] = { players: [], matchLog: [] };
+  if ((typeof getActiveClubId === 'function' ? getActiveClubId() : null) === clubId) {
+    players = [];
+    matchLog = [];
+  }
+}
 
 // Single Game State
 var mType = 'double';
@@ -103,6 +151,7 @@ const HIDDEN_PLAYERS = ['1대2용', '1대2대결용'];
 // 당일 게스트 (세션 내 존재, 순위/통계 제외)
 var oneTimePlayers = [];
 var mvpHistory = { monthly: {}, weekly: {} };
+var hofHistory = { milestones: {}, streaks: {} }; // ✅ v6.5: 명예의 전당 캐시
 
 // 가상 1대2대결용 플레이어 객체
 const VIRTUAL_1V2_PLAYER = { name: '1대2대결용', isGuest: true, isVirtual: true, score: 0, wins: 0, losses: 0, dScore: 0, dWins: 0, dLosses: 0, sScore: 0, sWins: 0, sLosses: 0, last: 0, lastD: 0, lastS: 0 };

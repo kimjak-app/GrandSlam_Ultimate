@@ -187,8 +187,9 @@ async function _doSync(clubId) {
     if ((getActiveClubId() || 'default') !== clubId) {
       $('loading-overlay').style.display = 'none'; setStatus(''); return;
     }
-    players  = (rawPlayers || []).map(ensure);
-    matchLog = []; // 클럽 전환 시 이전 matchLog 즉시 초기화
+    // ✅ v6.5: setter로 클럽별 격리 저장 + 전역변수 동기화
+    setClubPlayers(clubId, (rawPlayers || []).map(ensure));
+    setClubMatchLog(clubId, []); // 클럽 전환 시 이전 matchLog 즉시 초기화
     try { AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'players', players } })); } catch (e) {}
 
     $('loading-overlay').style.display = 'none';
@@ -198,7 +199,7 @@ async function _doSync(clubId) {
     const rawLog = await _fsGetMatchLog(clubId);
     if ((getActiveClubId() || 'default') !== clubId) { setStatus(''); return; }
 
-    matchLog = normalizeMatchLog(rawLog);
+    setClubMatchLog(clubId, normalizeMatchLog(rawLog));
     updateSeason();
     updateWeekly();
     if (tabNow === 1) updateChartRange(0);
@@ -209,6 +210,7 @@ async function _doSync(clubId) {
 
     fetchFeeData().catch(e => console.warn('sync fetchFeeData error:', e));
     fetchMvpHistory().catch(e => console.warn('sync fetchMvpHistory error:', e));
+    fetchHofHistory().catch(e => console.warn('sync fetchHofHistory error:', e)); // ✅ v6.5
     setTimeout(applyAutofitAllTables, 0);
 
     await _syncRestoreLoggedPlayer(clubId);
@@ -240,7 +242,7 @@ async function loadMoreMatchLog() {
       return;
     }
 
-    matchLog = normalizeMatchLog(matchLog.concat(more));
+    setClubMatchLog(clubId, normalizeMatchLog(matchLog.concat(more))); // ✅ v6.5
     if (typeof updateSeason === 'function')          updateSeason();
     if (typeof updateWeekly === 'function')          updateWeekly();
     if (typeof renderStatsPlayerList === 'function') renderStatsPlayerList();
@@ -277,7 +279,7 @@ async function pushPayload(payload) {
     if (Array.isArray(payload.data)) {
       _phase = 'fsSavePlayers';
       await _fsSavePlayers(clubId, payload.data);
-      players = payload.data.map(ensure);
+      setClubPlayers(clubId, payload.data.map(ensure)); // ✅ v6.5
     }
 
     // matchLog 전체 초기화
@@ -292,7 +294,7 @@ async function pushPayload(payload) {
           await delBatch.commit();
         }
       }
-      matchLog = [];
+      setClubMatchLog(clubId, []); // ✅ v6.5
     }
 
     // matchLog 추가
@@ -326,7 +328,7 @@ async function pushPayload(payload) {
       // 로컬 반영 (dedupe)
       const byId = new Map(matchLog.map(m => [m.id, m]));
       normalized.forEach(m => byId.set(m.id, m));
-      matchLog = Array.from(byId.values()).sort((a, b) => Number(b.ts) - Number(a.ts));
+      setClubMatchLog(clubId, Array.from(byId.values()).sort((a, b) => Number(b.ts) - Number(a.ts))); // ✅ v6.5
     }
 
     _phase = 'pushMvpHistory';
@@ -350,7 +352,13 @@ async function pushDataOnly() {
 
 async function pushWithMatchLogAppend(logEntries) {
   const arr = Array.isArray(logEntries) ? logEntries : [logEntries];
-  return await pushPayload({ action: 'save', data: players, matchLogAppend: arr });
+  const ok = await pushPayload({ action: 'save', data: players, matchLogAppend: arr });
+  // ✅ v6.5: 경기 저장 완료 후 관련 선수 마일스톤 자동 감지
+  if (ok && typeof checkAndUpdateHofHistory === 'function') {
+    const allNames = new Set(arr.flatMap(m => [...(m.home||[]), ...(m.away||[])]));
+    allNames.forEach(name => checkAndUpdateHofHistory(name));
+  }
+  return ok;
 }
 
 
@@ -402,6 +410,90 @@ async function pushMvpHistory() {
     console.warn('pushMvpHistory error:', e);
     return false;
   }
+}
+
+// ✅ v6.5: 명예의 전당 Firebase 캐싱
+async function fetchHofHistory() {
+  if (!currentClub) return;
+  const cid = getActiveClubId();
+  try {
+    const doc = await _clubRef(cid).collection('settings').doc('hofHistory').get();
+    if (doc.exists) {
+      const data = doc.data() || {};
+      hofHistory = {
+        milestones: (data.milestones && typeof data.milestones === 'object') ? data.milestones : {},
+        streaks:    (data.streaks    && typeof data.streaks    === 'object') ? data.streaks    : {},
+      };
+    }
+  } catch (e) { console.warn('fetchHofHistory error:', e); }
+}
+
+async function pushHofHistory() {
+  const cid = getActiveClubId();
+  if (!currentClub || !cid) return false;
+  try {
+    await _clubRef(cid).collection('settings').doc('hofHistory').set({
+      milestones: (hofHistory && hofHistory.milestones) ? hofHistory.milestones : {},
+      streaks:    (hofHistory && hofHistory.streaks)    ? hofHistory.streaks    : {},
+    });
+    return true;
+  } catch (e) {
+    console.warn('pushHofHistory error:', e);
+    return false;
+  }
+}
+
+function checkAndUpdateHofHistory(playerName) {
+  // 경기 저장 완료 후 해당 플레이어의 마일스톤/연승연패 재계산 → 변경분만 Firebase 저장
+  if (!playerName || !Array.isArray(matchLog)) return;
+  if (typeof _calcHallOfFame !== 'function') return;
+
+  const hof = _calcHallOfFame(playerName);
+  if (!hof) return;
+
+  if (!hofHistory.milestones) hofHistory.milestones = {};
+  if (!hofHistory.streaks)    hofHistory.streaks    = {};
+
+  const cached     = hofHistory.milestones[playerName] || {};
+  const cachedStreak = hofHistory.streaks[playerName]  || {};
+  let changed = false;
+
+  // 마일스톤 체크 — 새로 달성한 것만 저장
+  hof.milestones.forEach(n => {
+    const info = hof.milestoneMap[n];
+    if (info && !cached[n]) {
+      if (!hofHistory.milestones[playerName]) hofHistory.milestones[playerName] = {};
+      hofHistory.milestones[playerName][n] = { date: info.date, opps: info.opps, partner: info.partner };
+      changed = true;
+    }
+  });
+
+  // 연승 체크
+  if (hof.bestWinStreak) {
+    const bw = hof.bestWinStreak;
+    if (!cachedStreak.bestWin || bw.count > (cachedStreak.bestWin.count || 0)) {
+      if (!hofHistory.streaks[playerName]) hofHistory.streaks[playerName] = {};
+      hofHistory.streaks[playerName].bestWin = {
+        count: bw.count, startDate: bw.startDate, endDate: bw.endDate, opps: bw.opps,
+      };
+      changed = true;
+    }
+  }
+
+  // 연패 극복 체크
+  if (hof.bestLoseStreak) {
+    const bl = hof.bestLoseStreak;
+    if (!cachedStreak.bestLose || bl.count > (cachedStreak.bestLose.count || 0)) {
+      if (!hofHistory.streaks[playerName]) hofHistory.streaks[playerName] = {};
+      hofHistory.streaks[playerName].bestLose = {
+        count: bl.count, startDate: bl.startDate, endDate: bl.endDate, opps: bl.opps,
+        breakInfo: bl.breakInfo || null,
+      };
+      changed = true;
+    }
+  }
+
+  if (changed) pushHofHistory().catch(e => console.warn('pushHofHistory error:', e));
 }
 
 function persistCourtNoticesLocal() {
@@ -630,7 +722,7 @@ async function _doRestore(data) {
 
     // 선수 복원
     await _fsSavePlayers(clubId, data.players);
-    players = data.players.map(ensure);
+    setClubPlayers(clubId, data.players.map(ensure)); // ✅ v6.5
 
     // matchLog 복원 (기존 삭제 후 재저장)
     const logCol  = _clubRef(clubId).collection('matchLog');
@@ -639,7 +731,7 @@ async function _doRestore(data) {
     oldSnap.docs.forEach(d => delBatch.delete(d.ref));
     await delBatch.commit();
     if (data.matchLog.length > 0) await _fsAppendMatchLog(clubId, data.matchLog);
-    matchLog = normalizeMatchLog(data.matchLog);
+    setClubMatchLog(clubId, normalizeMatchLog(data.matchLog)); // ✅ v6.5
 
     // notices 복원
     await _clubRef(clubId).collection('settings').doc('notices').set({
