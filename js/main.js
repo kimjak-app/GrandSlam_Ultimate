@@ -3,7 +3,7 @@
 // ========================================
 
 // ✅ 버전 상수 — 버전업 시 여기만 바꾸면 전체 반영
-const APP_VERSION = 'v6.4432';
+const APP_VERSION = 'v6.4439';
 
 
 // ----------------------------------------
@@ -106,19 +106,36 @@ window.addEventListener('beforeunload', () => {
 // ----------------------------------------
 // 4. 홈 화면 렌더링
 // ----------------------------------------
+// ✅ 2단계: renderHome은 섹션 오케스트레이터 역할만 담당
+// 각 섹션은 renderHomeSection(id)으로 독립 호출 가능
+// 새 섹션 추가 시 renderHome() 수정 없이 섹션 함수만 추가하면 됨
 
-function renderHome() {
+const _HOME_SECTIONS = ['locker', 'hall', 'clubStatus'];
+
+function renderHomeSection(sectionId) {
+  const _snapClubId = typeof getActiveClubId === 'function' ? getActiveClubId() : null;
   try {
-    // 클럽 전환 시 다른 클럽 선수 잔상 제거
-    if (currentLoggedPlayer && Array.isArray(players) && !players.find(p => p.name === currentLoggedPlayer.name)) {
-      currentLoggedPlayer = null;
+    if (sectionId === 'locker') {
+      if (currentLoggedPlayer && Array.isArray(players) && !players.find(p => p.name === currentLoggedPlayer.name)) {
+        currentLoggedPlayer = null;
+      }
+      _renderLockerRoom(_snapClubId);
+    } else if (sectionId === 'hall') {
+      _renderHallOfFamePreview(_snapClubId);
+    } else if (sectionId === 'clubStatus') {
+      _renderClubStatus(_snapClubId);
     }
-    _renderLockerRoom();
-    _renderClubStatus();
-  } catch (e) { console.warn('[renderHome] error:', e); }
+  } catch (e) { console.warn(`[renderHomeSection:${sectionId}] error:`, e); }
 }
 
-function _renderLockerRoom() {
+function renderHome() {
+  _HOME_SECTIONS.forEach(id => renderHomeSection(id));
+}
+
+function _renderLockerRoom(_snapClubId) {
+  // ✅ 1단계 가드: DOM 쓰기 전 최상단에서 clubId 확인 — 클럽 바뀌었으면 즉시 중단
+  if (_snapClubId !== null && (typeof getActiveClubId === 'function' ? getActiveClubId() : null) !== _snapClubId) return;
+
   const me     = typeof currentLoggedPlayer !== 'undefined' ? currentLoggedPlayer : null;
   const myName = me ? me.name : null;
 
@@ -274,9 +291,12 @@ function _recordWeeklyMvp(refDateStr, playerName) {
   if (typeof pushMvpHistory === 'function') pushMvpHistory();
 }
 
-function _renderClubStatus() {
+function _renderClubStatus(_snapClubId) {
   const el = id => document.getElementById(id);
   if (!Array.isArray(matchLog) || !Array.isArray(players)) return;
+
+  // ✅ 1단계 가드: 계산 시작 전 클럽이 바뀌었으면 중단
+  if (_snapClubId !== null && (typeof getActiveClubId === 'function' ? getActiveClubId() : null) !== _snapClubId) return;
 
   const clubName = currentClub?.clubName || '우리 클럽';
   if (el('clubStatusName')) el('clubStatusName').innerHTML = `<span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:4px; color:#ffffff;">emoji_events</span>${clubName} 이번달`;
@@ -403,9 +423,334 @@ function _renderClubStatus() {
 }
 
 
+
+
+// ----------------------------------------
+// 6. 명예의 전당 (Hall of Fame)
+// ----------------------------------------
+
+function _calcHallOfFame(myName) {
+  if (!myName || !Array.isArray(matchLog) || matchLog.length === 0) return null;
+
+  const myGames = matchLog
+    .filter(m => (m.home||[]).includes(myName) || (m.away||[]).includes(myName))
+    .sort((a, b) => (a.date||'').localeCompare(b.date||'') || Number(a.ts||0) - Number(b.ts||0));
+
+  if (myGames.length === 0) return null;
+
+  const wins = myGames.filter(m => {
+    const inHome = (m.home||[]).includes(myName);
+    return (inHome && m.winner === 'home') || (!inHome && m.winner === 'away');
+  });
+
+  const getNthWin = (n) => wins.length >= n ? wins[n - 1] : null;
+
+  const getMatchInfo = (m) => {
+    if (!m) return null;
+    const inHome = (m.home||[]).includes(myName);
+    const myTeam  = inHome ? (m.home||[]) : (m.away||[]);
+    const oppTeam = inHome ? (m.away||[]) : (m.home||[]);
+    const partner = myTeam.filter(n => n !== myName);
+    const dn = n => typeof displayName === 'function' ? displayName(n) : n;
+    return { date: m.date || '', type: m.type || 'double', opps: oppTeam.map(dn).join('·'), partner: partner.map(dn).join('·') };
+  };
+
+  const toMonday = (dateStr) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    if (isNaN(d)) return null;
+    const day = d.getDay();
+    d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+    return d.toISOString().slice(0, 10);
+  };
+
+  const periodStats = (keyFn) => {
+    const map = {};
+    myGames.forEach(m => {
+      const key = keyFn(m.date || '');
+      if (!key) return;
+      if (!map[key]) map[key] = { w: 0, l: 0 };
+      const inHome = (m.home||[]).includes(myName);
+      const isWin = (inHome && m.winner === 'home') || (!inHome && m.winner === 'away');
+      isWin ? map[key].w++ : map[key].l++;
+    });
+    return map;
+  };
+
+  const bestByRate = (map, minGames = 3) => {
+    return Object.entries(map)
+      .filter(([, v]) => (v.w + v.l) >= minGames)
+      .map(([k, v]) => ({ key: k, w: v.w, l: v.l, total: v.w + v.l, rate: Math.round(v.w / (v.w + v.l) * 100) }))
+      .sort((a, b) => b.rate - a.rate || b.w - a.w)[0] || null;
+  };
+
+  const bestByWins = (map) => {
+    return Object.entries(map)
+      .map(([k, v]) => ({ key: k, w: v.w, l: v.l, total: v.w + v.l, rate: Math.round(v.w / (v.w + v.l) * 100) }))
+      .sort((a, b) => b.w - a.w || b.rate - a.rate)[0] || null;
+  };
+
+  const weekMap  = periodStats(d => toMonday(d));
+  const monthMap = periodStats(d => (d || '').slice(0, 7));
+  const yearMap  = periodStats(d => (d || '').slice(0, 4));
+
+  const fmtWeek  = (s) => { if (!s) return '–'; const d = new Date(s + 'T00:00:00'); return `${d.getMonth()+1}/${d.getDate()} 주`; };
+  const fmtMonth = (m) => m ? `${m.slice(0,4)}년 ${parseInt(m.slice(5))}월` : '–';
+  const fmtYear  = (y) => y ? `${y}년` : '–';
+
+  // 동적 마일스톤 생성: 1·10·50·100 고정 + 100 이후 50단위 자동 확장
+  const FIXED_MILESTONES = [1, 10, 50, 100];
+  const dynamicMilestones = [...FIXED_MILESTONES];
+  if (wins.length > 100) {
+    let next = 150;
+    while (next <= wins.length + 50) {
+      dynamicMilestones.push(next);
+      next += 50;
+    }
+  }
+  const milestoneMap = {};
+  dynamicMilestones.forEach(n => {
+    milestoneMap[n] = getMatchInfo(getNthWin(n));
+  });
+
+  // 연승/연패 계산
+  const calcStreaks = () => {
+    let bestWin = { count: 0, opps: [], startDate: '', endDate: '' };
+    let bestLose = { count: 0, opps: [], startDate: '', endDate: '', breakInfo: null };
+    let curWin = { count: 0, opps: [], startDate: '', endDate: '' };
+    let curLose = { count: 0, opps: [], startDate: '', endDate: '', breakInfo: null };
+
+    myGames.forEach((m, i) => {
+      const inHome = (m.home||[]).includes(myName);
+      const isWin  = (inHome && m.winner === 'home') || (!inHome && m.winner === 'away');
+      const dn     = n => typeof displayName === 'function' ? displayName(n) : n;
+      const oppTeam = (inHome ? (m.away||[]) : (m.home||[])).map(dn).join('·');
+      const date    = m.date || '';
+
+      if (isWin) {
+        // 연승 누적
+        if (curWin.count === 0) curWin.startDate = date;
+        curWin.count++;
+        curWin.opps.push(oppTeam);
+        curWin.endDate = date;
+        if (curWin.count > bestWin.count) bestWin = { ...curWin, opps: [...curWin.opps] };
+        // 연패 종료 — 연패 극복 정보 저장
+        if (curLose.count > 0) {
+          curLose.breakInfo = { opps: oppTeam, date };
+          if (curLose.count > bestLose.count) bestLose = { ...curLose, opps: [...curLose.opps] };
+          curLose = { count: 0, opps: [], startDate: '', endDate: '', breakInfo: null };
+        }
+      } else {
+        // 연패 누적
+        if (curLose.count === 0) curLose.startDate = date;
+        curLose.count++;
+        curLose.opps.push(oppTeam);
+        curLose.endDate = date;
+        // 연승 종료
+        if (curWin.count > 0) {
+          if (curWin.count > bestWin.count) bestWin = { ...curWin, opps: [...curWin.opps] };
+          curWin = { count: 0, opps: [], startDate: '', endDate: '' };
+        }
+      }
+    });
+    // 마지막 연속 기록 처리
+    if (curWin.count > bestWin.count)   bestWin  = { ...curWin,  opps: [...curWin.opps]  };
+    if (curLose.count > bestLose.count) bestLose = { ...curLose, opps: [...curLose.opps] };
+
+    return {
+      bestWinStreak:  bestWin.count  > 0 ? bestWin  : null,
+      bestLoseStreak: bestLose.count > 0 ? bestLose : null,
+    };
+  };
+
+  const { bestWinStreak, bestLoseStreak } = calcStreaks();
+
+  return {
+    totalWins: wins.length, totalGames: myGames.length,
+    milestones: dynamicMilestones,
+    milestoneMap,
+    bestWinStreak, bestLoseStreak,
+    bestRateWeek: bestByRate(weekMap, 2), bestRateMonth: bestByRate(monthMap, 3), bestRateYear: bestByRate(yearMap, 5),
+    bestWinsWeek: bestByWins(weekMap),   bestWinsMonth: bestByWins(monthMap),     bestWinsYear:  bestByWins(yearMap),
+    fmtWeek, fmtMonth, fmtYear,
+  };
+}
+
+function milestoneEmoji(n) {
+  if (n === 1)  return '🥇';
+  if (n === 10) return '⭐';
+  if (n === 50) return '🌟';
+  if (n < 200)  return '🏆';
+  if (n < 500)  return '👑';
+  return '🔱';
+}
+
+function _hofBadge(emoji, label, value, sub) {
+  return `<div style="background:#fff; border-radius:14px; padding:12px 14px; box-shadow:0 2px 8px rgba(0,0,0,0.07); margin-bottom:10px;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="font-size:28px; line-height:1; flex-shrink:0;">${emoji}</div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:10px; color:#999; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:3px;">${label}</div>
+        <div style="font-size:15px; font-weight:800; color:#1a1a2e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${value}</div>
+        ${sub ? `<div style="font-size:11px; color:#888; margin-top:3px;">${sub}</div>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function _hofMilestoneBadge(emoji, label, info) {
+  if (!info) return `<div style="background:#f5f5f5; border-radius:14px; padding:12px 14px; margin-bottom:10px; opacity:0.45;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="font-size:28px; line-height:1; flex-shrink:0; filter:grayscale(1);">${emoji}</div>
+      <div><div style="font-size:10px; color:#bbb; font-weight:700; letter-spacing:1px;">${label}</div>
+      <div style="font-size:13px; color:#ccc; font-weight:600;">아직 달성 전</div></div>
+    </div></div>`;
+  const partnerTxt = info.partner ? ` · 파트너: ${info.partner}` : '';
+  return _hofBadge(emoji, label, `vs ${info.opps}`, `${info.date}${partnerTxt}`);
+}
+
+function _renderHallOfFamePreview(_snapClubId) {
+  const card    = document.getElementById('hallOfFameCard');
+  const preview = document.getElementById('hofPreview');
+  if (!card || !preview) return;
+
+  const myName = typeof currentLoggedPlayer !== 'undefined' && currentLoggedPlayer ? currentLoggedPlayer.name : null;
+  if (!myName) { card.style.display = 'none'; return; }
+  if (_snapClubId !== null && (typeof getActiveClubId === 'function' ? getActiveClubId() : null) !== _snapClubId) return;
+
+  const hof = _calcHallOfFame(myName);
+  if (!hof) { card.style.display = 'none'; return; }
+
+  card.style.display = 'block';
+  const items = [];
+
+  if (hof.milestoneMap[1]) items.push(`<div style="flex-shrink:0; background:#FFF8E8; border:1.5px solid #F0D080; border-radius:14px; padding:10px 14px; min-width:130px; text-align:center;">
+    <div style="font-size:22px;">🥇</div>
+    <div style="font-size:10px; color:#C17A5A; font-weight:700; margin-top:4px;">첫 승리</div>
+    <div style="font-size:12px; font-weight:800; color:#1a1a2e; margin-top:2px;">${hof.milestoneMap[1].date}</div>
+  </div>`);
+
+  // 가장 최근 달성한 마일스톤 배지 (10승 이상)
+  const achieved = hof.milestones.filter(n => n >= 10 && hof.milestoneMap[n]);
+  const latestMilestone = achieved[achieved.length - 1];
+  if (latestMilestone) {
+    const info  = hof.milestoneMap[latestMilestone];
+    const emoji = milestoneEmoji(latestMilestone);
+    items.push(`<div style="flex-shrink:0; background:#EEF6FF; border:1.5px solid #90C0E8; border-radius:14px; padding:10px 14px; min-width:130px; text-align:center;">
+      <div style="font-size:22px;">${emoji}</div>
+      <div style="font-size:10px; color:#3A7BD5; font-weight:700; margin-top:4px;">${latestMilestone}승 달성</div>
+      <div style="font-size:12px; font-weight:800; color:#1a1a2e; margin-top:2px;">${info.date}</div>
+    </div>`);
+  }
+
+  if (hof.bestRateMonth) items.push(`<div style="flex-shrink:0; background:#F0FBF4; border:1.5px solid #90D0A8; border-radius:14px; padding:10px 14px; min-width:130px; text-align:center;">
+    <div style="font-size:22px;">🏆</div>
+    <div style="font-size:10px; color:#5D9C76; font-weight:700; margin-top:4px;">최고 승률의 달</div>
+    <div style="font-size:12px; font-weight:800; color:#1a1a2e; margin-top:2px;">${hof.fmtMonth(hof.bestRateMonth.key)} · ${hof.bestRateMonth.rate}%</div>
+  </div>`);
+
+  if (hof.bestWinsWeek) items.push(`<div style="flex-shrink:0; background:#F8F0FF; border:1.5px solid #C0A0E0; border-radius:14px; padding:10px 14px; min-width:130px; text-align:center;">
+    <div style="font-size:22px;">🎖️</div>
+    <div style="font-size:10px; color:#8B6B9A; font-weight:700; margin-top:4px;">최다승 주</div>
+    <div style="font-size:12px; font-weight:800; color:#1a1a2e; margin-top:2px;">${hof.fmtWeek(hof.bestWinsWeek.key)} · ${hof.bestWinsWeek.w}승</div>
+  </div>`);
+
+  preview.innerHTML = items.length ? items.join('') : '';
+  if (!items.length) card.style.display = 'none';
+}
+
+function openHallOfFameModal() {
+  const modal = document.getElementById('hallOfFameModal');
+  const body  = document.getElementById('hofModalBody');
+  if (!modal || !body) return;
+
+  const myName = typeof currentLoggedPlayer !== 'undefined' && currentLoggedPlayer ? currentLoggedPlayer.name : null;
+  if (!myName) return;
+
+  // ✅ 모달 open 시점 clubId 가드 — 클럽 전환 중 열리면 차단
+  const _snapClubId = typeof getActiveClubId === 'function' ? getActiveClubId() : null;
+
+  modal.style.display = 'block';
+  document.body.style.overflow = 'hidden';
+
+  const hof = _calcHallOfFame(myName);
+
+  // 계산 완료 후 clubId 재확인
+  if (_snapClubId !== null && (typeof getActiveClubId === 'function' ? getActiveClubId() : null) !== _snapClubId) {
+    closeHallOfFameModal(); return;
+  }
+
+  if (!hof) { body.innerHTML = '<div style="text-align:center; color:#bbb; padding:30px 0;">경기 기록이 없습니다.</div>'; return; }
+
+  const section = (title, color, content) =>
+    `<div style="margin-bottom:16px;"><div style="font-size:11px; font-weight:800; color:${color}; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px; padding-left:4px;">${title}</div>${content}</div>`;
+
+  const fmtStat = (s) => s ? `${s.w}승 ${s.l}패 · ${s.rate}%` : '–';
+
+  const summary = `<div style="background:#2C3E6B; border-radius:14px; padding:14px 16px; margin-bottom:16px; display:flex; justify-content:space-around; text-align:center;">
+    <div><div style="font-size:26px; font-weight:900; color:#fff;">${hof.totalWins}</div><div style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:2px;">총 승리</div></div>
+    <div style="width:1px; background:rgba(255,255,255,0.15);"></div>
+    <div><div style="font-size:26px; font-weight:900; color:#fff;">${hof.totalGames}</div><div style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:2px;">총 경기</div></div>
+    <div style="width:1px; background:rgba(255,255,255,0.15);"></div>
+    <div><div style="font-size:26px; font-weight:900; color:#fff;">${hof.totalGames > 0 ? Math.round(hof.totalWins/hof.totalGames*100) : 0}%</div><div style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:2px;">통산 승률</div></div>
+  </div>`;
+
+  // 동적 마일스톤 배지 생성
+  const milestoneBadges = hof.milestones.map(n =>
+    _hofMilestoneBadge(milestoneEmoji(n), `${n === 1 ? '첫 승리' : n + '승'} 달성`, hof.milestoneMap[n])
+  ).join('');
+
+  const milestones = section('🥇 승리 마일스톤', '#C17A5A', milestoneBadges);
+
+  const rates = section('📈 최고 승률', '#3A7BD5',
+    _hofBadge('📅', '최고 승률의 주',   hof.bestRateWeek  ? `${hof.fmtWeek(hof.bestRateWeek.key)} · ${hof.bestRateWeek.rate}%`   : '기록 없음', hof.bestRateWeek  ? fmtStat(hof.bestRateWeek)  : null) +
+    _hofBadge('🗓️', '최고 승률의 달',   hof.bestRateMonth ? `${hof.fmtMonth(hof.bestRateMonth.key)} · ${hof.bestRateMonth.rate}%` : '기록 없음', hof.bestRateMonth ? fmtStat(hof.bestRateMonth) : null) +
+    _hofBadge('📆', '최고 승률의 연도', hof.bestRateYear  ? `${hof.fmtYear(hof.bestRateYear.key)} · ${hof.bestRateYear.rate}%`   : '기록 없음', hof.bestRateYear  ? fmtStat(hof.bestRateYear)  : null));
+
+  const mostWins = section('🎖️ 최다 승수', '#5D9C76',
+    _hofBadge('🔥', '최다승 주',   hof.bestWinsWeek  ? `${hof.fmtWeek(hof.bestWinsWeek.key)} · ${hof.bestWinsWeek.w}승`   : '기록 없음', hof.bestWinsWeek  ? fmtStat(hof.bestWinsWeek)  : null) +
+    _hofBadge('💪', '최다승 달',   hof.bestWinsMonth ? `${hof.fmtMonth(hof.bestWinsMonth.key)} · ${hof.bestWinsMonth.w}승` : '기록 없음', hof.bestWinsMonth ? fmtStat(hof.bestWinsMonth) : null) +
+    _hofBadge('👑', '최다승 연도', hof.bestWinsYear  ? `${hof.fmtYear(hof.bestWinsYear.key)} · ${hof.bestWinsYear.w}승`   : '기록 없음', hof.bestWinsYear  ? fmtStat(hof.bestWinsYear)  : null));
+
+  // 연승 극복기 섹션
+  const fmtStreakOpps = (opps) => {
+    if (!opps || opps.length === 0) return '–';
+    // 중복 상대 제거 후 최대 5명까지 표시
+    const unique = [...new Set(opps)];
+    return unique.slice(0, 5).join(', ') + (unique.length > 5 ? ` 외 ${unique.length - 5}명` : '');
+  };
+
+  const winStreakContent = hof.bestWinStreak
+    ? _hofBadge('🔥', `최고 연승 · ${hof.bestWinStreak.count}연승`,
+        `${hof.bestWinStreak.startDate} ~ ${hof.bestWinStreak.endDate}`,
+        `상대: ${fmtStreakOpps(hof.bestWinStreak.opps)}`)
+    : `<div style="background:#f5f5f5; border-radius:14px; padding:12px 14px; margin-bottom:10px; opacity:0.45; font-size:13px; color:#bbb; font-weight:600;">기록 없음</div>`;
+
+  const loseStreakContent = hof.bestLoseStreak
+    ? _hofBadge('💪', `최고 연패 극복 · ${hof.bestLoseStreak.count}연패`,
+        `${hof.bestLoseStreak.startDate} ~ ${hof.bestLoseStreak.endDate}`,
+        `연패 상대: ${fmtStreakOpps(hof.bestLoseStreak.opps)}` +
+        (hof.bestLoseStreak.breakInfo
+          ? ` · 극복: vs ${hof.bestLoseStreak.breakInfo.opps} (${hof.bestLoseStreak.breakInfo.date})`
+          : ' · 극복 기록 없음'))
+    : `<div style="background:#f5f5f5; border-radius:14px; padding:12px 14px; margin-bottom:10px; opacity:0.45; font-size:13px; color:#bbb; font-weight:600;">기록 없음</div>`;
+
+  const streaks = section('⚡ 연승 / 연패 극복기', '#8B6B9A', winStreakContent + loseStreakContent);
+
+  body.innerHTML = summary + milestones + streaks + rates + mostWins;
+}
+
+function closeHallOfFameModal() {
+  const modal = document.getElementById('hallOfFameModal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
 // ----------------------------------------
 // window 전역 등록
 // ----------------------------------------
 
-window.hideSplashSafe  = hideSplashSafe;
-window.renderHome      = renderHome;
+window.hideSplashSafe       = hideSplashSafe;
+window.renderHome           = renderHome;
+window.renderHomeSection    = renderHomeSection;
+window.openHallOfFameModal  = openHallOfFameModal;
+window.closeHallOfFameModal = closeHallOfFameModal;

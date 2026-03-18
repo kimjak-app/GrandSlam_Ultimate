@@ -244,7 +244,7 @@ async function loadMoreMatchLog() {
     if (typeof updateSeason === 'function')          updateSeason();
     if (typeof updateWeekly === 'function')          updateWeekly();
     if (typeof renderStatsPlayerList === 'function') renderStatsPlayerList();
-    if (typeof renderHome === 'function')            renderHome();
+    // ✅ 1단계: renderHome 직접 호출 제거 — _syncRestoreLoggedPlayer 완료 후 단일 호출로 일원화
     setStatus('');
     AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'data', players } }));
 
@@ -752,34 +752,43 @@ async function handleEmailLogin() {
 }
 
 async function _syncRestoreLoggedPlayer(clubId) {
+  // ✅ 1단계: 모든 분기에서 renderHome 직접 호출 제거 → 함수 끝 단일 1회로 통합
   if (!currentUserAuth || !clubId) {
-    if (typeof renderHome === 'function') renderHome(); return;
-  }
-  try {
-    const playersRef = _clubRef(clubId).collection('players');
-    // 1) uid로 연동된 선수 확인
-    const snap = await playersRef.where('uid', '==', currentUserAuth.uid).get();
-    if (!snap.empty) { currentLoggedPlayer = snap.docs[0].data(); if (typeof renderHome === 'function') renderHome(); return; }
-    // 2) localStorage에 저장된 이름으로 복원
-    const savedName = localStorage.getItem(`auth_name_${clubId}_${currentUserAuth.uid}`);
-    if (savedName) {
-      const doc = await playersRef.doc(savedName).get();
-      if (doc.exists) {
-        currentLoggedPlayer = doc.data();
-        if (!currentLoggedPlayer.uid) {
-          playersRef.doc(savedName).update({ uid: currentUserAuth.uid, email: currentUserAuth.email || '' })
-            .catch(e => console.warn('[uid 자동저장 실패]', e));
-          currentLoggedPlayer.uid = currentUserAuth.uid;
+    currentLoggedPlayer = null;
+  } else {
+    try {
+      const playersRef = _clubRef(clubId).collection('players');
+      // 1) uid로 연동된 선수 확인
+      const snap = await playersRef.where('uid', '==', currentUserAuth.uid).get();
+      if (!snap.empty) {
+        currentLoggedPlayer = snap.docs[0].data();
+      } else {
+        // 2) localStorage에 저장된 이름으로 복원
+        const savedName = localStorage.getItem(`auth_name_${clubId}_${currentUserAuth.uid}`);
+        if (savedName) {
+          const doc = await playersRef.doc(savedName).get();
+          if (doc.exists) {
+            currentLoggedPlayer = doc.data();
+            if (!currentLoggedPlayer.uid) {
+              playersRef.doc(savedName).update({ uid: currentUserAuth.uid, email: currentUserAuth.email || '' })
+                .catch(e => console.warn('[uid 자동저장 실패]', e));
+              currentLoggedPlayer.uid = currentUserAuth.uid;
+            }
+          } else {
+            currentLoggedPlayer = null;
+          }
+        } else {
+          // 3) 해당 클럽에 없음
+          currentLoggedPlayer = null;
         }
-        if (typeof renderHome === 'function') renderHome(); return;
       }
+    } catch (e) {
+      console.warn('[_syncRestoreLoggedPlayer] error:', e);
+      currentLoggedPlayer = null;
     }
-    // 3) 해당 클럽에 없음
-    currentLoggedPlayer = null;
-    if (typeof renderHome === 'function') renderHome();
-  } catch (e) {
-    console.warn('[_syncRestoreLoggedPlayer] error:', e);
-    currentLoggedPlayer = null;
+  }
+  // ✅ 모든 경로 처리 완료 후 renderHome 단 1회 호출
+  if ((typeof getActiveClubId === 'function' ? getActiveClubId() : null) === clubId) {
     if (typeof renderHome === 'function') renderHome();
   }
 }
