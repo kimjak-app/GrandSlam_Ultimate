@@ -29,7 +29,7 @@
 
     .nav-item.active .material-symbols-outlined { font-variation-settings: 'FILL' 1, 'wght' 300; }
 
-    .app-screen { display: none; padding: 15px; max-width: 600px; margin: 0 auto; padding-bottom: 120px;  }
+    .app-screen { display: none; padding: 15px; max-width: 600px; margin: 0 auto; padding-top: 65px; padding-bottom: 120px; }
     .app-screen.active { display: block; }
 
     .header-banner { background: var(--wimbledon-sage); color: white; margin: 0 0 20px 0; padding: 20px; text-align: center; border-radius: 16px; box-shadow: 0 4px 15px rgba(93, 156, 118, 0.3); display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 20px; font-weight: 400; letter-spacing: -0.5px; position: relative; overflow: hidden; }
@@ -481,7 +481,12 @@
       padding: 10px 15px;
       max-width: 600px;
       margin: 0 auto;
-      flex-wrap: wrap;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      background: var(--bg-gray);
     }
     .favorite-launch-btn,
     .club-selector-btn {
@@ -512,12 +517,12 @@
       flex-shrink: 0;
     }
     .club-selector-btn {
-      flex: 3;
+      flex: 2;
       border: 2px solid var(--wimbledon-sage);
       color: var(--text-dark);
     }
     .club-selector-btn.club-selector-half {
-      flex: 3;
+      flex: 2;
     }
     .club-selector-btn .club-dot {
       width: 10px; height: 10px;
