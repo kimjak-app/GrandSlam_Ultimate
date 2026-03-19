@@ -252,6 +252,7 @@ function activateClub(club, doSync) {
   courtNotices = [];
   announcements = [];
   oneTimePlayers = [];
+  if (typeof quickMenu !== 'undefined') quickMenu = [];
 
   // ✅ 1단계: 초기화 직후 빈 상태 홈 즉시 표시 (이전 클럽 잔상 차단)
   if (typeof renderHome === 'function') renderHome();

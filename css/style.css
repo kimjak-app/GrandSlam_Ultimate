@@ -481,22 +481,43 @@
       padding: 10px 15px;
       max-width: 600px;
       margin: 0 auto;
+      flex-wrap: wrap;
     }
+    .favorite-launch-btn,
     .club-selector-btn {
       display: flex;
       align-items: center;
       gap: 6px;
-      flex: 1;
+      min-width: 0;
       padding: 10px 14px;
-      border: 2px solid var(--wimbledon-sage);
       border-radius: 14px;
       background: white;
       font-size: 14px;
-      font-weight: 400;
+      font-weight: 700;
       color: var(--text-dark);
       cursor: pointer;
       transition: all 0.2s;
       overflow: hidden;
+    }
+    .favorite-launch-btn {
+      flex: 1;
+      justify-content: center;
+      border: 2px solid var(--wimbledon-sage);
+      background: var(--wimbledon-sage);
+      color: #fff;
+    }
+    .favorite-launch-btn .material-symbols-outlined {
+      font-size: 18px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .club-selector-btn {
+      flex: 3;
+      border: 2px solid var(--wimbledon-sage);
+      color: var(--text-dark);
+    }
+    .club-selector-btn.club-selector-half {
+      flex: 3;
     }
     .club-selector-btn .club-dot {
       width: 10px; height: 10px;
@@ -515,6 +536,9 @@
       font-size: 18px;
       color: var(--text-gray);
       flex-shrink: 0;
+    }
+    .favorite-launch-btn:active {
+      background: #4a8a5a;
     }
     .club-selector-btn:active {
       background: rgba(93, 156, 118, 0.08);

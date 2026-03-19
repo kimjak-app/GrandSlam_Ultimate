@@ -211,6 +211,7 @@ async function _doSync(clubId) {
     fetchFeeData().catch(e => console.warn('sync fetchFeeData error:', e));
     fetchMvpHistory().catch(e => console.warn('sync fetchMvpHistory error:', e));
     fetchHofHistory().catch(e => console.warn('sync fetchHofHistory error:', e)); // ✅ v6.5
+    fetchQuickMenu().catch(e => console.warn('sync fetchQuickMenu error:', e)); // ✅ v6.6
     setTimeout(applyAutofitAllTables, 0);
 
     await _syncRestoreLoggedPlayer(clubId);
@@ -494,6 +495,37 @@ function checkAndUpdateHofHistory(playerName) {
   }
 
   if (changed) pushHofHistory().catch(e => console.warn('pushHofHistory error:', e));
+}
+
+// ✅ v6.6: 즐겨찾기 퀵메뉴
+async function fetchQuickMenu() {
+  if (!currentClub) return;
+  const cid = getActiveClubId();
+  try {
+    const doc = await _clubRef(cid).collection('settings').doc('quickMenu').get();
+    if (doc.exists) {
+      const data = doc.data() || {};
+      quickMenu = (typeof _normalizeQuickMenuItems === 'function')
+        ? _normalizeQuickMenuItems(data.items)
+        : (Array.isArray(data.items) ? data.items : []);
+    } else {
+      quickMenu = [];
+    }
+  } catch (e) { console.warn('fetchQuickMenu error:', e); }
+  if (typeof renderHomeSection === 'function') renderHomeSection('quickMenu');
+}
+
+async function pushQuickMenu() {
+  const cid = getActiveClubId();
+  if (!currentClub || !cid) return false;
+  try {
+    const items = (typeof _normalizeQuickMenuItems === 'function')
+      ? _normalizeQuickMenuItems(quickMenu)
+      : (Array.isArray(quickMenu) ? quickMenu : []);
+    quickMenu = [...items];
+    await _clubRef(cid).collection('settings').doc('quickMenu').set({ items });
+    return true;
+  } catch (e) { console.warn('pushQuickMenu error:', e); return false; }
 }
 
 function persistCourtNoticesLocal() {

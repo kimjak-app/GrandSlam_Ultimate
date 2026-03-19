@@ -137,6 +137,7 @@ async function enterTreasurer() {
 
 function resetTreasurerView() {
   if (treasurerUnlocked) {
+    if (_consumeTreasurerQuickTarget()) return;
     showTreasurerMenu();
   } else {
     $('treasurer-pin-screen').style.display = 'block';
@@ -180,11 +181,21 @@ async function verifyTreasurerPin() {
   $('treasurerPinInput').focus();
 }
 
+
+function _consumeTreasurerQuickTarget() {
+  const section = window._treasurerQuickTarget || '';
+  if (!section) return false;
+  window._treasurerQuickTarget = '';
+  window.showTreasurerSection(section);
+  return true;
+}
+
 function showTreasurerMenu() {
   $('treasurer-pin-screen').style.display = 'none';
   $('treasurer-main').style.display = 'block';
   hideTreasurerSections();
   pushDataOnly();
+  if (_consumeTreasurerQuickTarget()) return;
 }
 
 function hideTreasurerSections() {
