@@ -814,6 +814,7 @@ const QUICK_MENU_ALL = [
   { id: 'exchange',          label: '교류전',             icon: '<path d=\"M6.99 11 3 15l3.99 4v-3H14v-2H6.99v-3ZM21 9l-3.99-4v3H10v2h7.01v3L21 9Z\"/>', action: () => { closeQuickMenuPanel(); showView('exchange'); window.scrollTo({ top: 0, behavior: 'smooth' }); } },
   { id: 'ladder',            label: '사다리',             icon: '<path d=\"M4 2h2v20H4V2Zm14 0h2v20h-2V2ZM4 11h16v2H4v-2Z\"/>', action: () => { closeQuickMenuPanel(); showView('ladder'); window.scrollTo({ top: 0, behavior: 'smooth' }); } },
   { id: 'stats',             label: '통계',               icon: '<path d=\"M5 17h14v2H3V5h2v12Zm2-3.5 2.8-2.8 2.2 2.2L17 8h2v2h-1.2l-4.8 4.8-2.2-2.2L8.4 15 7 13.5Z\"/>', action: () => { closeQuickMenuPanel(); showView('stats'); window.scrollTo({ top: 0, behavior: 'smooth' }); } },
+  { id: 'backup',            label: '백업&복원',           icon: '<path d=\"M12 2a10 10 0 0 0-10 10 10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2Zm-1 14v-4H7l5-6 5 6h-4v4h-2Z\"/>', action: () => { closeQuickMenuPanel(); showView('backup'); window.scrollTo({ top: 0, behavior: 'smooth' }); } },
 ];
 
 function _openTreasurerQuick(section) {
