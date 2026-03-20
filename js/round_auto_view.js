@@ -2012,6 +2012,8 @@ function roundAutoSetMiniTournamentWinner(matchId, side) {
       const winners = currentRound.map(m => m.winner === 'home' ? m.home : m.away);
       if (winners.length === 1) {
         gsAlert(`최종 우승: ${roundAutoDisplayParticipant(winners[0])}!\n\n미니 토너먼트가 종료되었습니다.`);
+        // ✅ v6.66: 토너먼트 종료 즉시 리셋 — 다음 세션에서 잔류 화면 방지
+        roundAutoState.miniTournament = { matches: [], round: 0, matchupHistory: {} };
         roundAutoRenderMatches();
         saveRoundAutoState();
         return;
@@ -2372,6 +2374,56 @@ function roundAutoRenderMatches() {
       </div>`;
   };
 
+  const renderMiniTournament = () => {
+    const mini = roundAutoState.miniTournament || { matches: [], round: 0, matchupHistory: {} };
+    const allMatches = Array.isArray(mini.matches) ? mini.matches : [];
+    const currentRound = Number(mini.round) || 0;
+    const roundMatches = allMatches.filter(match => Number(match?.round) === currentRound);
+    const completedMatches = allMatches.filter(match => match?.winner === 'home' || match?.winner === 'away');
+    const winnerMatch = currentRound > 0 && roundMatches.length === 1 && roundMatches[0]?.winner;
+    const champion = winnerMatch
+      ? (roundMatches[0].winner === 'home' ? roundMatches[0].home : roundMatches[0].away)
+      : null;
+
+    const rows = roundMatches.map((match, idx) => {
+      const badge = statusInfo(match);
+      const clickable = match && hasTeams(match) && match.winner !== 'home' && match.winner !== 'away';
+      return `
+        <div class="team-box" style="padding:0; margin-bottom:12px; overflow:hidden; border-radius:14px;">
+          <div style="background:${courtHeaderBg}; color:#fff; padding:10px 14px; font-weight:800; font-size:14px;">🏆 라운드 ${currentRound} · ${idx + 1}경기</div>
+          <div style="padding:12px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px;">
+              <div style="font-size:13px; font-weight:800; color:#0f172a;">${escapeHtml(getTypeText(match))}</div>
+              ${badge.label ? `<span style="font-size:11px; font-weight:700; border-radius:999px; padding:4px 8px; ${badge.style}">${badge.label}</span>` : ''}
+            </div>
+            ${renderTeamButtons(match, clickable).replace(/roundAutoSetWinner\(/g, 'roundAutoSetMiniTournamentWinner(')}
+          </div>
+        </div>`;
+    }).join('');
+
+    const summary = champion
+      ? `<div style="margin-bottom:12px; padding:12px; border-radius:12px; background:#f8fafc; border:1px solid #e2e8f0; text-align:center;">
+          <div style="font-size:12px; font-weight:700; color:#64748b; margin-bottom:4px;">미니 토너먼트 종료</div>
+          <div style="font-size:16px; font-weight:900; color:var(--wimbledon-sage);">🏆 우승: ${escapeHtml(roundAutoDisplayParticipant(champion))}</div>
+        </div>`
+      : `<div style="margin-bottom:12px; padding:12px; border-radius:12px; background:#f8fafc; border:1px solid #e2e8f0;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+            <div style="font-size:13px; font-weight:800; color:var(--wimbledon-sage);">미니 토너먼트 진행 중</div>
+            <span style="font-size:11px; color:#fff; background:var(--wimbledon-sage); border-radius:999px; padding:3px 8px;">R${currentRound}</span>
+          </div>
+          <div style="font-size:11px; color:#64748b; margin-top:6px;">완료 경기 ${completedMatches.length} · 현재 라운드 ${roundMatches.length}경기</div>
+        </div>`;
+
+    list.innerHTML = summary + (rows || '<div style="font-size:12px; color:#999; text-align:center; padding:10px;">표시할 미니 토너먼트 대진이 없습니다.</div>');
+    return true;
+  };
+
+  const mini = roundAutoState.miniTournament || { matches: [], round: 0, matchupHistory: {} };
+  if ((Number(mini.round) || 0) > 0 && Array.isArray(mini.matches) && mini.matches.length) {
+    renderMiniTournament();
+    return;
+  }
+
   if (!turns.length) {
     list.innerHTML = '<div style="font-size:12px; color:#999; text-align:center; padding:10px;">생성된 매치가 없습니다.</div>';
     return;
@@ -2419,6 +2471,16 @@ function roundAutoRenderMatches() {
 }
 
 async function roundAutoGenerateNextTurn() {
+  // ✅ v6.67: 연습 모드 진입 시 한 번만 안내 알림
+  if (typeof isPracticeMode !== 'undefined' && isPracticeMode === 'practice') {
+    const alreadyNotified = roundAutoState._practiceModeNotified;
+    if (!alreadyNotified) {
+      roundAutoState._practiceModeNotified = true;
+      gsAlert('🧪 연습 모드 ON\n게임 결과가 랭킹·통계에 반영되지 않습니다.');
+    }
+  } else {
+    roundAutoState._practiceModeNotified = false;
+  }
   roundAutoSyncStateFromCurrentUI();
   roundAutoState.turns = (roundAutoState.turns || []).filter(turn => turn?.status !== 'preview');
 
