@@ -3,7 +3,7 @@
 // ========================================
 
 // ✅ 버전 상수 — 버전업 시 여기만 바꾸면 전체 반영
-const APP_VERSION = 'v6.65';
+const APP_VERSION = 'v6.682';
 
 
 // ----------------------------------------
@@ -293,22 +293,85 @@ function _recordWeeklyMvp(refDateStr, playerName) {
   if (typeof pushMvpHistory === 'function') pushMvpHistory();
 }
 
+// ✅ v6.68: 클럽 현황 계산 함수들 — 전역 참조 금지, 반드시 스냅샷 인자로만 동작
+function _calcClubScoreMap(logs, snapPlayers) {
+  const scoring = (typeof getClubScoring === 'function' ? getClubScoring() : null) || TENNIS_RULES.scoring;
+  const calcPts = (m, name) => {
+    const inHome = (m.home||[]).includes(name), inAway = (m.away||[]).includes(name);
+    if (!inHome && !inAway) return 0;
+    const isWin = (inHome && m.winner==='home') || (inAway && m.winner==='away');
+    const rule  = scoring[m.type || 'double'] || scoring.double;
+    return scoring.participate + (isWin ? rule.win : rule.loss);
+  };
+  const map = {};
+  logs.forEach(m => {
+    [...(m.home||[]),...(m.away||[])].forEach(n => {
+      if (!map[n]) map[n] = { w:0, l:0, pts:0 };
+      const inHome = (m.home||[]).includes(n);
+      const isWin  = (inHome && m.winner==='home') || (!inHome && m.winner==='away');
+      isWin ? map[n].w++ : map[n].l++;
+      map[n].pts += calcPts(m, n);
+    });
+  });
+  return map;
+}
+
+function _calcMonthBest({ snapMatchLog, snapPlayers, thisMonthStr }) {
+  const logs = snapMatchLog.filter(m => (m.date||'').startsWith(thisMonthStr));
+  if (!logs.length) return null;
+  const isActive = n => snapPlayers.find(p => p.name===n && !p.isGuest && (!p.status||p.status==='active'));
+  const top = Object.entries(_calcClubScoreMap(logs, snapPlayers))
+    .filter(([n]) => isActive(n)).sort(([,a],[,b]) => b.pts-a.pts || b.w-a.w)[0];
+  return top ? { name: top[0], ...top[1] } : null;
+}
+
+function _calcWeekendBest({ snapMatchLog, snapPlayers, mondayStr, lastMondayStr, lastSundayStr, isThisWeek }) {
+  const logs = isThisWeek
+    ? snapMatchLog.filter(m => m.date >= mondayStr)
+    : snapMatchLog.filter(m => m.date >= lastMondayStr && m.date <= lastSundayStr);
+  if (!logs.length) return null;
+  const isActive = n => snapPlayers.find(p => p.name===n && !p.isGuest && (!p.status||p.status==='active'));
+  const top = Object.entries(_calcClubScoreMap(logs, snapPlayers))
+    .filter(([n]) => isActive(n)).sort(([,a],[,b]) => b.pts-a.pts || b.w-a.w)[0];
+  return top ? { name: top[0], ...top[1] } : null;
+}
+
+function _calcMostImproved({ snapMatchLog, snapPlayers, mondayStr, lastMondayStr, lastSundayStr }) {
+  const isActive = n => snapPlayers.find(p => p.name===n && !p.isGuest && (!p.status||p.status==='active'));
+  const twMap = _calcClubScoreMap(snapMatchLog.filter(m => m.date >= mondayStr), snapPlayers);
+  const lwMap = _calcClubScoreMap(snapMatchLog.filter(m => m.date >= lastMondayStr && m.date <= lastSundayStr), snapPlayers);
+  return Object.entries(twMap)
+    .filter(([n, d]) => isActive(n) && (d.w+d.l) >= 2)
+    .map(([n, d]) => {
+      const twRate = Math.round(d.w/(d.w+d.l)*100);
+      const lw     = lwMap[n];
+      const lwRate = lw && (lw.w+lw.l) >= 1 ? Math.round(lw.w/(lw.w+lw.l)*100) : 0;
+      return { name:n, delta: twRate-lwRate, twRate, lwRate, pts: d.pts };
+    })
+    .filter(p => p.delta > 0).sort((a,b) => b.delta-a.delta || b.pts-a.pts).slice(0,3);
+}
+
 function _renderClubStatus(_snapClubId) {
+  // ✅ v6.68: 진입 즉시 전역 데이터 스냅샷 고정 — 이후 계산은 복사본만 사용, 전역 참조 완전 차단
+  const snapPlayers  = Array.isArray(players)  ? players.slice()  : [];
+  const snapMatchLog = Array.isArray(matchLog) ? matchLog.slice() : [];
+  const snapClubId   = _snapClubId;
+  const getCurrentId = () => typeof getActiveClubId === 'function' ? getActiveClubId() : null;
+
+  if (!Array.isArray(snapMatchLog) || !Array.isArray(snapPlayers)) return;
+  if (snapClubId !== null && getCurrentId() !== snapClubId) return;
+
   const el = id => document.getElementById(id);
-  if (!Array.isArray(matchLog) || !Array.isArray(players)) return;
-
-  // ✅ 1단계 가드: 계산 시작 전 클럽이 바뀌었으면 중단
-  if (_snapClubId !== null && (typeof getActiveClubId === 'function' ? getActiveClubId() : null) !== _snapClubId) return;
-
   const clubName = currentClub?.clubName || '우리 클럽';
   if (el('clubStatusName')) el('clubStatusName').innerHTML = `<span class="material-symbols-outlined" style="font-size:18px; vertical-align:middle; margin-right:4px; color:#ffffff;">emoji_events</span>${clubName} 이번달`;
 
   // 리셋 (클럽 전환 시 잔상 제거)
   try {
-    ['clubTopPlayerRow','clubWeekendPlayerRow'].forEach(id => { const r = el(id); if (r) r.style.display = 'none'; });
-    if (el('clubTopPlayer'))    el('clubTopPlayer').innerHTML    = '';
+    ['clubTopPlayerRow','clubWeekendPlayerRow','clubImprovedRow'].forEach(id => { const r = el(id); if (r) r.style.display = 'none'; });
+    if (el('clubTopPlayer'))     el('clubTopPlayer').innerHTML    = '';
     if (el('clubWeekendPlayer')) el('clubWeekendPlayer').innerHTML = '';
-    const totalMembers0 = players.filter(p => !p.isGuest && (!p.status || p.status === 'active')).length;
+    if (el('clubImprovedPlayer')) el('clubImprovedPlayer').innerHTML = '';
+    const totalMembers0 = snapPlayers.filter(p => !p.isGuest && (!p.status || p.status === 'active')).length;
     if (el('clubThisWeekGames'))  el('clubThisWeekGames').textContent  = '0';
     if (el('clubLastWeekGames'))  el('clubLastWeekGames').textContent  = '0';
     if (el('clubThisWeekAttend')) el('clubThisWeekAttend').textContent = `0/${totalMembers0}`;
@@ -320,107 +383,60 @@ function _renderClubStatus(_snapClubId) {
   const monday     = new Date(now); monday.setDate(now.getDate() + (day === 0 ? -6 : 1 - day)); monday.setHours(0,0,0,0);
   const lastMonday = new Date(monday); lastMonday.setDate(monday.getDate() - 7);
   const toStr      = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const mondayStr      = toStr(monday);
-  const lastMondayStr  = toStr(lastMonday);
-  const lastSundayStr  = toStr(new Date(monday.getTime() - 86400000));
-  const thisMonthStr   = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const mondayStr     = toStr(monday);
+  const lastMondayStr = toStr(lastMonday);
+  const lastSundayStr = toStr(new Date(monday.getTime() - 86400000));
+  const thisMonthStr  = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
-  const thisWeekGames = matchLog.filter(m => m.date >= mondayStr).length;
-  const lastWeekGames = matchLog.filter(m => m.date >= lastMondayStr && m.date <= lastSundayStr).length;
-
-  const getNames = logs => { const s = new Set(); logs.forEach(m => [...(m.home||[]),...(m.away||[])].forEach(n => s.add(n))); return s; };
-  const totalMembers = players.filter(p => !p.isGuest && (!p.status || p.status === 'active')).length;
+  const getNames     = logs => { const s = new Set(); logs.forEach(m => [...(m.home||[]),...(m.away||[])].forEach(n => s.add(n))); return s; };
+  const totalMembers = snapPlayers.filter(p => !p.isGuest && (!p.status || p.status === 'active')).length;
+  const thisWeekGames = snapMatchLog.filter(m => m.date >= mondayStr).length;
+  const lastWeekGames = snapMatchLog.filter(m => m.date >= lastMondayStr && m.date <= lastSundayStr).length;
 
   if (el('clubThisWeekGames'))  el('clubThisWeekGames').textContent  = thisWeekGames || '0';
-  if (el('clubThisWeekAttend')) el('clubThisWeekAttend').textContent = `${getNames(matchLog.filter(m => m.date >= mondayStr)).size}/${totalMembers}`;
+  if (el('clubThisWeekAttend')) el('clubThisWeekAttend').textContent = `${getNames(snapMatchLog.filter(m => m.date >= mondayStr)).size}/${totalMembers}`;
   if (el('clubLastWeekGames'))  el('clubLastWeekGames').textContent  = lastWeekGames || '0';
-  if (el('clubLastWeekAttend')) el('clubLastWeekAttend').textContent = `${getNames(matchLog.filter(m => m.date >= lastMondayStr && m.date <= lastSundayStr)).size}/${totalMembers}`;
+  if (el('clubLastWeekAttend')) el('clubLastWeekAttend').textContent = `${getNames(snapMatchLog.filter(m => m.date >= lastMondayStr && m.date <= lastSundayStr)).size}/${totalMembers}`;
 
-  const calcMatchScore = (m, name) => {
-    const inHome = (m.home||[]).includes(name), inAway = (m.away||[]).includes(name);
-    if (!inHome && !inAway) return 0;
-    const isWin  = (inHome && m.winner==='home') || (inAway && m.winner==='away');
-    const scoring = (typeof getClubScoring === 'function' ? getClubScoring() : null) || TENNIS_RULES.scoring;
-    const rule   = scoring[m.type || 'double'] || scoring.double;
-    return scoring.participate + (isWin ? rule.win : rule.loss);
-  };
+  const isThisWeek = thisWeekGames > 0;
+  const args = { snapMatchLog, snapPlayers, mondayStr, lastMondayStr, lastSundayStr, thisMonthStr, isThisWeek };
 
-  const buildScoreMap = logs => {
-    const map = {};
-    logs.forEach(m => {
-      [...(m.home||[]),...(m.away||[])].forEach(n => {
-        if (!map[n]) map[n] = { w:0, l:0, pts:0 };
-        const inHome = (m.home||[]).includes(n);
-        const isWin  = (inHome && m.winner==='home') || (!inHome && m.winner==='away');
-        isWin ? map[n].w++ : map[n].l++;
-        map[n].pts += calcMatchScore(m, n);
-      });
-    });
-    return map;
-  };
-
-  const isActiveMember = n => players.find(p => p.name===n && !p.isGuest && (!p.status||p.status==='active'));
-
-  // 이달의 1위
-  const monthGames = matchLog.filter(m => (m.date||'').startsWith(thisMonthStr));
-  if (monthGames.length > 0) {
-    const top = Object.entries(buildScoreMap(monthGames))
-      .filter(([n]) => isActiveMember(n)).sort(([,a],[,b]) => b.pts-a.pts || b.w-a.w)[0];
-    if (top && el('clubTopPlayer') && el('clubTopPlayerRow')) {
-      const dname = typeof displayName === 'function' ? displayName(top[0]) : top[0];
-      const ts    = top[1];
-      const rate  = (ts.w+ts.l) > 0 ? Math.round(ts.w/(ts.w+ts.l)*100) : 0;
-      el('clubTopPlayer').innerHTML = `<span class="material-symbols-outlined" style="font-size:28px; vertical-align:middle; margin-right:4px; color:#8B6914;">stars</span>${dname}<div style="font-size:13px;font-weight:600;color:#888;margin-top:4px;">${ts.w}승 ${ts.l}패 &nbsp;${rate}%</div>`;
-      el('clubTopPlayerRow').style.display = 'block';
-      _recordMonthlyMvp(thisMonthStr, top[0]);
-    }
+  // ✅ 이달의 1위 — 스냅샷 기반 계산
+  if (snapClubId !== null && getCurrentId() !== snapClubId) return;
+  const monthBest = _calcMonthBest(args);
+  if (monthBest && el('clubTopPlayer') && el('clubTopPlayerRow')) {
+    const dname = typeof displayName === 'function' ? displayName(monthBest.name) : monthBest.name;
+    const rate  = (monthBest.w+monthBest.l) > 0 ? Math.round(monthBest.w/(monthBest.w+monthBest.l)*100) : 0;
+    el('clubTopPlayer').innerHTML = `<span class="material-symbols-outlined" style="font-size:28px; vertical-align:middle; margin-right:4px; color:#8B6914;">stars</span>${dname}<div style="font-size:13px;font-weight:600;color:#888;margin-top:4px;">${monthBest.w}승 ${monthBest.l}패 &nbsp;${rate}%</div>`;
+    el('clubTopPlayerRow').style.display = 'block';
+    _recordMonthlyMvp(thisMonthStr, monthBest.name);
   }
 
-  // 이번주/지난주 BEST PLAYER
-  const isThisWeek    = thisWeekGames > 0;
-  const weekendSource = isThisWeek
-    ? matchLog.filter(m => m.date >= mondayStr)
-    : matchLog.filter(m => m.date >= lastMondayStr && m.date <= lastSundayStr);
-
-  if (weekendSource.length > 0) {
-    const wTop = Object.entries(buildScoreMap(weekendSource))
-      .filter(([n]) => isActiveMember(n)).sort(([,a],[,b]) => b.pts-a.pts || b.w-a.w)[0];
-    if (wTop && el('clubWeekendPlayer') && el('clubWeekendPlayerRow')) {
-      const wdname = typeof displayName === 'function' ? displayName(wTop[0]) : wTop[0];
-      const ws     = wTop[1];
-      const wrate  = (ws.w+ws.l) > 0 ? Math.round(ws.w/(ws.w+ws.l)*100) : 0;
-      el('clubWeekendPlayer').innerHTML = `<span class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:4px; color:#8B6914;">military_tech</span>${wdname}<div style="font-size:12px;font-weight:600;color:#999;margin-top:3px;">${ws.w}승 ${ws.l}패 &nbsp;${wrate}%</div>`;
-      const wLabelEl = el('clubWeekendPlayerRow').querySelector('div');
-      if (wLabelEl) wLabelEl.textContent = `BEST PLAYER ${isThisWeek ? 'THIS WEEKEND' : 'LAST WEEKEND'}`;
-      el('clubWeekendPlayerRow').style.display = 'block';
-      const weekRefDate = (isThisWeek ? mondayStr : lastMondayStr);
-      _recordWeeklyMvp(weekRefDate, wTop[0]);
-      if (el('clubTopPlayerRow')) el('clubTopPlayerRow').style.display = 'block';
-    }
+  // ✅ BEST PLAYER THIS/LAST WEEKEND — 스냅샷 기반 계산
+  if (snapClubId !== null && getCurrentId() !== snapClubId) return;
+  const weekendBest = _calcWeekendBest(args);
+  if (weekendBest && el('clubWeekendPlayer') && el('clubWeekendPlayerRow')) {
+    const wdname = typeof displayName === 'function' ? displayName(weekendBest.name) : weekendBest.name;
+    const wrate  = (weekendBest.w+weekendBest.l) > 0 ? Math.round(weekendBest.w/(weekendBest.w+weekendBest.l)*100) : 0;
+    el('clubWeekendPlayer').innerHTML = `<span class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:4px; color:#8B6914;">military_tech</span>${wdname}<div style="font-size:12px;font-weight:600;color:#999;margin-top:3px;">${weekendBest.w}승 ${weekendBest.l}패 &nbsp;${wrate}%</div>`;
+    const wLabelEl = el('clubWeekendPlayerRow').querySelector('div');
+    if (wLabelEl) wLabelEl.textContent = `BEST PLAYER ${isThisWeek ? 'THIS WEEKEND' : 'LAST WEEKEND'}`;
+    el('clubWeekendPlayerRow').style.display = 'block';
+    _recordWeeklyMvp(isThisWeek ? mondayStr : lastMondayStr, weekendBest.name);
+    if (el('clubTopPlayerRow')) el('clubTopPlayerRow').style.display = 'block';
   }
 
-  // MOST IMPROVED THIS WEEK
-  if (isThisWeek) {
-    const twMap = buildScoreMap(matchLog.filter(m => m.date >= mondayStr));
-    const lwMap = buildScoreMap(matchLog.filter(m => m.date >= lastMondayStr && m.date <= lastSundayStr));
-    const improved = Object.entries(twMap)
-      .filter(([n, d]) => isActiveMember(n) && (d.w+d.l) >= 2)
-      .map(([n, d]) => {
-        const twRate = Math.round(d.w/(d.w+d.l)*100);
-        const lw     = lwMap[n];
-        const lwRate = lw && (lw.w+lw.l) >= 1 ? Math.round(lw.w/(lw.w+lw.l)*100) : 0;
-        return { name:n, delta: twRate-lwRate, twRate, lwRate, pts: d.pts };
-      })
-      .filter(p => p.delta > 0).sort((a,b) => b.delta-a.delta || b.pts-a.pts).slice(0,3);
-
-    if (improved.length > 0 && el('clubImprovedRow') && el('clubImprovedPlayer')) {
-      el('clubImprovedPlayer').innerHTML = improved.map(p => {
-        const dname = typeof displayName === 'function' ? displayName(p.name) : p.name;
-        return `<div style="margin-bottom:6px;"><span class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:4px; color:#8B6914;">trending_up</span>${dname}<div style="font-size:12px;color:#5D9C76;font-weight:600;margin-top:2px;">▲${p.delta}% (지난주 ${p.lwRate}% → 이번주 ${p.twRate}%)</div></div>`;
-      }).join('');
-      el('clubImprovedRow').style.display = 'block';
-      if (el('clubTopPlayerRow')) el('clubTopPlayerRow').style.display = 'block';
-    }
+  // ✅ MOST IMPROVED THIS WEEK — 스냅샷 기반 계산
+  if (!isThisWeek) return;
+  if (snapClubId !== null && getCurrentId() !== snapClubId) return;
+  const improved = _calcMostImproved(args);
+  if (improved.length > 0 && el('clubImprovedRow') && el('clubImprovedPlayer')) {
+    el('clubImprovedPlayer').innerHTML = improved.map(p => {
+      const dname = typeof displayName === 'function' ? displayName(p.name) : p.name;
+      return `<div style="margin-bottom:6px;"><span class="material-symbols-outlined" style="font-size:22px; vertical-align:middle; margin-right:4px; color:#8B6914;">trending_up</span>${dname}<div style="font-size:12px;color:#5D9C76;font-weight:600;margin-top:2px;">▲${p.delta}% (지난주 ${p.lwRate}% → 이번주 ${p.twRate}%)</div></div>`;
+    }).join('');
+    el('clubImprovedRow').style.display = 'block';
+    if (el('clubTopPlayerRow')) el('clubTopPlayerRow').style.display = 'block';
   }
 }
 
@@ -586,7 +602,7 @@ function milestoneEmoji(n) {
   return 'trident';
 }
 
-function hofIcon(type, size, color, isMuted) {
+function hofIcon(type, size, color, isMuted, overlayLabel) {
   const px = size || 24;
   const c = color || '#D4A24C';
   const opacity = isMuted ? '0.45' : '1';
@@ -607,7 +623,13 @@ function hofIcon(type, size, color, isMuted) {
     close: '<path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4 6.4 5Z"/>'
   };
   const svg = icons[type] || icons.trophy;
-  return `<span style="display:inline-flex; align-items:center; justify-content:center; width:${px}px; height:${px}px; color:${c}; opacity:${opacity}; flex-shrink:0; line-height:1; vertical-align:middle;"><svg viewBox="0 0 24 24" width="${px}" height="${px}" fill="currentColor" aria-hidden="true">${svg}</svg></span>`;
+  // ✅ v6.682: overlayLabel — 별/트로피 위에 승수 숫자 오버레이 (별 안에 작게)
+  // viewBox가 24x24 기준 — 숫자는 4~5pt로 아주 작게, 별 중심(12, 11) 기준
+  const overlayFontSize = overlayLabel && overlayLabel.length >= 3 ? 3.6 : 4.8;
+  const overlay = overlayLabel
+    ? `<text x="12" y="11.5" text-anchor="middle" dominant-baseline="middle" fill="white" font-size="${overlayFontSize}" font-weight="900" font-family="sans-serif">${overlayLabel}</text>`
+    : '';
+  return `<span style="display:inline-flex; align-items:center; justify-content:center; width:${px}px; height:${px}px; color:${c}; opacity:${opacity}; flex-shrink:0; line-height:1; vertical-align:middle;"><svg viewBox="0 0 24 24" width="${px}" height="${px}" fill="currentColor" aria-hidden="true">${svg}${overlay}</svg></span>`;
 }
 
 function _hofBadge(icon, label, value, sub) {
@@ -623,15 +645,13 @@ function _hofBadge(icon, label, value, sub) {
   </div>`;
 }
 
-function _hofMilestoneBadge(iconType, label, info) {
-  if (!info) return `<div style="background:#f5f5f5; border-radius:14px; padding:12px 14px; margin-bottom:10px; opacity:0.45;">
-    <div style="display:flex; align-items:center; gap:10px;">
-      <div style="line-height:1; flex-shrink:0;">${hofIcon(iconType, 28, '#D4A24C', true)}</div>
-      <div><div style="font-size:10px; color:#bbb; font-weight:700; letter-spacing:1px;">${label}</div>
-      <div style="font-size:13px; color:#ccc; font-weight:600;">아직 달성 전</div></div>
-    </div></div>`;
+function _hofMilestoneBadge(iconType, label, info, milestoneN) {
+  // ✅ v6.681: 미달성 마일스톤 숨김 처리 — 달성한 것만 표시
+  if (!info) return '';
+  // ✅ v6.682: 아이콘 2배 크기 + 승수 숫자 오버레이 (첫 승리 제외)
+  const overlayLabel = (milestoneN && milestoneN !== 1) ? String(milestoneN) : null;
   const partnerTxt = info.partner ? ` · 파트너: ${info.partner}` : '';
-  return _hofBadge(hofIcon(iconType, 28, '#D4A24C'), label, `vs ${info.opps}`, `${info.date}${partnerTxt}`);
+  return _hofBadge(hofIcon(iconType, 72, '#D4A24C', false, overlayLabel), label, `vs ${info.opps}`, `${info.date}${partnerTxt}`);
 }
 
 function _renderHallOfFamePreview(_snapClubId) {
@@ -744,7 +764,7 @@ function openHallOfFameModal() {
 
   // 동적 마일스톤 배지 생성
   const milestoneBadges = hof.milestones.map(n =>
-    _hofMilestoneBadge(milestoneEmoji(n), `${n === 1 ? '첫 승리' : n + '승'} 달성`, hof.milestoneMap[n])
+    _hofMilestoneBadge(milestoneEmoji(n), `${n === 1 ? '첫 승리' : n + '승'} 달성`, hof.milestoneMap[n], n)
   ).join('');
 
   const milestones = section(`${hofIcon('firstWin', 14, '#C17A5A')} 승리 마일스톤`, '#C17A5A', milestoneBadges);
