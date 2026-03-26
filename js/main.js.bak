@@ -3,7 +3,7 @@
 // ========================================
 
 // ✅ 버전 상수 — 버전업 시 여기만 바꾸면 전체 반영
-const APP_VERSION = 'v6.695';
+const APP_VERSION = 'v6.693';
 
 
 // ----------------------------------------
@@ -515,14 +515,12 @@ function _calcHallOfFame(myName) {
   const fmtMonth = (m) => m ? `${m.slice(0,4)}년 ${parseInt(m.slice(5))}월` : '–';
   const fmtYear  = (y) => y ? `${y}년` : '–';
 
-  // 동적 마일스톤 생성: 1승 이후 10단위, 100승 이후 50단위.
-  // 현재 달성 단계 다음 목표 1개는 항상 보이도록 next target까지 포함.
+  // 동적 마일스톤 생성: 1·10·50·100 고정 + 100 이후 50단위 자동 확장
   const FIXED_MILESTONES = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
   const dynamicMilestones = [...FIXED_MILESTONES];
-  if (wins.length >= 100) {
+  if (wins.length > 100) {
     let next = 150;
-    const nextTarget = Math.ceil((wins.length + 1) / 50) * 50;
-    while (next <= nextTarget) {
+    while (next <= wins.length + 50) {
       dynamicMilestones.push(next);
       next += 50;
     }
@@ -635,127 +633,25 @@ function hofIcon(type, size, color, isMuted, overlayLabel) {
 }
 
 function _hofBadge(icon, label, value, sub) {
-  return `<div style="background:linear-gradient(180deg,#FFFFFF 0%, #F8FAFD 100%); border-radius:22px; padding:16px 16px; box-shadow:0 12px 30px rgba(20,32,58,0.08); margin-bottom:12px; border:1px solid rgba(30,41,59,0.06);">
-    <div style="display:flex; align-items:flex-start; gap:12px;">
-      <div style="width:48px; height:48px; border-radius:16px; background:rgba(244,247,252,0.92); display:flex; align-items:center; justify-content:center; line-height:1; flex-shrink:0; box-shadow:inset 0 1px 0 rgba(255,255,255,0.9);">${icon}</div>
+  return `<div style="background:#fff; border-radius:14px; padding:12px 14px; box-shadow:0 2px 8px rgba(0,0,0,0.07); margin-bottom:10px;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="line-height:1; flex-shrink:0;">${icon}</div>
       <div style="flex:1; min-width:0;">
-        <div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:1.1px; text-transform:uppercase; margin-bottom:5px;">${label}</div>
-        <div style="font-size:19px; font-weight:900; color:#14203A; line-height:1.18; letter-spacing:-0.02em;">${value}</div>
-        ${sub ? `<div style="font-size:11px; color:#6B7280; margin-top:7px; line-height:1.5;">${sub}</div>` : ''}
+        <div style="font-size:10px; color:#999; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-bottom:3px;">${label}</div>
+        <div style="font-size:15px; font-weight:800; color:#1a1a2e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${value}</div>
+        ${sub ? `<div style="font-size:11px; color:#888; margin-top:3px;">${sub}</div>` : ''}
       </div>
     </div>
   </div>`;
 }
 
-function _getVisibleMilestoneTrack(hof) {
-  if (!hof || !Array.isArray(hof.milestones)) return [];
-  const achieved = hof.milestones.filter(n => !!hof.milestoneMap[n]);
-  const next = hof.milestones.find(n => !hof.milestoneMap[n]);
-  const out = [...achieved];
-  if (typeof next === 'number') out.push(next);
-  return out;
-}
-
-function _getMilestonePalette(n, locked) {
-  if (locked) {
-    return {
-      bg: 'linear-gradient(180deg, #F4F6F8 0%, #E7EBF0 100%)',
-      border: 'rgba(137, 148, 166, 0.32)',
-      iconBg: 'rgba(255,255,255,0.75)',
-      iconColor: '#9AA4B2',
-      title: '#7B8796',
-      sub: '#98A2B3',
-      chipBg: 'rgba(122, 134, 154, 0.12)',
-      chipColor: '#7B8796',
-      shadow: '0 10px 24px rgba(20, 32, 58, 0.08)'
-    };
-  }
-  if (n === 1) {
-    return {
-      bg: 'linear-gradient(180deg, #FFF8E7 0%, #FFF1C8 100%)',
-      border: 'rgba(212, 162, 76, 0.42)',
-      iconBg: 'rgba(255,255,255,0.72)',
-      iconColor: '#C17A5A',
-      title: '#9F5F37',
-      sub: '#B07A5B',
-      chipBg: 'rgba(193, 122, 90, 0.12)',
-      chipColor: '#9F5F37',
-      shadow: '0 14px 30px rgba(193, 122, 90, 0.16)'
-    };
-  }
-  if (n >= 100) {
-    return {
-      bg: 'linear-gradient(180deg, #FFF4D9 0%, #F7DFC2 100%)',
-      border: 'rgba(186, 138, 44, 0.38)',
-      iconBg: 'rgba(255,255,255,0.75)',
-      iconColor: '#B8811F',
-      title: '#8C6112',
-      sub: '#A2772A',
-      chipBg: 'rgba(184, 129, 31, 0.12)',
-      chipColor: '#8C6112',
-      shadow: '0 14px 30px rgba(184, 129, 31, 0.16)'
-    };
-  }
-  return {
-    bg: 'linear-gradient(180deg, #EEF6FF 0%, #DDEBFF 100%)',
-    border: 'rgba(79, 124, 198, 0.34)',
-    iconBg: 'rgba(255,255,255,0.74)',
-    iconColor: '#3A7BD5',
-    title: '#2A5FA8',
-    sub: '#5D83B8',
-    chipBg: 'rgba(58, 123, 213, 0.10)',
-    chipColor: '#2A5FA8',
-    shadow: '0 14px 30px rgba(58, 123, 213, 0.15)'
-  };
-}
-
-function _hofMilestoneTrackBadge(hof, milestoneN, opts) {
-  const info = hof && hof.milestoneMap ? hof.milestoneMap[milestoneN] : null;
-  const locked = !info;
-  const palette = _getMilestonePalette(milestoneN, locked);
-  const iconType = milestoneN === 1 ? 'firstWin' : milestoneEmoji(milestoneN);
-  const overlayLabel = milestoneN !== 1 ? String(milestoneN) : null;
-  const compact = !!(opts && opts.compact);
-  const icon = hofIcon(iconType, compact ? 32 : 38, palette.iconColor, locked, overlayLabel);
-  const title = milestoneN === 1 ? '첫승' : `${milestoneN}승`;
-  const sub = locked
-    ? `${Math.min(hof.totalWins || 0, milestoneN)}/${milestoneN}`
-    : (info.date || '달성');
-  const chipLabel = locked ? 'NEXT' : 'CLEAR';
-  return `<div style="
-    flex:0 0 auto; min-width:${compact ? '88px' : '104px'}; padding:${compact ? '10px 10px 9px' : '14px 13px 12px'}; border-radius:${compact ? '22px' : '28px'};
-    background:${palette.bg}; border:1px solid ${palette.border}; box-shadow:${palette.shadow};
-    display:flex; flex-direction:column; align-items:center; text-align:center; gap:${compact ? '7px' : '9px'};">
-    <div style="width:${compact ? '52px' : '62px'}; height:${compact ? '52px' : '62px'}; border-radius:${compact ? '16px' : '20px'}; background:${palette.iconBg}; display:flex; align-items:center; justify-content:center; box-shadow:inset 0 1px 0 rgba(255,255,255,0.55);">${icon}</div>
-    <div style="font-size:${compact ? '12px' : '13px'}; font-weight:900; color:${palette.title}; line-height:1; letter-spacing:-0.02em;">${title}</div>
-    <div style="font-size:${compact ? '10px' : '10px'}; font-weight:700; color:${palette.sub}; line-height:1.3; white-space:nowrap;">${locked ? '다음 목표 ' + sub : sub}</div>
-    <div style="display:inline-flex; align-items:center; justify-content:center; min-width:${compact ? '46px' : '50px'}; padding:${compact ? '4px 8px' : '4px 9px'}; border-radius:999px; background:${palette.chipBg}; color:${palette.chipColor}; font-size:9px; font-weight:900; letter-spacing:0.8px;">${chipLabel}</div>
-  </div>`;
-}
-
-function _hofMilestoneDetailCard(hof, milestoneN) {
-  const info = hof && hof.milestoneMap ? hof.milestoneMap[milestoneN] : null;
+function _hofMilestoneBadge(iconType, label, info, milestoneN) {
+  // ✅ v6.681: 미달성 마일스톤 숨김 처리 — 달성한 것만 표시
   if (!info) return '';
-  const iconType = milestoneN === 1 ? 'firstWin' : milestoneEmoji(milestoneN);
-  const overlayLabel = milestoneN !== 1 ? String(milestoneN) : null;
-  const palette = _getMilestonePalette(milestoneN, false);
+  // ✅ v6.682: 아이콘 2배 크기 + 승수 숫자 오버레이 (첫 승리 제외)
+  const overlayLabel = (milestoneN && milestoneN !== 1) ? String(milestoneN) : null;
   const partnerTxt = info.partner ? ` · 파트너: ${info.partner}` : '';
-  const label = milestoneN === 1 ? '첫 승리 달성' : `${milestoneN}승 달성`;
-  return `<div style="background:#fff; border-radius:20px; padding:14px 16px; box-shadow:0 8px 22px rgba(20,32,58,0.08); margin-bottom:10px; border:1px solid rgba(20,32,58,0.05);">
-    <div style="display:flex; align-items:center; gap:12px;">
-      <div style="width:72px; height:72px; border-radius:22px; background:${palette.bg}; border:1px solid ${palette.border}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${hofIcon(iconType, 42, palette.iconColor, false, overlayLabel)}</div>
-      <div style="flex:1; min-width:0;">
-        <div style="font-size:10px; color:${palette.sub}; font-weight:800; letter-spacing:1px; text-transform:uppercase; margin-bottom:4px;">${label}</div>
-        <div style="font-size:15px; font-weight:900; color:#1a1a2e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">vs ${info.opps}</div>
-        <div style="font-size:11px; color:#777; margin-top:4px; line-height:1.45;">${info.date}${partnerTxt}</div>
-      </div>
-    </div>
-  </div>`;
-}
-
-function _hofMilestoneBadge(iconType, label, info, milestoneN, hof) {
-  if (!hof || !info) return '';
-  return _hofMilestoneDetailCard(hof, milestoneN);
+  return _hofBadge(hofIcon(iconType, 72, '#D4A24C', false, overlayLabel), label, `vs ${info.opps}`, `${info.date}${partnerTxt}`);
 }
 
 function _renderHallOfFamePreview(_snapClubId) {
@@ -771,10 +667,38 @@ function _renderHallOfFamePreview(_snapClubId) {
   if (!hof) { card.style.display = 'none'; return; }
 
   card.style.display = 'block';
-  const visibleTrack = _getVisibleMilestoneTrack(hof);
-  const items = visibleTrack.length
-    ? [`<div style="display:flex; gap:10px; overflow-x:auto; padding:2px 0 4px; scroll-snap-type:x proximity;">${visibleTrack.map(n => _hofMilestoneTrackBadge(hof, n, { compact:true })).join('')}</div>`]
-    : [];
+  const items = [];
+
+  if (hof.milestoneMap[1]) items.push(`<div style="flex-shrink:0; background:#FFF8E8; border:1.5px solid #F0D080; border-radius:14px; padding:10px 14px; min-width:130px; text-align:center;">
+    <div>${hofIcon('firstWin', 22, '#C17A5A')}</div>
+    <div style="font-size:10px; color:#C17A5A; font-weight:700; margin-top:4px;">첫 승리</div>
+    <div style="font-size:12px; font-weight:800; color:#1a1a2e; margin-top:2px;">${hof.milestoneMap[1].date}</div>
+  </div>`);
+
+  // 가장 최근 달성한 마일스톤 배지 (10승 이상)
+  const achieved = hof.milestones.filter(n => n >= 10 && hof.milestoneMap[n]);
+  const latestMilestone = achieved[achieved.length - 1];
+  if (latestMilestone) {
+    const info  = hof.milestoneMap[latestMilestone];
+    const emoji = milestoneEmoji(latestMilestone);
+    items.push(`<div style="flex-shrink:0; background:#EEF6FF; border:1.5px solid #90C0E8; border-radius:14px; padding:10px 14px; min-width:130px; text-align:center;">
+      <div>${hofIcon(emoji, 22, '#3A7BD5')}</div>
+      <div style="font-size:10px; color:#3A7BD5; font-weight:700; margin-top:4px;">${latestMilestone}승 달성</div>
+      <div style="font-size:12px; font-weight:800; color:#1a1a2e; margin-top:2px;">${info.date}</div>
+    </div>`);
+  }
+
+  if (hof.bestRateMonth) items.push(`<div style="flex-shrink:0; background:#F0FBF4; border:1.5px solid #90D0A8; border-radius:14px; padding:10px 14px; min-width:130px; text-align:center;">
+    <div>${hofIcon('rate', 22, '#5D9C76')}</div>
+    <div style="font-size:10px; color:#5D9C76; font-weight:700; margin-top:4px;">최고 승률의 달</div>
+    <div style="font-size:12px; font-weight:800; color:#1a1a2e; margin-top:2px;">${hof.fmtMonth(hof.bestRateMonth.key)} · ${hof.bestRateMonth.rate}%</div>
+  </div>`);
+
+  if (hof.bestWinsWeek) items.push(`<div style="flex-shrink:0; background:#F8F0FF; border:1.5px solid #C0A0E0; border-radius:14px; padding:10px 14px; min-width:130px; text-align:center;">
+    <div>${hofIcon('wins', 22, '#8B6B9A')}</div>
+    <div style="font-size:10px; color:#8B6B9A; font-weight:700; margin-top:4px;">최다승 주</div>
+    <div style="font-size:12px; font-weight:800; color:#1a1a2e; margin-top:2px;">${hof.fmtWeek(hof.bestWinsWeek.key)} · ${hof.bestWinsWeek.w}승</div>
+  </div>`);
 
   preview.innerHTML = items.length ? items.join('') : '';
   if (!items.length) card.style.display = 'none';
@@ -826,30 +750,24 @@ function openHallOfFameModal() {
   if (!hof) { body.innerHTML = '<div style="text-align:center; color:#bbb; padding:30px 0;">경기 기록이 없습니다.</div>'; return; }
 
   const section = (title, color, content) =>
-    `<div style="margin-bottom:22px;"><div style="display:flex; align-items:center; gap:8px; font-size:11px; font-weight:900; color:${color}; letter-spacing:1.4px; text-transform:uppercase; margin-bottom:10px; padding-left:2px;">${title}</div>${content}</div>`;
+    `<div style="margin-bottom:16px;"><div style="font-size:11px; font-weight:800; color:${color}; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px; padding-left:4px;">${title}</div>${content}</div>`;
 
   const fmtStat = (s) => s ? `${s.w}승 ${s.l}패 · ${s.rate}%` : '–';
 
-  const lifetimeRate = hof.totalGames > 0 ? Math.round(hof.totalWins/hof.totalGames*100) : 0;
-  const summary = `<div style="background:linear-gradient(180deg,#2F4A86 0%, #233763 100%); border-radius:24px; padding:18px 18px; margin-bottom:20px; box-shadow:0 18px 34px rgba(25,38,74,0.24); overflow:hidden; position:relative;">
-    <div style="position:absolute; inset:auto -38px -38px auto; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,0.06);"></div>
-    <div style="font-size:11px; letter-spacing:1.6px; color:rgba(255,255,255,0.58); font-weight:800; text-transform:uppercase; margin-bottom:12px;">Trophy Cabinet</div>
-    <div style="display:flex; justify-content:space-between; gap:10px; text-align:center;">
-      <div style="flex:1;"><div style="font-size:28px; font-weight:900; color:#fff; line-height:1;">${hof.totalWins}</div><div style="font-size:10px; color:rgba(255,255,255,0.62); margin-top:5px; font-weight:700;">총 승리</div></div>
-      <div style="width:1px; background:rgba(255,255,255,0.14);"></div>
-      <div style="flex:1;"><div style="font-size:28px; font-weight:900; color:#fff; line-height:1;">${hof.totalGames}</div><div style="font-size:10px; color:rgba(255,255,255,0.62); margin-top:5px; font-weight:700;">총 경기</div></div>
-      <div style="width:1px; background:rgba(255,255,255,0.14);"></div>
-      <div style="flex:1;"><div style="font-size:28px; font-weight:900; color:#fff; line-height:1;">${lifetimeRate}%</div><div style="font-size:10px; color:rgba(255,255,255,0.62); margin-top:5px; font-weight:700;">통산 승률</div></div>
-    </div>
+  const summary = `<div style="background:#2C3E6B; border-radius:14px; padding:14px 16px; margin-bottom:16px; display:flex; justify-content:space-around; text-align:center;">
+    <div><div style="font-size:26px; font-weight:900; color:#fff;">${hof.totalWins}</div><div style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:2px;">총 승리</div></div>
+    <div style="width:1px; background:rgba(255,255,255,0.15);"></div>
+    <div><div style="font-size:26px; font-weight:900; color:#fff;">${hof.totalGames}</div><div style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:2px;">총 경기</div></div>
+    <div style="width:1px; background:rgba(255,255,255,0.15);"></div>
+    <div><div style="font-size:26px; font-weight:900; color:#fff;">${hof.totalGames > 0 ? Math.round(hof.totalWins/hof.totalGames*100) : 0}%</div><div style="font-size:10px; color:rgba(255,255,255,0.6); margin-top:2px;">통산 승률</div></div>
   </div>`;
 
-  const visibleTrack = _getVisibleMilestoneTrack(hof);
-  const latestAchieved = [...visibleTrack].reverse().find(n => !!hof.milestoneMap[n]);
-  const milestoneTrack = visibleTrack.length
-    ? `<div style="display:flex; gap:12px; overflow-x:auto; padding:2px 2px 8px; margin-bottom:14px; scroll-snap-type:x proximity;">${visibleTrack.map(n => _hofMilestoneTrackBadge(hof, n)).join('')}</div>`
-    : '';
-  const milestoneDetail = latestAchieved ? _hofMilestoneDetailCard(hof, latestAchieved) : '';
-  const milestones = section(`${hofIcon('firstWin', 14, '#C17A5A')} 승리 마일스톤`, '#C17A5A', milestoneTrack + milestoneDetail);
+  // 동적 마일스톤 배지 생성
+  const milestoneBadges = hof.milestones.map(n =>
+    _hofMilestoneBadge(milestoneEmoji(n), `${n === 1 ? '첫 승리' : n + '승'} 달성`, hof.milestoneMap[n], n)
+  ).join('');
+
+  const milestones = section(`${hofIcon('firstWin', 14, '#C17A5A')} 승리 마일스톤`, '#C17A5A', milestoneBadges);
 
   const rates = section(`${hofIcon('rate', 14, '#3A7BD5')} 최고 승률`, '#3A7BD5',
     _hofBadge(hofIcon('calendarWeek',  24, '#3A7BD5'), '최고 승률의 주',   hof.bestRateWeek  ? `${hof.fmtWeek(hof.bestRateWeek.key)} · ${hof.bestRateWeek.rate}%`   : '기록 없음', hof.bestRateWeek  ? fmtStat(hof.bestRateWeek)  : null) +
@@ -886,7 +804,7 @@ function openHallOfFameModal() {
 
   const streaks = section(`${hofIcon('streak', 14, '#8B6B9A')} 연승 / 연패 극복기`, '#8B6B9A', winStreakContent + loseStreakContent);
 
-  body.innerHTML = `<div style="padding-bottom:10px;">${summary + milestones + streaks + rates + mostWins}</div>`;
+  body.innerHTML = summary + milestones + streaks + rates + mostWins;
 }
 
 function closeHallOfFameModal() {
