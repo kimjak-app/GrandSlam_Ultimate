@@ -16,11 +16,16 @@ function nowISO() {
   return { ts: d.getTime(), ds };
 }
 
-function calcDeltas(type, isWin) {
+function calcDeltas(type, isWin, isDraw) {
   const rule = TENNIS_RULES.scoring[type] || TENNIS_RULES.scoring.double;
-  const earn = isWin
-    ? TENNIS_RULES.scoring.participate + rule.win
-    : TENNIS_RULES.scoring.participate + rule.loss;
+  let earn;
+  if (isDraw) {
+    earn = 0.1 + (rule.draw || 1.5); // 참가 0.1 + 무승부 1.5 = 1.6
+  } else {
+    earn = isWin
+      ? TENNIS_RULES.scoring.participate + rule.win
+      : TENNIS_RULES.scoring.participate + rule.loss;
+  }
   if (type === "double" || type === "mixed") return { total: earn, d: earn, s: 0.0 };
   return { total: earn, d: 0.0, s: earn };
 }
@@ -124,6 +129,7 @@ function ensure(p) {
 // ----------------------------------------
 
 function applyMatchToPlayers(type, homeArr, awayArr, winnerSide) {
+  const isDraw = winnerSide === 'draw';
   const homeWin = winnerSide === "home";
   const getGender = (n) => { const p = players.find(x => x.name === n); return p ? p.gender : 'M'; };
 
@@ -146,55 +152,79 @@ function applyMatchToPlayers(type, homeArr, awayArr, winnerSide) {
       || (hg.every(g => g === 'F') && ag.every(g => g === 'M'));
   })();
 
-  const apply = (ns, isW, isMyTeamMixed) => ns.forEach(n => {
+  const apply = (ns, isW, isMyTeamMixed, drawMode) => ns.forEach(n => {
     const p = players.find(x => x.name === n);
     if (!p) return;
-    const d = calcDeltas(type, isW);
+    const d = calcDeltas(type, isW, drawMode);
 
     p.score += d.total;
-    p.wins += isW ? 1 : 0;
-    p.losses += isW ? 0 : 1;
+    // 무승부는 wins/losses 카운트 안 함
+    if (!drawMode) {
+      p.wins += isW ? 1 : 0;
+      p.losses += isW ? 0 : 1;
+    }
 
     if (type === "double") {
       if (!isCrossDouble) {
         p.dScore += d.d;
-        p.dWins += isW ? 1 : 0;
-        p.dLosses += isW ? 0 : 1;
+        if (!drawMode) {
+          p.dWins += isW ? 1 : 0;
+          p.dLosses += isW ? 0 : 1;
+        }
       }
       if (isMyTeamMixed) {
         p.mScore += d.d;
-        p.mWins += isW ? 1 : 0;
-        p.mLosses += isW ? 0 : 1;
+        if (!drawMode) {
+          p.mWins += isW ? 1 : 0;
+          p.mLosses += isW ? 0 : 1;
+        }
       }
     } else {
       if (!isCrossSingle) {
         p.sScore += d.s;
-        p.sWins += isW ? 1 : 0;
-        p.sLosses += isW ? 0 : 1;
+        if (!drawMode) {
+          p.sWins += isW ? 1 : 0;
+          p.sLosses += isW ? 0 : 1;
+        }
       }
     }
 
     p.weekly += d.total;
-    p.wWins += isW ? 1 : 0;
-    p.wLosses += isW ? 0 : 1;
+    if (!drawMode) {
+      p.wWins += isW ? 1 : 0;
+      p.wLosses += isW ? 0 : 1;
+    }
 
     if (type === "double") {
       if (!isCrossDouble) {
         p.wdScore += d.d;
-        p.wdWins += isW ? 1 : 0;
-        p.wdLosses += isW ? 0 : 1;
+        if (!drawMode) {
+          p.wdWins += isW ? 1 : 0;
+          p.wdLosses += isW ? 0 : 1;
+        }
       }
     } else {
       if (!isCrossSingle) {
         p.wsScore += d.s;
-        p.wsWins += isW ? 1 : 0;
-        p.wsLosses += isW ? 0 : 1;
+        if (!drawMode) {
+          p.wsWins += isW ? 1 : 0;
+          p.wsLosses += isW ? 0 : 1;
+        }
       }
     }
   });
 
-  if (homeWin) { apply(homeArr, true, homeMixed); apply(awayArr, false, awayMixed); }
-  else { apply(awayArr, true, awayMixed); apply(homeArr, false, homeMixed); }
+  if (isDraw) {
+    // 무승부: 양팀 모두 동일하게 1.6점 지급, wins/losses 카운트 없음
+    apply(homeArr, false, homeMixed, true);
+    apply(awayArr, false, awayMixed, true);
+  } else if (homeWin) {
+    apply(homeArr, true, homeMixed, false);
+    apply(awayArr, false, awayMixed, false);
+  } else {
+    apply(awayArr, true, awayMixed, false);
+    apply(homeArr, false, homeMixed, false);
+  }
 }
 
 

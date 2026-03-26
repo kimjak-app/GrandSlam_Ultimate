@@ -18,14 +18,17 @@ const TENNIS_RULES = {
     single: {
       win:  4.0,
       loss: -0.1,
+      draw: 1.5,            // 무승부 추가점 (참가 0.1 + 1.5 = 1.6 지급)
     },
     double: {
       win:  3.0,
       loss: -0.1,
+      draw: 1.5,            // 무승부 추가점
     },
     mixed: {
       win:  3.0,
       loss: -0.1,
+      draw: 1.5,            // 무승부 추가점
     },
   },
 

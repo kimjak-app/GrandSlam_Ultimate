@@ -3,7 +3,7 @@
 // ========================================
 
 // ✅ 버전 상수 — 버전업 시 여기만 바꾸면 전체 반영
-const APP_VERSION = 'v6.751';
+const APP_VERSION = 'v6.752';
 
 
 // ----------------------------------------
@@ -564,10 +564,14 @@ function _calcHallOfFame(myName) {
 
     myGames.forEach((m, i) => {
       const inHome = (m.home||[]).includes(myName);
-      const isWin  = (inHome && m.winner === 'home') || (!inHome && m.winner === 'away');
+      const isDraw = m.winner === 'draw';
+      const isWin  = !isDraw && ((inHome && m.winner === 'home') || (!inHome && m.winner === 'away'));
       const dn     = n => typeof displayName === 'function' ? displayName(n) : n;
       const oppTeam = (inHome ? (m.away||[]) : (m.home||[])).map(dn).join('·');
       const date    = m.date || '';
+
+      // 무승부는 연승/연패 카운트 건너뜀
+      if (isDraw) return;
 
       if (isWin) {
         // 연승 누적

@@ -2211,7 +2211,7 @@ function roundAutoSetWinner(matchId, side) {
   if (!activeTurn) return;
   const match = (activeTurn.matches || []).find(item => item?.id === matchId);
   if (!match) return;
-  if (side !== 'home' && side !== 'away') return;
+  if (side !== 'home' && side !== 'away' && side !== 'draw') return;
   if (match._courtDoneInFlight) return;
 
   const applyWinner = async () => {
@@ -2336,7 +2336,12 @@ function roundAutoRenderMatches() {
     const badge = statusInfo(match);
     return `
       <div class="team-box" style="padding:0; margin-bottom:14px; overflow:hidden; border-radius:14px;">
-        <div style="background:${courtHeaderBg}; color:#fff; padding:10px 14px; font-weight:800; font-size:14px;">🎾 코트 ${courtNo}</div>
+        <div style="background:${courtHeaderBg}; color:#fff; padding:10px 14px; font-weight:800; font-size:14px; display:flex; align-items:center; justify-content:space-between;">
+          <span>🎾 코트 ${courtNo}</span>
+          ${match && hasTeams(match) && match.winner !== 'home' && match.winner !== 'away'
+            ? `<button onclick="roundAutoSetWinner('${match?.id}','draw')" style="background:rgba(255,255,255,0.22); border:none; color:#fff; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700; cursor:pointer;">무승부</button>`
+            : ''}
+        </div>
         <div style="padding:12px;">
           <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px;">
             <div style="font-size:13px; font-weight:800; color:#0f172a;">${escapeHtml(label)}</div>

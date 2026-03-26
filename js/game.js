@@ -155,7 +155,11 @@ function updateSimpleTeamsUI() {
     const awayStyle = baseBtn + (ct.winner === 'away' ? ' background:var(--wimbledon-sage);' : '') + (awayReady ? '' : ' opacity:0.4;');
     html += `
       <div style="padding:0; margin-bottom:14px; overflow:hidden; border-radius:14px; border:1px solid #e5e7eb;">
-        <div style="background:var(--wimbledon-sage); color:#fff; padding:10px 14px; font-weight:800; font-size:14px;">🎾 코트 ${i + 1}</div>
+        <div style="background:var(--wimbledon-sage); color:#fff; padding:10px 14px; font-weight:800; font-size:14px; display:flex; align-items:center; justify-content:space-between;">
+          <span>🎾 코트 ${i + 1}</span>
+          <button onclick="saveSimpleImmediate(${i},'draw')" ${canClick ? '' : 'disabled'}
+            style="background:rgba(255,255,255,0.22); border:none; color:#fff; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700; cursor:pointer; ${canClick ? '' : 'opacity:0.4;'}">무승부</button>
+        </div>
         <div style="padding:12px;">
           <div style="display:flex; align-items:center; gap:8px;">
             <button onclick="saveSimpleImmediate(${i},'home')"
@@ -178,18 +182,20 @@ async function saveSimpleImmediate(courtIdx, side) {
   if (!ct) return;
   const h = ct.home;
   const a = ct.away;
-  const hs = side === 'home' ? '1' : '0';
-  const as = side === 'away' ? '1' : '0';
+  const isDraw = side === 'draw';
+  const hs = isDraw ? '0' : (side === 'home' ? '1' : '0');
+  const as = isDraw ? '0' : (side === 'away' ? '1' : '0');
 
   const msg = GameEngine.validateSaveInput(isPracticeMode, hs, as, mType, h, a);
-  if (msg) { gsAlert(msg); return; }
+  if (msg && !isDraw) { gsAlert(msg); return; }
 
   GameEngine.materializeHiddenPlayers([...h, ...a]);
   snapshotLastRanks();
 
   const logEntry = GameEngine.createMatchLogEntry(mType, h, a, hs, as);
+  if (isDraw) logEntry.winner = 'draw';
   const snapshot = GameEngine.snapshotSaveState();
-  GameEngine.applyMatchAndAppendLog(mType, h, a, logEntry.winner, logEntry);
+  GameEngine.applyMatchAndAppendLog(mType, h, a, isDraw ? 'draw' : logEntry.winner, logEntry);
 
   const ok = await pushWithMatchLogAppend(logEntry);
   if (!ok) {
