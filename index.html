@@ -1778,7 +1778,7 @@
             <div class="sub-rank-title" style="margin:0;"><span class="material-symbols-outlined">checklist</span>회비
               납부
               현황</div>
-            <select id="feeYear" onchange="renderFeeTable()"
+            <select id="feeYear" onchange="renderFeeTable(); renderPartialFeePicker()"
               style="padding:8px 12px; border:2px solid #E5E5EA; border-radius:10px; font-size:14px; font-weight:400;">
             </select>
           </div>
@@ -1797,6 +1797,8 @@
               style="padding:8px 10px; font-size:12px;">✅ 연완납</button>
             <button class="crud-btn crud-btn-edit" onclick="feeSetAll('Y','month')"
               style="padding:8px 10px; font-size:12px;">✅ 월완납</button>
+            <button class="crud-btn crud-btn-edit" onclick="feeSetAll('P','month')"
+              style="padding:8px 10px; font-size:12px; background:#FF9F0A; border-color:#FF9F0A; color:#fff;">🟡 부분납</button>
             <button class="crud-btn crud-btn-del" onclick="feeSetAll('N','year')"
               style="padding:8px 10px; font-size:12px;">↩️ 연해제</button>
             <button class="crud-btn crud-btn-del" onclick="feeSetAll('N','month')"
@@ -1816,6 +1818,14 @@
               않습니다.</div>
             <div id="feeExemptPickerArea"></div>
           </div>
+          <div style="background:#f8f8f8; border-radius:10px; padding:12px; margin-bottom:12px;">
+            <div style="font-size:12px; color:var(--text-gray); margin-bottom:8px; font-weight:bold;">🟡 부분 납부 설정
+            </div>
+            <div style="font-size:11px; color:var(--text-gray); margin-bottom:8px;">부분납을 설정할 월을 선택하세요. 금액은 재정관리에서 따로 입력한 값을 그대로 사용합니다.</div>
+            <select id="feePartialMonth" onchange="renderPartialFeePicker()" style="margin-bottom:10px; padding:5px 10px; border-radius:8px; border:1px solid #ddd; font-size:13px; color:var(--text-dark);">
+            </select>
+            <div id="feePartialPickerArea"></div>
+          </div>
           <div class="fee-table-wrap">
             <table class="fee-table" id="feeTable">
               <thead id="feeHead"></thead>
@@ -1823,7 +1833,7 @@
             </table>
           </div>
           <div style="margin-top:12px; font-size:12px; color:var(--text-gray);">
-            ✅ 납부완료 &nbsp; ❌ 미납 &nbsp; | 셀 터치로 변경
+            ✅ 납부완료 &nbsp; 🟡 부분납 &nbsp; ❌ 미납 &nbsp; | 셀 터치로 변경
           </div>
           <button class="btn-sub sky" onclick="copyFeeStatus()"
             style="width:100%; margin-top:12px; display:flex; align-items:center; justify-content:center; gap:6px;">

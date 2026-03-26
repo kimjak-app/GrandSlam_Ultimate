@@ -52,17 +52,31 @@ function _buildFeeSection(ym) {
   const members = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt &&
                                        (!p.status || p.status === 'active' || p.status === 'dormant'))
                          .sort((a, b) => a.name.localeCompare(b.name));
-  const paid = [], unpaid = [];
+  const paid = [], partial = [], unpaid = [];
   members.forEach(p => {
     const pf = feeData[p.name] || {};
-    (pf[key] === 'Y' || pf[yearlyKey] === 'Y') ? paid.push(displayName(p.name)) : unpaid.push(displayName(p.name));
+    const status = (pf[yearlyKey] === 'Y' || pf[key] === 'Y') ? 'Y' : (pf[key] === 'P' ? 'P' : 'N');
+    if (status === 'Y') paid.push(displayName(p.name));
+    else if (status === 'P') partial.push(displayName(p.name));
+    else unpaid.push(displayName(p.name));
   });
   const rate = members.length > 0 ? Math.round(paid.length / members.length * 100) : 0;
-  let txt = `💰 회비 납부 현황 (${parseInt(month)}월)\n━━━━━━━━━━\n`;
-  txt += `납부율: ${paid.length}/${members.length}명 (${rate}%)\n`;
-  txt += `✅ 납부 (${paid.length}명): ${paid.join(', ') || '없음'}\n`;
+  let txt = `💰 회비 납부 현황 (${parseInt(month)}월)
+━━━━━━━━━━
+`;
+  txt += `납부율: ${paid.length}/${members.length}명 (${rate}%)
+`;
+  txt += `✅ 납부 (${paid.length}명): ${paid.join(', ') || '없음'}
+`;
+  txt += `🟡 부분납 (${partial.length}명): ${partial.join(', ') || '없음'}
+`;
   txt += `❌ 미납 (${unpaid.length}명): ${unpaid.join(', ') || '없음'}`;
-  if (monthlyFeeAmount) txt += `\n💵 납부액: ${(paid.length * monthlyFeeAmount).toLocaleString()}원`;
+  if (monthlyFeeAmount) {
+    txt += `
+💵 자동 합산 납부액: ${(paid.length * monthlyFeeAmount).toLocaleString()}원`;
+    if (partial.length > 0) txt += `
+ℹ️ 부분납 금액은 재정관리 수입 항목에서 별도 반영`;
+  }
   return txt;
 }
 
@@ -146,7 +160,7 @@ function _buildRiskSection(ym) {
       if (p.status === 'inactive' || p.status === 'dormant') return false;
       const pf = feeData[p.name] || {};
       if (pf[`${year}-yearly`] === 'Y') return false;
-      return checkMonths.every(k => pf[k] !== 'Y');
+      return checkMonths.every(k => pf[k] !== 'Y' && pf[k] !== 'P');
     });
     if (longUnpaid.length > 0) warnings.push(`💸 2개월 이상 미납: ${longUnpaid.map(p => displayName(p.name)).join(', ')}`);
   }

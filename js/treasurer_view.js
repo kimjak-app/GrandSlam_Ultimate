@@ -212,7 +212,7 @@ function showTreasurerSection(section) {
   const el = $('treasurer-' + section);
   if (el) el.style.display = 'block';
 
-  if (section === 'fee')         { initFeeTable(); renderTreasurerPicker(); renderFeeExemptPicker(); }
+  if (section === 'fee')         { initFeeTable(); renderTreasurerPicker(); renderFeeExemptPicker(); renderPartialFeePicker(); }
   if (section === 'finance')     { initFinance(); }
   if (section === 'court-mgmt')  { loadCourtPresets(); renderCourtNoticeList(); }
   if (section === 'notice-mgmt') { renderAnnouncementMgmtList(); }
@@ -257,6 +257,7 @@ function initFeeTable() {
     _getTreasurerCache().feeYear = $('feeYear').value;
     syncFeeToFinance();
     renderFeeTable();
+    renderPartialFeePicker();
   });
 }
 
@@ -266,6 +267,45 @@ function saveMonthlyFee() {
   localStorage.setItem('grandslam_monthly_fee_' + getActiveClubId(), monthlyFeeAmount);
   syncFeeToFinance();
   pushFeeData();
+}
+
+function _getFeeMonthStatus(pf, key, yearlyKey) {
+  if (!pf) return 'N';
+  if (pf[yearlyKey] === 'Y' || pf[key] === 'Y') return 'Y';
+  if (pf[key] === 'P') return 'P';
+  return 'N';
+}
+
+function _getFeeCellView(status) {
+  if (status === 'Y') return { text: '✅', extraClass: '', style: '' };
+  if (status === 'P') return { text: '🟡', extraClass: ' fee-partial', style: 'color:#FF9F0A; font-size:12px; font-weight:700;' };
+  return { text: '❌', extraClass: ' fee-unpaid', style: '' };
+}
+
+function _getSelectedFeeMonthKey() {
+  const year = $('feeYear')?.value || String(new Date().getFullYear());
+  const monthSel = $('feePartialMonth');
+  const month = monthSel?.value ? parseInt(monthSel.value) : new Date().getMonth() + 1;
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+function _initPartialMonthDropdown() {
+  const sel = $('feePartialMonth');
+  if (!sel) return;
+  const year = $('feeYear')?.value || String(new Date().getFullYear());
+  const curMonth = new Date().getMonth() + 1;
+  const curYear = new Date().getFullYear();
+  const selectedYear = parseInt(year);
+  const maxMonth = (selectedYear === curYear) ? curMonth : 12;
+  const prevVal = sel.value ? parseInt(sel.value) : curMonth;
+  sel.innerHTML = '';
+  for (let m = 1; m <= maxMonth; m++) {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = `${m}월`;
+    if (m === (prevVal <= maxMonth ? prevVal : curMonth)) opt.selected = true;
+    sel.appendChild(opt);
+  }
 }
 
 function renderFeeTable() {
@@ -282,11 +322,14 @@ function renderFeeTable() {
     const key       = `${year}-${String(curMonth).padStart(2, '0')}`;
     const yearlyKey = `${year}-yearly`;
     const targets   = members.filter(p => !p.isTreasurer && !p.isFeeExempt);
-    const paidCount = targets.filter(p => {
+    let paidCount = 0, partialCount = 0;
+    targets.forEach(p => {
       const pf = feeData[p.name] || {};
-      return pf[key] === 'Y' || pf[yearlyKey] === 'Y';
-    }).length;
-    summaryEl.textContent = `📊 ${curMonth}월 납부 현황: ${paidCount}/${targets.length}명`;
+      const status = _getFeeMonthStatus(pf, key, yearlyKey);
+      if (status === 'Y') paidCount++;
+      else if (status === 'P') partialCount++;
+    });
+    summaryEl.textContent = `📊 ${curMonth}월 납부 현황: 완납 ${paidCount}명 · 부분납 ${partialCount}명 / 총 ${targets.length}명`;
   }
 
   // 헤더
@@ -326,12 +369,13 @@ function renderFeeTable() {
     bodyHtml += `<tr><td>${escapeHtml(displayName(p.name))}<button style="${yearlyBtnStyle}" onclick="toggleYearlyFee('${safeName}')">${isYearly ? '연납✓' : '연납'}</button></td>`;
     for (let m = 1; m <= 12; m++) {
       const key      = `${year}-${String(m).padStart(2, '0')}`;
-      const paid     = isYearly || pFee[key] === 'Y';
+      const status   = _getFeeMonthStatus(pFee, key, `${year}-yearly`);
+      const view     = _getFeeCellView(status);
       const isCur    = (parseInt(year) === curYear && m === curMonth);
-      const cellClass = (!paid ? ' fee-unpaid' : '') + (isCur ? ' fee-current-month' : '');
+      const cellClass = (view.extraClass || '') + (isCur ? ' fee-current-month' : '');
       const autoStyle = isYearly ? ' opacity:0.75;' : '';
       const clickHandler = isYearly ? '' : `onclick="toggleFee('${safeName}','${key}')"`;
-      bodyHtml += `<td class="fee-check${cellClass}" style="${autoStyle}" ${clickHandler}>${paid ? '✅' : '❌'}</td>`;
+      bodyHtml += `<td class="fee-check${cellClass}" style="${autoStyle}${view.style || ''}" ${clickHandler}>${view.text}</td>`;
     }
     bodyHtml += '</tr>';
   });
@@ -341,10 +385,12 @@ function renderFeeTable() {
 function toggleFee(name, key) {
   if (!currentUserAuth || !currentLoggedPlayer) { requireAuth(() => toggleFee(name, key)); return; }
   if (!feeData[name]) feeData[name] = {};
-  feeData[name][key] = (feeData[name][key] === 'Y') ? 'N' : 'Y';
+  const cur = feeData[name][key];
+  feeData[name][key] = (cur === 'Y') ? 'N' : 'Y';
   const cid = getActiveClubId();
   if (cid) localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
   renderFeeTable();
+  renderPartialFeePicker();
   syncFeeToFinance();
   pushFeeData();
 }
@@ -364,6 +410,7 @@ function feeSetAll(value, scope) {
     members.forEach(p => { if (!feeData[p.name]) feeData[p.name] = {}; feeData[p.name][key] = value; });
   }
   renderFeeTable();
+  renderPartialFeePicker();
   syncFeeToFinance();
   const cid = getActiveClubId();
   if (cid) localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
@@ -378,18 +425,31 @@ function copyFeeStatus() {
   const members   = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt &&
                                         (!p.status || p.status === 'active' || p.status === 'dormant'))
                            .sort((a, b) => a.name.localeCompare(b.name));
-  const paid = [], unpaid = [];
+  const paid = [], partial = [], unpaid = [];
   members.forEach(p => {
     const pf = feeData[p.name] || {};
-    (pf[key] === 'Y' || pf[yearlyKey] === 'Y') ? paid.push(displayName(p.name)) : unpaid.push(displayName(p.name));
+    const status = _getFeeMonthStatus(pf, key, yearlyKey);
+    if (status === 'Y') paid.push(displayName(p.name));
+    else if (status === 'P') partial.push(displayName(p.name));
+    else unpaid.push(displayName(p.name));
   });
 
-  let text = `📋 ${year}년 ${curMonth}월 회비 납부 현황\n━━━━━━━━━━\n`;
-  text += `✅ 납부 (${paid.length}명): ${paid.join(', ') || '없음'}\n`;
-  text += `❌ 미납 (${unpaid.length}명): ${unpaid.join(', ') || '없음'}\n`;
+  let text = `📋 ${year}년 ${curMonth}월 회비 납부 현황
+━━━━━━━━━━
+`;
+  text += `✅ 납부 (${paid.length}명): ${paid.join(', ') || '없음'}
+`;
+  text += `🟡 부분납 (${partial.length}명): ${partial.join(', ') || '없음'}
+`;
+  text += `❌ 미납 (${unpaid.length}명): ${unpaid.join(', ') || '없음'}
+`;
   if (monthlyFeeAmount) {
-    text += `━━━━━━━━━━\n💰 월회비: ${monthlyFeeAmount.toLocaleString()}원\n`;
-    text += `📥 납부액: ${(paid.length * monthlyFeeAmount).toLocaleString()}원`;
+    text += `━━━━━━━━━━
+💰 월회비: ${monthlyFeeAmount.toLocaleString()}원
+`;
+    text += `📥 자동 합산 납부액: ${(paid.length * monthlyFeeAmount).toLocaleString()}원`;
+    if (partial.length > 0) text += `
+ℹ️ 부분납 금액은 재정관리 수입 내역 기준으로 별도 반영`;
   }
 
   if (navigator.clipboard?.writeText) {
@@ -397,6 +457,57 @@ function copyFeeStatus() {
   } else { fallbackCopy(text); }
 }
 
+function renderPartialFeePicker() {
+  _initPartialMonthDropdown();
+  const el = $('feePartialPickerArea');
+  if (!el) return;
+  const key = _getSelectedFeeMonthKey();
+  const [, month] = key.split('-');
+  const partialMembers = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt && (feeData[p.name] || {})[key] === 'P');
+  const members = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt && (!p.status || p.status === 'active' || p.status === 'dormant')).sort((a, b) => a.name.localeCompare(b.name));
+
+  let html = `<div style="margin-bottom:8px; font-size:13px; color:var(--text-gray);">현재 ${parseInt(month,10)}월 부분납 회원: <strong style="color:#FF9F0A;">${partialMembers.length > 0 ? partialMembers.map(p => escapeHtml(displayName(p.name))).join(', ') : '없음'}</strong></div>`;
+  html += `<div style="display:flex; flex-wrap:wrap; gap:6px;">`;
+  members.forEach(p => {
+    const isP = (feeData[p.name] || {})[key] === 'P';
+    const safe = escapeHtml(p.name).replace(/'/g, "&#39;");
+    html += `<button onclick="togglePartialFee('${safe}')"
+      style="padding:6px 12px; border-radius:20px; border:2px solid ${isP ? '#FF9F0A' : '#ddd'}; background:${isP ? '#FF9F0A' : '#fff'}; color:${isP ? '#fff' : 'var(--text-dark)'}; font-size:13px; cursor:pointer;">
+      ${isP ? '&#10003; ' : ''}${escapeHtml(displayName(p.name))}
+    </button>`;
+  });
+  html += `</div>`;
+  if (partialMembers.length > 0) html += `<button onclick="clearPartialFee()" style="margin-top:8px; font-size:12px; color:var(--up-red); background:none; border:none; cursor:pointer;">&#10005; 전체 부분납 해제</button>`;
+  el.innerHTML = html;
+}
+
+function togglePartialFee(name) {
+  if (!currentUserAuth || !currentLoggedPlayer) { requireAuth(() => togglePartialFee(name)); return; }
+  const key = _getSelectedFeeMonthKey();
+  if (!feeData[name]) feeData[name] = {};
+  feeData[name][key] = feeData[name][key] === 'P' ? 'N' : 'P';
+  const cid = getActiveClubId();
+  if (cid) localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
+  renderPartialFeePicker();
+  renderFeeTable();
+  renderPartialFeePicker();
+  syncFeeToFinance();
+  pushFeeData();
+}
+
+function clearPartialFee() {
+  if (!currentUserAuth || !currentLoggedPlayer) { requireAuth(() => clearPartialFee()); return; }
+  const key = _getSelectedFeeMonthKey();
+  players.forEach(p => {
+    if (!p.isGuest && !p.isTreasurer && !p.isFeeExempt && feeData[p.name] && feeData[p.name][key] === 'P') feeData[p.name][key] = 'N';
+  });
+  const cid = getActiveClubId();
+  if (cid) localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
+  renderPartialFeePicker();
+  renderFeeTable();
+  syncFeeToFinance();
+  pushFeeData();
+}
 
 // ----------------------------------------
 // 4. 총무 / 면제 피커
@@ -409,6 +520,7 @@ function toggleTreasurer(name) {
   p.isTreasurer = true;
   pushDataOnly();
   renderTreasurerPicker();
+  renderPartialFeePicker();
   renderFeeTable();
   gsAlert(`${displayName(name)}님이 총무로 지정됐습니다.`);
 }
@@ -417,6 +529,7 @@ function clearTreasurer() {
   players.forEach(x => { x.isTreasurer = false; });
   pushDataOnly();
   renderTreasurerPicker();
+  renderPartialFeePicker();
   renderFeeTable();
   gsAlert('총무 면제가 해제됐습니다.');
 }
@@ -470,16 +583,20 @@ function toggleFeeExempt(name) {
   const cid = getActiveClubId();
   if (cid) localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
   renderFeeExemptPicker();
+  renderPartialFeePicker();
   renderFeeTable();
   syncFeeToFinance();
+  pushFeeData();
 }
 
 function clearFeeExempt() {
   players.forEach(x => { x.isFeeExempt = false; });
   pushDataOnly();
   renderFeeExemptPicker();
+  renderPartialFeePicker();
   renderFeeTable();
   syncFeeToFinance();
+  pushFeeData();
   gsAlert('회비 면제가 전체 해제됐습니다.');
 }
 
