@@ -3,7 +3,7 @@
 // ========================================
 
 // ✅ 버전 상수 — 버전업 시 여기만 바꾸면 전체 반영
-const APP_VERSION = 'v6.695';
+const APP_VERSION = 'v6.75';
 
 
 // ----------------------------------------
@@ -28,6 +28,22 @@ function hideSplashSafe() {
 // ----------------------------------------
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // ✅ v6.75: 전역 햅틱 피드백 — 버튼 터치 시 자동 분기
+  document.addEventListener('touchstart', (e) => {
+    const el = e.target.closest('button, [role="button"], .nav-item, .game-card, .crud-btn');
+    if (!el) return;
+    if (el.classList.contains('crud-btn-del') || el.dataset.haptic === 'warning') {
+      gsHaptic('warning');
+    } else if (el.dataset.haptic === 'success' ||
+               el.id === 'btnSave' ||
+               el.onclick?.toString().includes('save') ||
+               el.onclick?.toString().includes('Save') ||
+               el.textContent?.includes('저장')) {
+      gsHaptic('success');
+    } else {
+      gsHaptic('light');
+    }
+  }, { passive: true });
   try { await initClubSystem(); } catch (e) { console.error('initClubSystem() error:', e); }
   try { await sync(); }           catch (e) { console.error('sync() error:', e); }
 
@@ -611,6 +627,8 @@ function hofIcon(type, size, color, isMuted, overlayLabel) {
   const icons = {
     hall: '<path d="M12 2l7 3v4c0 4.7-2.9 8.8-7 10.2C7.9 17.8 5 13.7 5 9V5l7-3Zm0 2.2L7 6.3v2.6c0 3.6 2.1 6.8 5 8 2.9-1.2 5-4.4 5-8V6.3l-5-2.1Zm-2.2 4.3h4.4v1.6h-1.4v3.7h-1.6v-3.7H9.8V8.5Z"/>',
     firstWin: '<path d="M9 4h6v2h-1v3.3a3.5 3.5 0 0 1-2 3.2V15h2v2H8v-2h2v-2.5a3.5 3.5 0 0 1-2-3.2V6H7V4h2Zm1 2v3.3a1.5 1.5 0 0 0 3 0V6h-3Z"/><path d="M17 5h2v2a3 3 0 0 1-3 3h-1V8h1a1 1 0 0 0 1-1V5ZM7 5v2a1 1 0 0 0 1 1h1v2H8a3 3 0 0 1-3-3V5h2Z"/>',
+    monthAward: '<path d="M12 3a7 7 0 1 1 0 14 7 7 0 0 1 0-14Zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10Z"/><path d="m12 7 1.2 2.5 2.8.3-2.1 1.9.6 2.9-2.5-1.4-2.5 1.4.6-2.9-2.1-1.9 2.8-.3L12 7Z"/><path d="M9 16.2 7.2 21l2.8-1.6 2 1.1v-4.1H9Zm6 0h-3v4.1l2-1.1 2.8 1.6-1.8-4.8Z"/>',
+    weekAward: '<path d="M12 9a5 5 0 1 1 0 10A5 5 0 0 1 12 9Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/><path d="m12 11 .9 1.8 2 .3-1.5 1.4.4 2L12 15.6l-1.8 1-.4-2L8.1 13.1l2-.3L12 11Z"/><path d="M10 3h4l1 6h-6L10 3Z"/><path d="M9 3h6v1.5l-1 1h-4l-1-1V3Z"/>',
     star: '<path d="m12 3 2.1 4.6 5 .6-3.7 3.5 1 5-4.4-2.5L7.6 17l1-5L5 8.2l5-.6L12 3Z"/>',
     spark: '<path d="M12 2.5 14.2 8l5.8.5-4.4 3.8 1.3 5.7L12 15.1 7.1 18l1.3-5.7L4 8.5 9.8 8 12 2.5Z"/><path d="M18.8 3.8 20 6l2.2 1.2L20 8.4l-1.2 2.2-1.2-2.2-2.2-1.2L17.6 6l1.2-2.2Z"/>',
     trophy: '<path d="M8 4h8v2h1a2 2 0 0 1 2 2v1a4 4 0 0 1-4 4h-.6A5.5 5.5 0 0 1 13 14.6V17h3v2H8v-2h3v-2.4A5.5 5.5 0 0 1 9.6 13H9a4 4 0 0 1-4-4V8a2 2 0 0 1 2-2h1V4Zm0 2v3a3.5 3.5 0 0 0 7 0V6H8Zm9 2v1a2 2 0 0 1-2 2V8h2Zm-10 0v3a2 2 0 0 1-2-2V8h2Z"/>',
@@ -634,14 +652,51 @@ function hofIcon(type, size, color, isMuted, overlayLabel) {
   return `<span style="display:inline-flex; align-items:center; justify-content:center; width:${px}px; height:${px}px; color:${c}; opacity:${opacity}; flex-shrink:0; line-height:1; vertical-align:middle;"><svg viewBox="0 0 24 24" width="${px}" height="${px}" fill="currentColor" aria-hidden="true">${svg}${overlay}</svg></span>`;
 }
 
+
+function _hofGetClubPalette() {
+  const base = (typeof currentClub !== 'undefined' && currentClub && currentClub.color) ? currentClub.color : '#5D9C76';
+  const deep = (typeof tinycolor !== 'undefined')
+    ? tinycolor(base).darken(16).saturate(8).toHexString()
+    : base;
+  const soft = (typeof tinycolor !== 'undefined')
+    ? tinycolor(base).lighten(8).desaturate(6).toHexString()
+    : '#78B18E';
+  const halo = (typeof tinycolor !== 'undefined')
+    ? tinycolor(base).setAlpha(0.16).toRgbString()
+    : 'rgba(93, 156, 118, 0.16)';
+  return { base, deep, soft, halo };
+}
+
+function _applyHofClubChrome() {
+  const clubPalette = _hofGetClubPalette();
+  const header = document.getElementById('hofCardHeader');
+  const modalHeader = document.getElementById('hofModalHeader');
+  const modalBody = document.getElementById('hofModalBody');
+  const viewBtn = document.querySelector('#hallOfFameCard .section-header-chip');
+  if (header) {
+    header.style.background = `linear-gradient(135deg, ${clubPalette.base} 0%, ${clubPalette.deep} 100%)`;
+  }
+  if (modalHeader) {
+    modalHeader.style.background = `linear-gradient(135deg, ${clubPalette.base} 0%, ${clubPalette.deep} 100%)`;
+  }
+  if (modalBody) {
+    modalBody.style.background = '#F8F9FB';
+  }
+  if (viewBtn) {
+    viewBtn.style.background = 'rgba(255,255,255,0.14)';
+    viewBtn.style.borderColor = 'rgba(255,255,255,0.24)';
+    viewBtn.style.color = '#fff';
+  }
+}
+
 function _hofBadge(icon, label, value, sub) {
-  return `<div style="background:linear-gradient(180deg,#FFFFFF 0%, #F8FAFD 100%); border-radius:22px; padding:16px 16px; box-shadow:0 12px 30px rgba(20,32,58,0.08); margin-bottom:12px; border:1px solid rgba(30,41,59,0.06);">
+  return `<div style="background:linear-gradient(180deg,#FFFFFF 0%, #FAFBFD 100%); border-radius:20px; padding:15px 16px; box-shadow:0 8px 20px rgba(20,32,58,0.05); margin-bottom:12px; border:1px solid rgba(30,41,59,0.05);">
     <div style="display:flex; align-items:flex-start; gap:12px;">
-      <div style="width:48px; height:48px; border-radius:16px; background:rgba(244,247,252,0.92); display:flex; align-items:center; justify-content:center; line-height:1; flex-shrink:0; box-shadow:inset 0 1px 0 rgba(255,255,255,0.9);">${icon}</div>
+      <div style="width:46px; height:46px; border-radius:15px; background:rgba(244,247,252,0.88); display:flex; align-items:center; justify-content:center; line-height:1; flex-shrink:0; box-shadow:inset 0 1px 0 rgba(255,255,255,0.9);">${icon}</div>
       <div style="flex:1; min-width:0;">
-        <div style="font-size:10px; color:#94A3B8; font-weight:800; letter-spacing:1.1px; text-transform:uppercase; margin-bottom:5px;">${label}</div>
-        <div style="font-size:19px; font-weight:900; color:#14203A; line-height:1.18; letter-spacing:-0.02em;">${value}</div>
-        ${sub ? `<div style="font-size:11px; color:#6B7280; margin-top:7px; line-height:1.5;">${sub}</div>` : ''}
+        <div style="font-size:10px; color:#A0AEC0; font-weight:600; letter-spacing:1px; text-transform:uppercase; margin-bottom:5px;">${label}</div>
+        <div style="font-size:16px; font-weight:600; color:#223047; line-height:1.3; letter-spacing:-0.01em;">${value}</div>
+        ${sub ? `<div style="font-size:11px; color:#7B8794; margin-top:6px; line-height:1.55; font-weight:400;">${sub}</div>` : ''}
       </div>
     </div>
   </div>`;
@@ -659,53 +714,53 @@ function _getVisibleMilestoneTrack(hof) {
 function _getMilestonePalette(n, locked) {
   if (locked) {
     return {
-      bg: 'linear-gradient(180deg, #F4F6F8 0%, #E7EBF0 100%)',
-      border: 'rgba(137, 148, 166, 0.32)',
-      iconBg: 'rgba(255,255,255,0.75)',
+      bg: '#FFFFFF',
+      border: 'rgba(137, 148, 166, 0.26)',
+      iconBg: 'rgba(241, 245, 249, 0.98)',
       iconColor: '#9AA4B2',
       title: '#7B8796',
       sub: '#98A2B3',
-      chipBg: 'rgba(122, 134, 154, 0.12)',
+      chipBg: 'rgba(122, 134, 154, 0.10)',
       chipColor: '#7B8796',
-      shadow: '0 10px 24px rgba(20, 32, 58, 0.08)'
+      shadow: '0 10px 24px rgba(20, 32, 58, 0.05)'
     };
   }
   if (n === 1) {
     return {
-      bg: 'linear-gradient(180deg, #FFF8E7 0%, #FFF1C8 100%)',
-      border: 'rgba(212, 162, 76, 0.42)',
-      iconBg: 'rgba(255,255,255,0.72)',
+      bg: '#FFFFFF',
+      border: 'rgba(212, 162, 76, 0.36)',
+      iconBg: 'rgba(255, 244, 214, 0.96)',
       iconColor: '#C17A5A',
       title: '#9F5F37',
       sub: '#B07A5B',
-      chipBg: 'rgba(193, 122, 90, 0.12)',
+      chipBg: 'rgba(193, 122, 90, 0.10)',
       chipColor: '#9F5F37',
-      shadow: '0 14px 30px rgba(193, 122, 90, 0.16)'
+      shadow: '0 12px 28px rgba(193, 122, 90, 0.10)'
     };
   }
   if (n >= 100) {
     return {
-      bg: 'linear-gradient(180deg, #FFF4D9 0%, #F7DFC2 100%)',
-      border: 'rgba(186, 138, 44, 0.38)',
-      iconBg: 'rgba(255,255,255,0.75)',
+      bg: '#FFFFFF',
+      border: 'rgba(186, 138, 44, 0.32)',
+      iconBg: 'rgba(255, 244, 217, 0.96)',
       iconColor: '#B8811F',
       title: '#8C6112',
       sub: '#A2772A',
-      chipBg: 'rgba(184, 129, 31, 0.12)',
+      chipBg: 'rgba(184, 129, 31, 0.10)',
       chipColor: '#8C6112',
-      shadow: '0 14px 30px rgba(184, 129, 31, 0.16)'
+      shadow: '0 12px 28px rgba(184, 129, 31, 0.10)'
     };
   }
   return {
-    bg: 'linear-gradient(180deg, #EEF6FF 0%, #DDEBFF 100%)',
-    border: 'rgba(79, 124, 198, 0.34)',
-    iconBg: 'rgba(255,255,255,0.74)',
+    bg: '#FFFFFF',
+    border: 'rgba(79, 124, 198, 0.30)',
+    iconBg: 'rgba(230, 239, 255, 0.98)',
     iconColor: '#3A7BD5',
     title: '#2A5FA8',
     sub: '#5D83B8',
-    chipBg: 'rgba(58, 123, 213, 0.10)',
+    chipBg: 'rgba(58, 123, 213, 0.08)',
     chipColor: '#2A5FA8',
-    shadow: '0 14px 30px rgba(58, 123, 213, 0.15)'
+    shadow: '0 12px 28px rgba(58, 123, 213, 0.09)'
   };
 }
 
@@ -716,20 +771,22 @@ function _hofMilestoneTrackBadge(hof, milestoneN, opts) {
   const iconType = milestoneN === 1 ? 'firstWin' : milestoneEmoji(milestoneN);
   const overlayLabel = milestoneN !== 1 ? String(milestoneN) : null;
   const compact = !!(opts && opts.compact);
-  const icon = hofIcon(iconType, compact ? 32 : 38, palette.iconColor, locked, overlayLabel);
+  const icon = hofIcon(iconType, compact ? 38 : 50, palette.iconColor, locked, overlayLabel);
   const title = milestoneN === 1 ? '첫승' : `${milestoneN}승`;
   const sub = locked
     ? `${Math.min(hof.totalWins || 0, milestoneN)}/${milestoneN}`
     : (info.date || '달성');
   const chipLabel = locked ? 'NEXT' : 'CLEAR';
   return `<div style="
-    flex:0 0 auto; min-width:${compact ? '88px' : '104px'}; padding:${compact ? '10px 10px 9px' : '14px 13px 12px'}; border-radius:${compact ? '22px' : '28px'};
-    background:${palette.bg}; border:1px solid ${palette.border}; box-shadow:${palette.shadow};
-    display:flex; flex-direction:column; align-items:center; text-align:center; gap:${compact ? '7px' : '9px'};">
-    <div style="width:${compact ? '52px' : '62px'}; height:${compact ? '52px' : '62px'}; border-radius:${compact ? '16px' : '20px'}; background:${palette.iconBg}; display:flex; align-items:center; justify-content:center; box-shadow:inset 0 1px 0 rgba(255,255,255,0.55);">${icon}</div>
-    <div style="font-size:${compact ? '12px' : '13px'}; font-weight:900; color:${palette.title}; line-height:1; letter-spacing:-0.02em;">${title}</div>
-    <div style="font-size:${compact ? '10px' : '10px'}; font-weight:700; color:${palette.sub}; line-height:1.3; white-space:nowrap;">${locked ? '다음 목표 ' + sub : sub}</div>
-    <div style="display:inline-flex; align-items:center; justify-content:center; min-width:${compact ? '46px' : '50px'}; padding:${compact ? '4px 8px' : '4px 9px'}; border-radius:999px; background:${palette.chipBg}; color:${palette.chipColor}; font-size:9px; font-weight:900; letter-spacing:0.8px;">${chipLabel}</div>
+    flex:0 0 auto; min-width:${compact ? '108px' : '138px'}; padding:${compact ? '16px 12px 12px' : '20px 18px 17px'}; border-radius:${compact ? '22px' : '28px'};
+    background:${palette.bg}; border:1px solid ${palette.border}; box-shadow:${palette.shadow}, 0 10px 20px ${_hofGetClubPalette().halo};
+    display:flex; flex-direction:column; align-items:center; text-align:center; gap:${compact ? '10px' : '12px'};">
+    <div style="width:${compact ? '66px' : '84px'}; height:${compact ? '66px' : '84px'}; border-radius:${compact ? '20px' : '24px'}; background:#FFFFFF; display:flex; align-items:center; justify-content:center; border:1px solid rgba(15,23,42,0.05); box-shadow:inset 0 1px 0 rgba(255,255,255,0.92);">
+      <div style="width:${compact ? '48px' : '60px'}; height:${compact ? '48px' : '60px'}; border-radius:50%; background:${palette.iconBg}; display:flex; align-items:center; justify-content:center;">${icon}</div>
+    </div>
+    <div style="font-size:${compact ? '12px' : '14px'}; font-weight:600; color:${palette.title}; line-height:1.1; letter-spacing:-0.01em;">${title}</div>
+    <div style="font-size:${compact ? '10px' : '11px'}; font-weight:500; color:${palette.sub}; line-height:1.35; white-space:nowrap;">${locked ? '다음 목표 ' + sub : sub}</div>
+    <div style="display:inline-flex; align-items:center; justify-content:center; min-width:${compact ? '48px' : '56px'}; padding:${compact ? '4px 8px' : '5px 11px'}; border-radius:999px; background:${palette.chipBg}; color:${palette.chipColor}; font-size:${compact ? '9px' : '10px'}; font-weight:600; letter-spacing:0.5px;">${chipLabel}</div>
   </div>`;
 }
 
@@ -741,12 +798,14 @@ function _hofMilestoneDetailCard(hof, milestoneN) {
   const palette = _getMilestonePalette(milestoneN, false);
   const partnerTxt = info.partner ? ` · 파트너: ${info.partner}` : '';
   const label = milestoneN === 1 ? '첫 승리 달성' : `${milestoneN}승 달성`;
-  return `<div style="background:#fff; border-radius:20px; padding:14px 16px; box-shadow:0 8px 22px rgba(20,32,58,0.08); margin-bottom:10px; border:1px solid rgba(20,32,58,0.05);">
-    <div style="display:flex; align-items:center; gap:12px;">
-      <div style="width:72px; height:72px; border-radius:22px; background:${palette.bg}; border:1px solid ${palette.border}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">${hofIcon(iconType, 42, palette.iconColor, false, overlayLabel)}</div>
+  return `<div style="background:#fff; border-radius:22px; padding:16px 18px; box-shadow:0 8px 22px rgba(20,32,58,0.07), 0 10px 24px ${_hofGetClubPalette().halo}; margin-bottom:10px; border:1px solid rgba(20,32,58,0.05);">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <div style="width:86px; height:86px; border-radius:26px; background:#FFFFFF; border:1px solid ${palette.border}; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:inset 0 1px 0 rgba(255,255,255,0.9);">
+        <div style="width:60px; height:60px; border-radius:50%; background:${palette.iconBg}; display:flex; align-items:center; justify-content:center;">${hofIcon(iconType, 46, palette.iconColor, false, overlayLabel)}</div>
+      </div>
       <div style="flex:1; min-width:0;">
-        <div style="font-size:10px; color:${palette.sub}; font-weight:800; letter-spacing:1px; text-transform:uppercase; margin-bottom:4px;">${label}</div>
-        <div style="font-size:15px; font-weight:900; color:#1a1a2e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">vs ${info.opps}</div>
+        <div style="font-size:10px; color:${palette.sub}; font-weight:600; letter-spacing:0.8px; text-transform:uppercase; margin-bottom:4px;">${label}</div>
+        <div style="font-size:15px; font-weight:600; color:#1f2937; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">vs ${info.opps}</div>
         <div style="font-size:11px; color:#777; margin-top:4px; line-height:1.45;">${info.date}${partnerTxt}</div>
       </div>
     </div>
@@ -756,6 +815,51 @@ function _hofMilestoneDetailCard(hof, milestoneN) {
 function _hofMilestoneBadge(iconType, label, info, milestoneN, hof) {
   if (!hof || !info) return '';
   return _hofMilestoneDetailCard(hof, milestoneN);
+}
+
+
+function _hofGetPlayerAwards(name) {
+  const monthly = (mvpHistory && mvpHistory.monthly) ? Object.values(mvpHistory.monthly) : [];
+  const weekly = (mvpHistory && mvpHistory.weekly) ? Object.values(mvpHistory.weekly) : [];
+  const monthItems = monthly.filter(x => x && x.playerName === name).sort((a,b) => String(a.key||'').localeCompare(String(b.key||'')));
+  const weekItems = weekly.filter(x => x && x.playerName === name).sort((a,b) => String(a.key||'').localeCompare(String(b.key||'')));
+  return {
+    monthly: monthItems,
+    weekly: weekItems,
+    monthLabels: monthItems.map(x => {
+      const key = String(x.key || '');
+      if (!key) return '';
+      const parts = key.split('-');
+      if (parts.length >= 2) return `${Number(parts[0])}년 ${Number(parts[1])}월`;
+      return key;
+    }).filter(Boolean),
+    weekLabels: weekItems.map(x => x.label || '').filter(Boolean)
+  };
+}
+
+function _hofAwardHeroCard(type, labels, clubPalette) {
+  const isMonth = type === 'month';
+  const title = isMonth ? 'Player of the Month' : 'Player of the Week';
+  const iconType = isMonth ? 'monthAward' : 'weekAward';
+  const accent = isMonth ? '#D58B17' : '#7B8EA8';
+  const border = isMonth ? 'rgba(213,139,23,0.26)' : 'rgba(123,142,168,0.24)';
+  const iconBg = isMonth ? 'rgba(255,244,217,0.98)' : 'rgba(237,241,247,0.98)';
+  const halo = clubPalette && clubPalette.halo ? clubPalette.halo : 'rgba(93,156,118,0.12)';
+  const count = labels && labels.length ? labels.length : 0;
+  const latest = labels && labels.length ? labels[labels.length - 1] : 'No awards yet';
+  const titleHtml = isMonth
+    ? `Player<br>of<br>the Month`
+    : `Player<br>of<br>the Week`;
+  return `<div style="display:flex; justify-content:center; overflow:hidden;">
+    <div style="flex:0 0 auto; width:140px; padding:20px 18px 17px; border-radius:28px; background:linear-gradient(180deg,#FFFFFF 0%, #FBFCFE 100%); border:1px solid ${border}; box-shadow:0 12px 28px rgba(20,32,58,0.06), 0 10px 22px ${halo}; display:flex; flex-direction:column; align-items:center; text-align:center; gap:12px; box-sizing:border-box;">
+      <div style="width:84px; height:84px; border-radius:24px; background:#FFFFFF; display:flex; align-items:center; justify-content:center; border:1px solid rgba(15,23,42,0.05); box-shadow:inset 0 1px 0 rgba(255,255,255,0.92);">
+        <div style="width:60px; height:60px; border-radius:50%; background:${iconBg}; display:flex; align-items:center; justify-content:center;">${hofIcon(iconType, 42, accent)}</div>
+      </div>
+      <div style="font-size:11.5px; font-weight:500; color:#1f2937; line-height:1.2; text-align:center;">${titleHtml}</div>
+      <div style="font-size:10px; font-weight:500; color:#8a94a6; line-height:1.35; display:flex; align-items:center; justify-content:center;">${latest}</div>
+      <div style="display:inline-flex; align-items:center; justify-content:center; min-width:56px; padding:5px 11px; border-radius:999px; background:${iconBg}; color:${accent}; font-size:10px; font-weight:600; letter-spacing:0.5px;">${count}</div>
+    </div>
+  </div>`;
 }
 
 function _renderHallOfFamePreview(_snapClubId) {
@@ -771,6 +875,7 @@ function _renderHallOfFamePreview(_snapClubId) {
   if (!hof) { card.style.display = 'none'; return; }
 
   card.style.display = 'block';
+  _applyHofClubChrome();
   const visibleTrack = _getVisibleMilestoneTrack(hof);
   const items = visibleTrack.length
     ? [`<div style="display:flex; gap:10px; overflow-x:auto; padding:2px 0 4px; scroll-snap-type:x proximity;">${visibleTrack.map(n => _hofMilestoneTrackBadge(hof, n, { compact:true })).join('')}</div>`]
@@ -793,6 +898,7 @@ function openHallOfFameModal() {
 
   modal.style.display = 'block';
   document.body.style.overflow = 'hidden';
+  _applyHofClubChrome();
 
   // ✅ v6.5: matchLog 전체 재계산 + Firebase 캐시 병합
   const hof = _calcHallOfFame(myName);
@@ -826,22 +932,28 @@ function openHallOfFameModal() {
   if (!hof) { body.innerHTML = '<div style="text-align:center; color:#bbb; padding:30px 0;">경기 기록이 없습니다.</div>'; return; }
 
   const section = (title, color, content) =>
-    `<div style="margin-bottom:22px;"><div style="display:flex; align-items:center; gap:8px; font-size:11px; font-weight:900; color:${color}; letter-spacing:1.4px; text-transform:uppercase; margin-bottom:10px; padding-left:2px;">${title}</div>${content}</div>`;
+    `<div style="margin-bottom:22px;"><div style="display:flex; align-items:center; gap:8px; font-size:11px; font-weight:700; color:${color}; letter-spacing:1.1px; text-transform:uppercase; margin-bottom:10px; padding-left:2px;">${title}</div>${content}</div>`;
 
   const fmtStat = (s) => s ? `${s.w}승 ${s.l}패 · ${s.rate}%` : '–';
 
   const lifetimeRate = hof.totalGames > 0 ? Math.round(hof.totalWins/hof.totalGames*100) : 0;
-  const summary = `<div style="background:linear-gradient(180deg,#2F4A86 0%, #233763 100%); border-radius:24px; padding:18px 18px; margin-bottom:20px; box-shadow:0 18px 34px rgba(25,38,74,0.24); overflow:hidden; position:relative;">
-    <div style="position:absolute; inset:auto -38px -38px auto; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,0.06);"></div>
-    <div style="font-size:11px; letter-spacing:1.6px; color:rgba(255,255,255,0.58); font-weight:800; text-transform:uppercase; margin-bottom:12px;">Trophy Cabinet</div>
+  const clubPalette = _hofGetClubPalette();
+  const summary = `<div style="background:linear-gradient(180deg, ${clubPalette.base} 0%, ${clubPalette.deep} 100%); border-radius:24px; padding:18px 18px; margin-bottom:20px; box-shadow:0 18px 34px ${clubPalette.halo}; overflow:hidden; position:relative;">
+    <div style="position:absolute; inset:auto -38px -38px auto; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,0.08);"></div>
+    <div style="position:absolute; top:-28px; right:-18px; width:92px; height:92px; border-radius:50%; background:rgba(255,255,255,0.06);"></div>
+    <div style="font-size:18px; letter-spacing:0.7px; color:rgba(255,255,255,0.96); font-weight:700; margin-bottom:14px; text-transform:uppercase;">TROPHY CABINET</div>
     <div style="display:flex; justify-content:space-between; gap:10px; text-align:center;">
-      <div style="flex:1;"><div style="font-size:28px; font-weight:900; color:#fff; line-height:1;">${hof.totalWins}</div><div style="font-size:10px; color:rgba(255,255,255,0.62); margin-top:5px; font-weight:700;">총 승리</div></div>
-      <div style="width:1px; background:rgba(255,255,255,0.14);"></div>
-      <div style="flex:1;"><div style="font-size:28px; font-weight:900; color:#fff; line-height:1;">${hof.totalGames}</div><div style="font-size:10px; color:rgba(255,255,255,0.62); margin-top:5px; font-weight:700;">총 경기</div></div>
-      <div style="width:1px; background:rgba(255,255,255,0.14);"></div>
-      <div style="flex:1;"><div style="font-size:28px; font-weight:900; color:#fff; line-height:1;">${lifetimeRate}%</div><div style="font-size:10px; color:rgba(255,255,255,0.62); margin-top:5px; font-weight:700;">통산 승률</div></div>
+      <div style="flex:1;"><div style="font-size:24px; font-weight:600; color:#fff; line-height:1.05;">${hof.totalWins}</div><div style="font-size:10px; color:rgba(255,255,255,0.72); margin-top:5px; font-weight:500;">총 승리</div></div>
+      <div style="width:1px; background:rgba(255,255,255,0.16);"></div>
+      <div style="flex:1;"><div style="font-size:24px; font-weight:600; color:#fff; line-height:1.05;">${hof.totalGames}</div><div style="font-size:10px; color:rgba(255,255,255,0.72); margin-top:5px; font-weight:500;">총 경기</div></div>
+      <div style="width:1px; background:rgba(255,255,255,0.16);"></div>
+      <div style="flex:1;"><div style="font-size:24px; font-weight:600; color:#C0392B; line-height:1.05;">${lifetimeRate}%</div><div style="font-size:10px; color:rgba(255,255,255,0.72); margin-top:5px; font-weight:500;">통산 승률</div></div>
     </div>
   </div>`;
+
+  const playerAwards = _hofGetPlayerAwards(myName);
+  const playerOfMonth = section('Player of the Month', '#D58B17', _hofAwardHeroCard('month', playerAwards.monthLabels, clubPalette));
+  const playerOfWeek = section('Player of the Week', '#7B8EA8', _hofAwardHeroCard('week', playerAwards.weekLabels, clubPalette));
 
   const visibleTrack = _getVisibleMilestoneTrack(hof);
   const latestAchieved = [...visibleTrack].reverse().find(n => !!hof.milestoneMap[n]);
@@ -849,7 +961,7 @@ function openHallOfFameModal() {
     ? `<div style="display:flex; gap:12px; overflow-x:auto; padding:2px 2px 8px; margin-bottom:14px; scroll-snap-type:x proximity;">${visibleTrack.map(n => _hofMilestoneTrackBadge(hof, n)).join('')}</div>`
     : '';
   const milestoneDetail = latestAchieved ? _hofMilestoneDetailCard(hof, latestAchieved) : '';
-  const milestones = section(`${hofIcon('firstWin', 14, '#C17A5A')} 승리 마일스톤`, '#C17A5A', milestoneTrack + milestoneDetail);
+  const milestones = section(`${hofIcon('firstWin', 14, '#C17A5A')} Victory Milestones`, '#C17A5A', milestoneTrack + milestoneDetail);
 
   const rates = section(`${hofIcon('rate', 14, '#3A7BD5')} 최고 승률`, '#3A7BD5',
     _hofBadge(hofIcon('calendarWeek',  24, '#3A7BD5'), '최고 승률의 주',   hof.bestRateWeek  ? `${hof.fmtWeek(hof.bestRateWeek.key)} · ${hof.bestRateWeek.rate}%`   : '기록 없음', hof.bestRateWeek  ? fmtStat(hof.bestRateWeek)  : null) +
@@ -886,7 +998,7 @@ function openHallOfFameModal() {
 
   const streaks = section(`${hofIcon('streak', 14, '#8B6B9A')} 연승 / 연패 극복기`, '#8B6B9A', winStreakContent + loseStreakContent);
 
-  body.innerHTML = `<div style="padding-bottom:10px;">${summary + milestones + streaks + rates + mostWins}</div>`;
+  body.innerHTML = `<div style="padding-bottom:10px;">${summary + playerOfMonth + playerOfWeek + milestones + streaks + rates + mostWins}</div>`;
 }
 
 function closeHallOfFameModal() {
@@ -948,11 +1060,14 @@ function _normalizeQuickMenuItems(items) {
 function _buildQuickMenuButton(item, small) {
   return `<button onclick="window._qmAction('${item.id}')" style="
     display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:${small ? '5px' : '6px'}; padding:${small ? '10px 4px 8px' : '12px 6px 10px'};
-    background:#F8F9FB; border:1.5px solid #EBEBEB; border-radius:14px; cursor:pointer;
-    min-height:${small ? '70px' : '84px'}; font-size:${small ? '11px' : '12px'}; font-weight:700;
-    color:#3A4A5A; line-height:1.3; white-space:pre-line; text-align:center;">
-    ${_qmIcon(item.icon, '#4A6B8A')}
+    gap:${small ? '5px' : '8px'}; padding:${small ? '10px 4px 8px' : '14px 8px 12px'};
+    background:#fff; border:1.5px solid rgba(40,103,70,0.12); border-radius:16px; cursor:pointer;
+    min-height:${small ? '70px' : '88px'}; font-size:${small ? '11px' : '12px'}; font-weight:600;
+    color:#191c1c; line-height:1.3; white-space:pre-line; text-align:center;
+    box-shadow:0 4px 12px rgba(40,103,70,0.07);">
+    <div style="width:38px;height:38px;border-radius:12px;background:rgba(40,103,70,0.08);display:flex;align-items:center;justify-content:center;">
+      ${_qmIcon(item.icon, '#286746')}
+    </div>
     ${item.label}
   </button>`;
 }
@@ -990,6 +1105,7 @@ function openQuickMenuPanel() {
   _renderQuickMenu(typeof getActiveClubId === 'function' ? getActiveClubId() : null);
   modal.style.display = 'block';
   document.body.style.overflow = 'hidden';
+  _applyHofClubChrome();
 }
 
 function closeQuickMenuPanel() {
@@ -1013,15 +1129,18 @@ function openQuickMenuEdit() {
       const idx = _qmEditSelected.indexOf(item.id);
       return `<button onclick="window._qmToggle('${item.id}')" style="
         display:flex; flex-direction:column; align-items:center; justify-content:center;
-        gap:5px; padding:10px 4px 8px; border-radius:14px; cursor:pointer; min-height:70px;
-        font-size:11px; font-weight:700; line-height:1.3; white-space:pre-line; text-align:center;
-        background:${sel ? '#E8F0FB' : '#F8F9FB'};
-        border:2px solid ${sel ? 'var(--aussie-blue)' : '#EBEBEB'};
-        color:${sel ? 'var(--aussie-blue)' : '#3A4A5A'};
-        position:relative;">
-        ${sel ? `<span style="position:absolute;top:4px;right:6px;font-size:10px;font-weight:900;color:var(--aussie-blue);">${idx + 1}</span>` : ''}
-        ${_qmIcon(item.icon, sel ? 'var(--aussie-blue)' : '#4A6B8A')}
-        ${item.label}
+        gap:10px; padding:20px 12px 18px; border-radius:16px; cursor:pointer;
+        font-size:13px; font-weight:600; line-height:1.3; text-align:center;
+        background:${sel ? '#fff' : '#F1F4F2'};
+        border:2px solid ${sel ? '#286746' : 'transparent'};
+        color:${sel ? '#191c1c' : '#4B5563'};
+        box-shadow:${sel ? '0 8px 24px rgba(40,103,70,0.10)' : 'none'};
+        position:relative; box-sizing:border-box; width:100%;">
+        ${sel ? `<div style="position:absolute;top:10px;right:10px;width:22px;height:22px;border-radius:50%;background:#286746;color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;">${idx + 1}</div>` : ''}
+        <div style="width:48px;height:48px;border-radius:14px;background:${sel ? 'rgba(40,103,70,0.10)' : '#E5EAE7'};display:flex;align-items:center;justify-content:center;">
+          ${_qmIcon(item.icon, sel ? '#286746' : '#6B7280')}
+        </div>
+        <span style="white-space:pre-line;">${item.label}</span>
       </button>`;
     }).join('');
   };
@@ -1039,6 +1158,7 @@ function openQuickMenuEdit() {
   render();
   modal.style.display = 'block';
   document.body.style.overflow = 'hidden';
+  _applyHofClubChrome();
 }
 
 function openQuickMenuEditFromPanel() {

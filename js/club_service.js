@@ -307,14 +307,14 @@ function renderCourtNoticeList() {
       const parts = [];
       if (s.time)  parts.push('⏰ ' + escapeHtml(s.time));
       if (s.court) parts.push('🎾 ' + escapeHtml(s.court));
-      return parts.length > 0 ? `<div style="font-size:12px; color:var(--text-gray); margin-top:2px;">${parts.join(' &nbsp; ')}</div>` : '';
+      return parts.length > 0 ? `<div style="font-size:13px; color:var(--text-gray); margin-top:2px;">${parts.join(' &nbsp; ')}</div>` : '';
     }).join('');
 
     return `<div class="crud-item"><div class="crud-item-header"><div>` +
-      `<div style="font-size:14px; color:var(--text-dark);">${escapeHtml(n.date)}${dayStr}</div>` +
-      `<div style="font-size:15px; margin-top:4px;">${escapeHtml(n.courtName)}</div>` +
+      `<div style="font-size:15px; color:var(--text-dark);">${escapeHtml(n.date)}${dayStr}</div>` +
+      `<div style="font-size:16px; margin-top:4px;">${escapeHtml(n.courtName)}</div>` +
       slotsHtml +
-      (n.address ? `<div style="font-size:12px; color:var(--text-gray);">📍 ${escapeHtml(n.address)}</div>` : '') +
+      (n.address ? `<div style="font-size:13px; color:var(--text-gray);">📍 ${escapeHtml(n.address)}</div>` : '') +
       `</div><div class="crud-item-actions">` +
       `<button class="crud-btn crud-btn-del" onclick="deleteCourtNotice('${n.id}')">삭제</button>` +
       `</div></div></div>`;
@@ -373,7 +373,7 @@ function renderAnnouncementMgmtList() {
         <div>
           <div style="display:flex; align-items:center; gap:6px;">
             ${a.isImportant ? '<span class="notice-badge">⭐ 중요</span>' : ''}
-            <span style="font-size:15px;">${escapeHtml(a.title).replace(/\n/g, '<br>')}</span>
+            <span style="font-size:16px;">${escapeHtml(a.title).replace(/\n/g, '<br>')}</span>
           </div>
           <div style="font-size:11px; color:var(--text-gray); margin-top:4px;">${(a.registeredDate || '').replace(/-/g, '.')} 등록</div>
         </div>
