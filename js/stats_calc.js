@@ -102,14 +102,14 @@ function pickBestByRule(map, preferHigh = true) {
 
 function ensure(p) {
   const fields = [
-    'score', 'wins', 'losses', 'last',
+    'score', 'wins', 'losses', 'draws', 'last',
     'dScore', 'dWins', 'dLosses', 'lastD',
     'sScore', 'sWins', 'sLosses', 'lastS',
     'weekly', 'wWins', 'wLosses',
     'wdScore', 'wsScore', 'wdWins', 'wdLosses', 'wsWins', 'wsLosses',
     'lastW', 'lastWD', 'lastWS',
     'mScore', 'mWins', 'mLosses', 'lastM',
-    'rank', 'dRank'   // ✅ 3-3: 글로벌 랭킹 엔진용 필수 필드
+    'rank', 'dRank'
   ];
   fields.forEach(f => { if (p[f] === undefined) p[f] = 0; });
 
@@ -158,10 +158,12 @@ function applyMatchToPlayers(type, homeArr, awayArr, winnerSide) {
     const d = calcDeltas(type, isW, drawMode);
 
     p.score += d.total;
-    // 무승부는 wins/losses 카운트 안 함
+    // 무승부는 wins/losses 카운트 안 하고 draws만 올림
     if (!drawMode) {
       p.wins += isW ? 1 : 0;
       p.losses += isW ? 0 : 1;
+    } else {
+      p.draws = (p.draws || 0) + 1;
     }
 
     if (type === "double") {
@@ -342,8 +344,10 @@ function computeStatsFromMatchLog(name) {
 
   let sWins = 0, sLosses = 0, sScore = 0;
   let dWins = 0, dLosses = 0, dScore = 0;
+  let totalDraws = 0;
 
   logs.forEach(l => {
+    if (l.winner === 'draw') { totalDraws++; return; }
     const win = didPlayerWin(l, name);
     if (win === null) return;
     const t = l.type === "double" ? "double" : "single";
@@ -355,6 +359,7 @@ function computeStatsFromMatchLog(name) {
   const totalWins = sWins + dWins;
   const totalLosses = sLosses + dLosses;
   const totalPt = (Number(sScore) + Number(dScore)).toFixed(1);
+  const drawText = totalDraws > 0 ? ` ${totalDraws}무` : '';
 
   const tableHTML = `
     <tr><td>단식 전적</td><td>${rateText(sWins, sLosses)}%</td><td>${sWins}승 ${sLosses}패</td><td>${Number(sScore).toFixed(1)}</td></tr>
@@ -362,7 +367,7 @@ function computeStatsFromMatchLog(name) {
   `;
   const footHTML = `
     <tr style="background:#f9f9f9; font-weight: bold; border-top: 2px solid var(--wimbledon-sage);">
-      <td>종합 전적</td><td>${rateText(totalWins, totalLosses)}%</td><td>${totalWins}승 ${totalLosses}패</td>
+      <td>종합 전적</td><td>${rateText(totalWins, totalLosses)}%</td><td>${totalWins}승 ${totalLosses}패${drawText}</td>
       <td style="color:var(--wimbledon-sage);">${totalPt} pt</td>
     </tr>
   `;

@@ -865,53 +865,71 @@ function roundEngineSortRankingStandings(standings) {
   });
 }
 
-function roundEngineApplyRoundScore(winner, loser, mode, winPoint, losePoint) {
-  const applyOne = (name, isWin) => {
+function roundEngineApplyRoundScore(winner, loser, mode, isDraw, winPoint, losePoint) {
+  const drawEarn = 0.1 + (TENNIS_RULES.scoring[mode === 'single' ? 'single' : 'double'].draw || 1.5);
+
+  const applyOne = (name, isWin, drawMode) => {
     const p = players.find(pl => pl.name === name);
     if (!p) return;
-    const earn = TENNIS_RULES.scoring.participate + (isWin
-      ? TENNIS_RULES.scoring[mode === 'single' ? 'single' : 'double'].win
-      : TENNIS_RULES.scoring[mode === 'single' ? 'single' : 'double'].loss);
+    const earn = drawMode
+      ? drawEarn
+      : TENNIS_RULES.scoring.participate + (isWin
+        ? TENNIS_RULES.scoring[mode === 'single' ? 'single' : 'double'].win
+        : TENNIS_RULES.scoring[mode === 'single' ? 'single' : 'double'].loss);
 
     p.score = (p.score || 0) + earn;
     p.weekly = (p.weekly || 0) + earn;
-    if (isWin) {
-      p.wins = (p.wins || 0) + 1;
-      p.wWins = (p.wWins || 0) + 1;
+    if (!drawMode) {
+      if (isWin) {
+        p.wins = (p.wins || 0) + 1;
+        p.wWins = (p.wWins || 0) + 1;
+      } else {
+        p.losses = (p.losses || 0) + 1;
+        p.wLosses = (p.wLosses || 0) + 1;
+      }
     } else {
-      p.losses = (p.losses || 0) + 1;
-      p.wLosses = (p.wLosses || 0) + 1;
+      p.draws = (p.draws || 0) + 1;
     }
 
     if (mode === 'single') {
       p.sScore = (p.sScore || 0) + earn;
       p.wsScore = (p.wsScore || 0) + earn;
-      if (isWin) {
-        p.sWins = (p.sWins || 0) + 1;
-        p.wsWins = (p.wsWins || 0) + 1;
-      } else {
-        p.sLosses = (p.sLosses || 0) + 1;
-        p.wsLosses = (p.wsLosses || 0) + 1;
+      if (!drawMode) {
+        if (isWin) {
+          p.sWins = (p.sWins || 0) + 1;
+          p.wsWins = (p.wsWins || 0) + 1;
+        } else {
+          p.sLosses = (p.sLosses || 0) + 1;
+          p.wsLosses = (p.wsLosses || 0) + 1;
+        }
       }
     } else {
       p.dScore = (p.dScore || 0) + earn;
       p.wdScore = (p.wdScore || 0) + earn;
-      if (isWin) {
-        p.dWins = (p.dWins || 0) + 1;
-        p.wdWins = (p.wdWins || 0) + 1;
-      } else {
-        p.dLosses = (p.dLosses || 0) + 1;
-        p.wdLosses = (p.wdLosses || 0) + 1;
+      if (!drawMode) {
+        if (isWin) {
+          p.dWins = (p.dWins || 0) + 1;
+          p.wdWins = (p.wdWins || 0) + 1;
+        } else {
+          p.dLosses = (p.dLosses || 0) + 1;
+          p.wdLosses = (p.wdLosses || 0) + 1;
+        }
       }
     }
   };
 
-  if (mode === 'single') {
-    applyOne(Array.isArray(winner) ? winner[0] : winner, true);
-    applyOne(Array.isArray(loser) ? loser[0] : loser, false);
+  if (isDraw) {
+    // 무승부: winner/loser 배열 모두 동일하게 +1.6점
+    const allPlayers = mode === 'single'
+      ? [[Array.isArray(winner) ? winner[0] : winner], [Array.isArray(loser) ? loser[0] : loser]]
+      : [winner, loser];
+    allPlayers.flat().forEach(n => applyOne(n, false, true));
+  } else if (mode === 'single') {
+    applyOne(Array.isArray(winner) ? winner[0] : winner, true, false);
+    applyOne(Array.isArray(loser) ? loser[0] : loser, false, false);
   } else {
-    winner.forEach(n => applyOne(n, true));
-    loser.forEach(n => applyOne(n, false));
+    winner.forEach(n => applyOne(n, true, false));
+    loser.forEach(n => applyOne(n, false, false));
   }
 }
 

@@ -448,7 +448,7 @@ function roundAutoGetLiveMatchByCourt(activeTurn, courtNo) {
     .sort((a, b) => (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0));
   for (let i = matches.length - 1; i >= 0; i -= 1) {
     const m = matches[i];
-    if (m?.winner !== 'home' && m?.winner !== 'away') return m;
+    if (m?.winner !== 'home' && m?.winner !== 'away' && m?.winner !== 'draw') return m;
   }
   return null;
 }
@@ -585,7 +585,7 @@ function roundAutoBuildAllCourtPreviews(activeTurn, planningStatsSource, options
 async function roundAutoCommitSingleMatchToGlobalLog(activeTurn, match) {
   if (!activeTurn || !match) return false;
   if (match.committed) return true;
-  if (match.winner !== 'home' && match.winner !== 'away') return false;
+  if (match.winner !== 'home' && match.winner !== 'away' && match.winner !== 'draw') return false;
   // ✅ v6.443: 연습 모드 차단 — Firebase 저장 및 스탯 반영 스킵
   if (typeof isPracticeMode !== 'undefined' && isPracticeMode === 'practice') {
     match.committed = true;
@@ -607,11 +607,17 @@ async function roundAutoCommitSingleMatchToGlobalLog(activeTurn, match) {
       ensureSnapshotLastRanks();
       const now = Date.now();
       const ds = new Date(now - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-      const winner = match.winner === 'home' ? match.home : match.away;
-      const loser = match.winner === 'home' ? match.away : match.home;
+      const isDraw = match.winner === 'draw';
+      const winner = isDraw ? match.home : (match.winner === 'home' ? match.home : match.away);
+      const loser  = isDraw ? match.away : (match.winner === 'home' ? match.away : match.home);
       const logId = `${now}-${activeTurn.turnNo}-${match.courtNo || 0}-${Math.floor(Math.random() * 100000)}`;
 
-      roundEngineApplyRoundScore(winner, loser, mode);
+      if (isDraw) {
+        // 무승부: 양팀 모두 +1.6점, 승/패 카운트 없음
+        roundEngineApplyRoundScore(match.home, match.away, mode, true);
+      } else {
+        roundEngineApplyRoundScore(winner, loser, mode, false);
+      }
 
       const winnerTeam = mode === 'single'
         ? [Array.isArray(winner) ? winner[0] : winner]
@@ -627,7 +633,7 @@ async function roundAutoCommitSingleMatchToGlobalLog(activeTurn, match) {
         type: mode,
         home: winnerTeam,
         away: loserTeam,
-        winner: 'home',
+        winner: isDraw ? 'draw' : 'home',
         memo: 'round_auto',
       };
 
@@ -642,7 +648,7 @@ async function roundAutoCommitSingleMatchToGlobalLog(activeTurn, match) {
       match.committed = true;
       match.logId = entry.id;
       match.ts = now; // ✅ v5.82: 커밋 시각 기록 (코트 종료 순서 추적용)
-      const decidedMatches = (activeTurn.matches || []).filter(m => m && (m.winner === 'home' || m.winner === 'away'));
+      const decidedMatches = (activeTurn.matches || []).filter(m => m && (m.winner === 'home' || m.winner === 'away' || m.winner === 'draw'));
       if (decidedMatches.length && decidedMatches.every(m => m.committed)) {
         activeTurn.committedTurn = true;
       }
@@ -671,7 +677,7 @@ async function roundAutoHandleSingleCourtDone(matchId) {
   if (!activeTurn) return;
 
   const match = (activeTurn.matches || []).find(m => m.id === matchId);
-  if (!match || (match.winner !== 'home' && match.winner !== 'away')) return;
+  if (!match || (match.winner !== 'home' && match.winner !== 'away' && match.winner !== 'draw')) return;
 
   // 1. 중복 실행 방지
   if (match._courtDoneInFlight) return;
@@ -804,7 +810,7 @@ async function roundAutoHandleCourtDone(matchId) {
   if (!activeTurn) return;
   const match = (activeTurn.matches || []).find(m => m?.id === matchId);
   if (!match) return;
-  if (match.winner !== 'home' && match.winner !== 'away') return;
+  if (match.winner !== 'home' && match.winner !== 'away' && match.winner !== 'draw') return;
   if (match._courtDoneInFlight) return;
 
   match._courtDoneInFlight = true;
@@ -1056,7 +1062,7 @@ function roundAutoRebuildSessionStatsBaseline(eligiblePool, completedTurns = [])
     .sort((a, b) => (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0))
     .forEach(turn => {
       const decidedMatches = (Array.isArray(turn?.matches) ? turn.matches : [])
-        .filter(match => match && (match.winner === 'home' || match.winner === 'away'));
+        .filter(match => match && (match.winner === 'home' || match.winner === 'away' || match.winner === 'draw'));
       if (!decidedMatches.length) return;
 
       const activeNames = new Set();
@@ -1721,7 +1727,7 @@ function roundAutoComputeSessionStandings() {
   };
 
   roundAutoFlattenMatches({ includePreview: false }).forEach(match => {
-    if (!match || (match.winner !== 'home' && match.winner !== 'away')) return;
+    if (!match || (match.winner !== 'home' && match.winner !== 'away' && match.winner !== 'draw')) return;
     const homePlayers = Array.isArray(match.home) ? match.home : [match.home];
     const awayPlayers = Array.isArray(match.away) ? match.away : [match.away];
     const homeKey = isDouble ? roundAutoTeamKey(homePlayers) : homePlayers[0];
@@ -2068,7 +2074,7 @@ function roundAutoRegenerateCurrentTurn() {
     const activeTurnNo = activeTurn.turnNo;
     const prevTurns = turns.slice(0, activeIdx).filter(t => t?.status !== 'preview');
 
-    const doneMatches = (activeTurn.matches || []).filter(m => m.winner === 'home' || m.winner === 'away');
+    const doneMatches = (activeTurn.matches || []).filter(m => m.winner === 'home' || m.winner === 'away' || m.winner === 'draw');
     const eligiblePool = roundAutoGetSelectedEligiblePool();
     const targetCourtCount = Math.max(1, Number(roundAutoState.courtCount) || 1);
     const baselineTurns = [
@@ -2192,7 +2198,7 @@ function roundAutoAssignNextToCourt(matchId, mode, previewCourtNo) {
 async function roundAutoCommitTurnToGlobalLog(activeTurn) {
   if (!activeTurn || !Array.isArray(activeTurn.matches)) return false;
   const decided = activeTurn.matches
-    .filter(match => match && (match.winner === 'home' || match.winner === 'away'))
+    .filter(match => match && (match.winner === 'home' || match.winner === 'away' || match.winner === 'draw'))
     .sort((a, b) => (Number(a?.ts) || 0) - (Number(b?.ts) || 0) || (Number(a?.courtNo) || 0) - (Number(b?.courtNo) || 0));
 
   for (const match of decided) {
@@ -2291,7 +2297,7 @@ function roundAutoRenderMatches() {
   };
   const statusInfo = match => {
     if (!match) return { label: '', style: 'background:#e5e7eb; color:#475569;' };
-    if (match.winner === 'home' || match.winner === 'away') {
+    if (match.winner === 'home' || match.winner === 'away' || match.winner === 'draw') {
       return { label: '완료', style: 'background:#64748b; color:#fff;' };
     }
     return { label: '진행중', style: 'background:var(--wimbledon-sage); color:#fff;' };
@@ -2303,7 +2309,7 @@ function roundAutoRenderMatches() {
     const matches = (activeTurn?.matches || [])
       .filter(match => Number(match?.courtNo) === Number(courtNo))
       .sort((a, b) => (Number(a?.courtGameSeq) || 0) - (Number(b?.courtGameSeq) || 0) || (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0));
-    const unresolved = matches.filter(match => match?.winner !== 'home' && match?.winner !== 'away');
+    const unresolved = matches.filter(match => match?.winner !== 'home' && match?.winner !== 'away' && match?.winner !== 'draw');
     return unresolved.find(hasTeams) || unresolved[0] || matches.find(hasTeams) || matches[0] || null;
   };
   const renderTeamButtons = (match, clickable) => {
@@ -2338,7 +2344,7 @@ function roundAutoRenderMatches() {
       <div class="team-box" style="padding:0; margin-bottom:14px; overflow:hidden; border-radius:14px;">
         <div style="background:${courtHeaderBg}; color:#fff; padding:10px 14px; font-weight:800; font-size:14px; display:flex; align-items:center; justify-content:space-between;">
           <span>🎾 코트 ${courtNo}</span>
-          ${match && hasTeams(match) && match.winner !== 'home' && match.winner !== 'away'
+          ${match && hasTeams(match) && match.winner !== 'home' && match.winner !== 'away' && match.winner !== 'draw'
             ? `<button onclick="roundAutoSetWinner('${match?.id}','draw')" style="background:rgba(255,255,255,0.22); border:none; color:#fff; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700; cursor:pointer;">무승부</button>`
             : ''}
         </div>
@@ -2347,7 +2353,7 @@ function roundAutoRenderMatches() {
             <div style="font-size:13px; font-weight:800; color:#0f172a;">${escapeHtml(label)}</div>
             ${badge.label ? `<span style="font-size:11px; font-weight:700; border-radius:999px; padding:4px 8px; ${badge.style}">${badge.label}</span>` : ''}
           </div>
-          ${renderTeamButtons(match, !!match && hasTeams(match) && match.winner !== 'home' && match.winner !== 'away')}
+          ${renderTeamButtons(match, !!match && hasTeams(match) && match.winner !== 'home' && match.winner !== 'away' && match.winner !== 'draw')}
         </div>
       </div>`;
   };
@@ -2384,7 +2390,7 @@ function roundAutoRenderMatches() {
     const allMatches = Array.isArray(mini.matches) ? mini.matches : [];
     const currentRound = Number(mini.round) || 0;
     const roundMatches = allMatches.filter(match => Number(match?.round) === currentRound);
-    const completedMatches = allMatches.filter(match => match?.winner === 'home' || match?.winner === 'away');
+    const completedMatches = allMatches.filter(match => match?.winner === 'home' || match?.winner === 'away' || match?.winner === 'draw');
     const winnerMatch = currentRound > 0 && roundMatches.length === 1 && roundMatches[0]?.winner;
     const champion = winnerMatch
       ? (roundMatches[0].winner === 'home' ? roundMatches[0].home : roundMatches[0].away)
@@ -2392,7 +2398,7 @@ function roundAutoRenderMatches() {
 
     const rows = roundMatches.map((match, idx) => {
       const badge = statusInfo(match);
-      const clickable = match && hasTeams(match) && match.winner !== 'home' && match.winner !== 'away';
+      const clickable = match && hasTeams(match) && match.winner !== 'home' && match.winner !== 'away' && match.winner !== 'draw';
       return `
         <div class="team-box" style="padding:0; margin-bottom:12px; overflow:hidden; border-radius:14px;">
           <div style="background:${courtHeaderBg}; color:#fff; padding:10px 14px; font-weight:800; font-size:14px;">🏆 라운드 ${currentRound} · ${idx + 1}경기</div>
@@ -2500,7 +2506,7 @@ async function roundAutoGenerateNextTurn() {
 
   const existingActive = (roundAutoState.turns || []).find(turn => turn?.status === 'active');
   if (existingActive) {
-    const allDone = (existingActive.matches || []).every(match => match && (match.winner === 'home' || match.winner === 'away'));
+    const allDone = (existingActive.matches || []).every(match => match && (match.winner === 'home' || match.winner === 'away' || match.winner === 'draw'));
     if (!allDone) {
       gsAlert('현재 진행 중인 턴의 승자를 먼저 선택해주세요.');
       return;
@@ -2552,7 +2558,7 @@ function roundAutoComputePersonalStandings() {
   (roundAutoState.selectedPlayers || []).forEach(name => ensure(name));
 
   roundAutoFlattenMatches({ includePreview: false }).forEach(match => {
-    if (!match || (match.winner !== 'home' && match.winner !== 'away')) return;
+    if (!match || (match.winner !== 'home' && match.winner !== 'away' && match.winner !== 'draw')) return;
     const homePlayers = Array.isArray(match.home) ? match.home : [match.home];
     const awayPlayers = Array.isArray(match.away) ? match.away : [match.away];
     const winners = match.winner === 'home' ? homePlayers : awayPlayers;
@@ -2684,7 +2690,7 @@ function roundAutoGetEditableLiveMatchForCourt(courtNo) {
   const matches = (activeTurn.matches || [])
     .filter(match => Number(match?.courtNo) === Number(courtNo))
     .sort((a, b) => (Number(a?.courtGameSeq) || 0) - (Number(b?.courtGameSeq) || 0) || (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0));
-  const unresolved = matches.filter(match => match?.winner !== 'home' && match?.winner !== 'away');
+  const unresolved = matches.filter(match => match?.winner !== 'home' && match?.winner !== 'away' && match?.winner !== 'draw');
   return unresolved[0] || null;
 }
 
@@ -2995,7 +3001,7 @@ async function roundAutoConfirmManual() {
   if (existingActive && roundAutoState._manualLoadedFromCurrent) {
     // committed(결과 확정)된 경기는 보존, 미결 경기만 수동 배치로 교체
     const committedMatches = (existingActive.matches || []).filter(
-      m => m.winner === 'home' || m.winner === 'away'
+      m => m.winner === 'home' || m.winner === 'away' || m.winner === 'draw'
     );
     const manualCourtSeqTrackerEdit = roundAutoCreateCourtGameSeqTracker();
     const replacedMatches = roundAutoManualCourts.map((court, idx) => {
@@ -3042,7 +3048,7 @@ async function roundAutoConfirmManual() {
 
   // 현재 active 턴이 있으면 승자 확인 후 커밋 (신규 턴 시작)
   if (existingActive) {
-    const allDone = (existingActive.matches || []).every(m => m.winner === 'home' || m.winner === 'away');
+    const allDone = (existingActive.matches || []).every(m => m.winner === 'home' || m.winner === 'away' || m.winner === 'draw');
     if (!allDone) {
       gsAlert('현재 진행 중인 턴의 승자를 먼저 선택해주세요.');
       return;
