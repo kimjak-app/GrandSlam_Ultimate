@@ -3,7 +3,7 @@
 // ========================================
 
 // ✅ 버전 상수 — 버전업 시 여기만 바꾸면 전체 반영
-const APP_VERSION = 'v6.75';
+const APP_VERSION = 'v6.751';
 
 
 // ----------------------------------------
@@ -28,17 +28,24 @@ function hideSplashSafe() {
 // ----------------------------------------
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // ✅ v6.75: 전역 햅틱 피드백 — 버튼 터치 시 자동 분기
+  // ✅ v6.75: 전역 햅틱 피드백 — cursor:pointer 요소 전체 자동 감지
   document.addEventListener('touchstart', (e) => {
-    const el = e.target.closest('button, [role="button"], .nav-item, .game-card, .crud-btn');
-    if (!el) return;
+    let el = e.target;
+    // cursor:pointer인 조상 요소까지 탐색 (최대 5단계)
+    for (let i = 0; i < 5; i++) {
+      if (!el || el === document.body) break;
+      const cursor = window.getComputedStyle(el).cursor;
+      if (cursor === 'pointer') break;
+      el = el.parentElement;
+    }
+    if (!el || el === document.body) return;
+    if (window.getComputedStyle(el).cursor !== 'pointer') return;
+
     if (el.classList.contains('crud-btn-del') || el.dataset.haptic === 'warning') {
       gsHaptic('warning');
     } else if (el.dataset.haptic === 'success' ||
-               el.id === 'btnSave' ||
-               el.onclick?.toString().includes('save') ||
-               el.onclick?.toString().includes('Save') ||
-               el.textContent?.includes('저장')) {
+               el.textContent?.trim().startsWith('저장') ||
+               el.textContent?.includes('Save Changes')) {
       gsHaptic('success');
     } else {
       gsHaptic('light');
