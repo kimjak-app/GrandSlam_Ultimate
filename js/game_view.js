@@ -125,6 +125,8 @@ function showViewUI(v) {
   document.querySelectorAll('.app-screen').forEach(el => el.style.display = 'none');
   const el = document.getElementById(`view-${v}`);
   if (el) el.style.display = 'block';
+  // ✅ v6.753: 뷰 전환 시 항상 최상단으로 스크롤 — 모든 진입 경로 일괄 처리
+  window.scrollTo({ top: 0, behavior: 'instant' });
   setTimeout(applyAutofitAllTables, 0);
 
   if (v === 'tennis') sync();
