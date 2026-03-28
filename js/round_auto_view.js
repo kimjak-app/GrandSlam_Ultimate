@@ -1663,7 +1663,7 @@ async function initRoundAutoPlayerPool() {
 
   const associateHtml = filteredAssociates.map((player, idx) => {
     const id = `round-auto-assoc-${idx}`;
-    const labelText = `${roundAutoGenderIcon(player)}[준] ${roundAutoPlayerLabel(player.name, player.level)}`;
+    const labelText = `[준] ${roundAutoPlayerLabel(player.name, '')}`;
     return typeof createPlayerOption === 'function'
       ? createPlayerOption({ inputType: 'checkbox', nameAttr: 'round-auto-player', id, value: player.name,
           checked: roundAutoState.selectedPlayers.includes(player.name), onClick: '', labelText,
