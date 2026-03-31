@@ -49,8 +49,11 @@ function syncFeeToFinance() {
 function _buildFeeSection(ym) {
   const [year, month] = ym.split('-');
   const key = `${year}-${month}`, yearlyKey = `${year}-yearly`;
+  // 해당 월 말일 계산 (가입일 필터링 기준)
+  const monthLastDay = new Date(parseInt(year), parseInt(month), 0).toISOString().slice(0, 10);
   const members = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt &&
-                                       (!p.status || p.status === 'active' || p.status === 'dormant'))
+                                       (!p.status || p.status === 'active' || p.status === 'dormant') &&
+                                       (!p.joinedAt || p.joinedAt <= monthLastDay))
                          .sort((a, b) => a.name.localeCompare(b.name));
   const paid = [], partial = [], unpaid = [];
   members.forEach(p => {
@@ -60,11 +63,13 @@ function _buildFeeSection(ym) {
     else if (status === 'P') partial.push(displayName(p.name));
     else unpaid.push(displayName(p.name));
   });
-  const rate = members.length > 0 ? Math.round(paid.length / members.length * 100) : 0;
+  // 납부율: 완납 + 부분납 모두 납부 완료로 계산
+  const paidCount = paid.length + partial.length;
+  const rate = members.length > 0 ? Math.round(paidCount / members.length * 100) : 0;
   let txt = `💰 회비 납부 현황 (${parseInt(month)}월)
 ━━━━━━━━━━
 `;
-  txt += `납부율: ${paid.length}/${members.length}명 (${rate}%)
+  txt += `납부율: ${paidCount}/${members.length}명 (${rate}%)
 `;
   txt += `✅ 납부 (${paid.length}명): ${paid.join(', ') || '없음'}
 `;
