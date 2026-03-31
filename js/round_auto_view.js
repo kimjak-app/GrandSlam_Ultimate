@@ -34,6 +34,10 @@ function createRoundAutoInitialState() {
     oneTimeGuests: [],
     miniTournament: { matches: [], round: 0, matchupHistory: {} },
     modalRankedParticipants: [],
+    plannedTurns: [],
+    sessionPlannerEnabled: true,
+    sessionPlannerTurns: 6,
+    _sessionEndNotified: false,
   };
 }
 
@@ -334,6 +338,10 @@ async function loadRoundAutoState() {
       previewVariant: Math.max(0, Number(parsed.previewVariant) || 0),
       matchupHistory: parsed.matchupHistory && typeof parsed.matchupHistory === 'object' ? parsed.matchupHistory : {},
       oneTimeGuests: Array.isArray(parsed.oneTimeGuests) ? parsed.oneTimeGuests : [],
+      plannedTurns: Array.isArray(parsed.plannedTurns) ? parsed.plannedTurns : [],
+      sessionPlannerEnabled: typeof parsed.sessionPlannerEnabled === 'boolean' ? parsed.sessionPlannerEnabled : true,
+      sessionPlannerTurns: [4, 6, 8].includes(Number(parsed.sessionPlannerTurns)) ? Number(parsed.sessionPlannerTurns) : 6,
+      _sessionEndNotified: false,
     };
 
     if (!Array.isArray(roundAutoState.config.levelFilter)) {
@@ -804,9 +812,55 @@ async function roundAutoHandleSingleCourtDone(matchId) {
   }
 }
 
+// ── 세션 플래너 헬퍼 함수 (채코치 설계 v7.21) ──────────────────────────────
+
+function roundAutoIsResolvedMatch(match) {
+  return !!match && (match.winner === 'home' || match.winner === 'away' || match.winner === 'draw');
+}
+
+function roundAutoGetCourtMatches(activeTurn, courtNo) {
+  return (activeTurn?.matches || [])
+    .filter(m => Number(m?.courtNo) === Number(courtNo))
+    .sort((a, b) => {
+      const ta = Number(a?.turnNo) || 0;
+      const tb = Number(b?.turnNo) || 0;
+      if (ta !== tb) return ta - tb;
+      return (Number(a?.courtGameSeq) || 0) - (Number(b?.courtGameSeq) || 0);
+    });
+}
+
+function roundAutoPickRenderableMatchForCourt(activeTurn, courtNo) {
+  const courtMatches = roundAutoGetCourtMatches(activeTurn, courtNo);
+  if (!courtMatches.length) return null;
+  const unresolved = courtMatches.filter(m => !roundAutoIsResolvedMatch(m));
+  if (!unresolved.length) return courtMatches[courtMatches.length - 1] || null;
+  const playable = unresolved.find(m => !m._locked);
+  return playable || unresolved[0];
+}
+
+function roundAutoGetFrontierTurnNo(activeTurn) {
+  const unresolved = (activeTurn?.matches || []).filter(m => !roundAutoIsResolvedMatch(m));
+  if (!unresolved.length) return null;
+  return Math.min(...unresolved.map(m => Number(m?.turnNo) || 0));
+}
+
+function roundAutoIsFrontierTurnDone(activeTurn, courtCount) {
+  const frontierTurnNo = roundAutoGetFrontierTurnNo(activeTurn);
+  if (frontierTurnNo == null) return true;
+  for (let c = 1; c <= courtCount; c++) {
+    const target = (activeTurn?.matches || []).find(m =>
+      Number(m?.courtNo) === c && Number(m?.turnNo) === frontierTurnNo
+    );
+    if (!target) return false;
+    if (!roundAutoIsResolvedMatch(target)) return false;
+  }
+  return true;
+}
+
 async function roundAutoHandleCourtDone(matchId) {
   const turns = roundAutoState.turns || [];
-  const activeTurn = turns.find(t => t?.status === 'active');
+  // matchId가 속한 턴을 찾음 (active 턴이 여러 개일 수 있으므로 id로 정확히 탐색)
+  const activeTurn = turns.find(t => t?.status === 'active' && (t.matches || []).some(m => m?.id === matchId));
   if (!activeTurn) return;
   const match = (activeTurn.matches || []).find(m => m?.id === matchId);
   if (!match) return;
@@ -819,8 +873,74 @@ async function roundAutoHandleCourtDone(matchId) {
     const committed = await roundAutoCommitSingleMatchToGlobalLog(activeTurn, match);
     if (!committed) return;
 
-    // 2. ✅ v5.82: 공용 대기열 첫 번째를 shift() → 빈 코트 번호를 이 시점에 부여
-    const previewTurn = (roundAutoState.turns || []).find(t => t?.status === 'preview'); // ✅ v5.83: stale turns 참조 → 실시간 참조
+    // 2-SP. 세션 플래너 ON: plannedTurns에서 다음 턴 코트 매치 투입
+    if (roundAutoState.sessionPlannerEnabled !== false && Array.isArray(roundAutoState.plannedTurns) && roundAutoState.plannedTurns.length > 0 && !match.nextCourtAssigned) {
+      const nextTurnNo = (Number(match.turnNo) || 0) + 1; // 방금 끝난 매치의 턴 기준
+      const totalPlannedTurns = roundAutoState.sessionPlannerTurns || 6;
+
+      // 세션 종료 체크: plannedTurns 초과 시 종료 모달
+      if (nextTurnNo > totalPlannedTurns) {
+        match.nextCourtAssigned = true;
+        // 마지막 코트가 완료될 때만 모달 표시 (중복 방지)
+        const allLastTurnDone = (activeTurn.matches || [])
+          .filter(m => Number(m.turnNo) === totalPlannedTurns)
+          .every(m => m.winner === 'home' || m.winner === 'away' || m.winner === 'draw');
+        if (allLastTurnDone && !roundAutoState._sessionEndNotified) {
+          roundAutoState._sessionEndNotified = true;
+          setTimeout(() => {
+            gsAlert(`계획했던 ${totalPlannedTurns}턴 진행이 종료되었습니다.\n더 원하시면 다시 생성하세요.`);
+          }, 500);
+        }
+      } else {
+        const plannedNext = roundAutoState.plannedTurns.find(t => t.turnNo === nextTurnNo);
+        if (plannedNext) {
+          const plannedMatch = (plannedNext.matches || []).find(m => m.courtNo === match.courtNo);
+          if (plannedMatch) {
+            // 현재 같은 턴에서 미완료 중인 매치 선수 파악 (충돌 감지용)
+            const incomingNames = new Set([...(plannedMatch.home || []), ...(plannedMatch.away || [])]);
+            const busyNames = new Set();
+            (activeTurn.matches || []).forEach(m => {
+              if (m.id === match.id) return; // 방금 끝난 경기 제외
+              if (m._locked) return;          // 잠긴 매치 제외
+              if (roundAutoIsResolvedMatch(m)) return; // 완료된 경기 제외
+              [...(m.home || []), ...(m.away || [])].forEach(n => busyNames.add(n));
+            });
+            const conflictNames = [...incomingNames].filter(n => busyNames.has(n));
+
+            const newMatch = {
+              id: `sp-live-${nextTurnNo}-${match.courtNo}-${Date.now()}`,
+              turnNo: nextTurnNo,
+              courtNo: match.courtNo,
+              home: plannedMatch.home,
+              away: plannedMatch.away,
+              type: plannedMatch.type,
+              winner: null,
+              committed: false,
+              _source: 'session-planner',
+              _locked: conflictNames.length > 0,
+              _lockedReason: conflictNames.length > 0
+                ? `${conflictNames.join(', ')} 선수가 다른 코트 경기 중`
+                : null,
+            };
+
+            // 현재 activeTurn.matches에 다음 턴 매치를 추가 (turnNo로 구분)
+            roundAutoAssignCourtGameSeq(newMatch, roundAutoCreateCourtGameSeqTracker(roundAutoState.turns));
+            activeTurn.matches.push(newMatch);
+            match.nextCourtAssigned = true;
+
+            const eligiblePool = roundAutoGetSelectedEligiblePool();
+            const promotedNames = new Set([...(newMatch.home || []), ...(newMatch.away || [])]);
+            const promotedPlayers = eligiblePool.filter(p => promotedNames.has(p.name));
+            const statsRef = roundAutoState.sessionStats || {};
+            roundAutoApplyTurnParticipation(promotedPlayers, eligiblePool, nextTurnNo, statsRef);
+            roundAutoState.sessionStats = statsRef;
+          }
+        }
+      }
+    }
+
+    // 2. ✅ v5.82: 공용 대기열 첫 번째를 shift() → 빈 코트 번호를 이 시점에 부여 (세션 플래너 OFF 전용)
+    const previewTurn = (roundAutoState.sessionPlannerEnabled !== false) ? null : (roundAutoState.turns || []).find(t => t?.status === 'preview');
     if (previewTurn && Array.isArray(previewTurn.matches) && previewTurn.matches.length > 0 && !match.nextCourtAssigned) {
       const pm = previewTurn.matches.shift(); // 공용 queue의 첫 번째 꺼냄
 
@@ -934,8 +1054,49 @@ async function roundAutoHandleCourtDone(matchId) {
       }
     }
 
-    const liveMatches = roundAutoGetLiveCourtMatches(activeTurn);
-    if (!liveMatches.length) activeTurn.status = 'done';
+    // ── 세션 플래너 잠금 해제 체크
+    // 방금 경기 완료 → 해당 선수들이 포함된 _locked 매치 재검사
+    if (roundAutoState.sessionPlannerEnabled !== false) {
+      const nowDoneNames = new Set([
+        ...(Array.isArray(match.home) ? match.home : []),
+        ...(Array.isArray(match.away) ? match.away : []),
+      ]);
+      const stillBusyNames = new Set();
+      (activeTurn.matches || []).forEach(m => {
+        if (m._locked) return; // 잠긴 매치 자신은 제외
+        if (roundAutoIsResolvedMatch(m)) return; // 완료된 매치 제외
+        [...(m.home || []), ...(m.away || [])].forEach(n => stillBusyNames.add(n));
+      });
+      (activeTurn.matches || []).forEach(m => {
+        if (!m._locked) return;
+        const incomingNames = new Set([...(m.home || []), ...(m.away || [])]);
+        const stillConflict = [...incomingNames].filter(n => stillBusyNames.has(n));
+        if (stillConflict.length === 0) {
+          m._locked = false;
+          m._lockedReason = null;
+        } else {
+          m._lockedReason = `${stillConflict.join(', ')} 선수가 다른 코트 경기 중`;
+        }
+      });
+    }
+
+    // 세션 플래너: frontier turnNo 기준으로 완료 판단
+    const courtCount = Math.max(1, Number(roundAutoState.courtCount) || 1);
+    const frontierTurnNo = roundAutoGetFrontierTurnNo(activeTurn);
+
+    if (frontierTurnNo == null) {
+      // 미완료 매치 없음 → 전체 종료
+      activeTurn.status = 'done';
+      const maxTurnInActive = Math.max(...(activeTurn.matches || []).map(m => Number(m.turnNo) || 0), 0);
+      if (maxTurnInActive > 0) roundAutoState.turnNo = maxTurnInActive;
+    } else {
+      roundAutoState.turnNo = frontierTurnNo;
+      if (roundAutoIsFrontierTurnDone(activeTurn, courtCount)) {
+        // frontier 턴 완료 — 남은 미완료 매치 있으면 active 유지, 없으면 done
+        const hasRemaining = (activeTurn.matches || []).some(m => !roundAutoIsResolvedMatch(m));
+        if (!hasRemaining) activeTurn.status = 'done';
+      }
+    }
 
     const normalized = roundAutoNormalizeTurnsState(roundAutoState);
     roundAutoState = normalized.state;
@@ -953,6 +1114,59 @@ function roundAutoStartSession() {
   roundAutoState.turns = (roundAutoState.turns || []).filter(turn => turn?.status !== 'preview');
   roundAutoState.previewVariant = 0;
 
+  // ── 세션 플래너 ON: 6턴 전체 먼저 생성
+  if (roundAutoState.sessionPlannerEnabled !== false && typeof sessionPlannerGenerate === 'function') {
+    const pool       = roundAutoGetSelectedEligiblePool();
+    const courtCount = Math.max(1, Number(roundAutoState.courtCount) || 1);
+    const totalTurns = [4, 6, 8].includes(Number(roundAutoState.sessionPlannerTurns))
+      ? Number(roundAutoState.sessionPlannerTurns) : 6;
+    const config = {
+      allowMixed:        roundAutoState.config?.allowMixed !== false,
+      allowGenderBattle: roundAutoAllowGenderBattle(),
+      allowMixedVsSame:  roundAutoState.config?.allowMixedVsSame !== false,
+    };
+    if (pool.length >= courtCount * 4) {
+      const plan = sessionPlannerGenerate(pool, courtCount, totalTurns, config);
+      if (plan) {
+        roundAutoState.plannedTurns = plan;
+        // ── 1턴을 plannedTurns[0]에서 꺼내서 바로 시작 (기존 엔진 완전 건너뜀)
+        const plannedTurn = plan.find(t => t.turnNo === 1);
+        if (plannedTurn) {
+          const courtSeqTracker = roundAutoCreateCourtGameSeqTracker();
+          const activeTurn = {
+            turnNo: 1,
+            status: 'active',
+            matches: (plannedTurn.matches || []).map((m, idx) => {
+              const match = {
+                id: `sp-live-1-${m.courtNo || (idx+1)}-${Date.now()}-${idx}`,
+                turnNo: 1,
+                courtNo: m.courtNo || (idx + 1),
+                home: m.home,
+                away: m.away,
+                type: m.type,
+                winner: null,
+                committed: false,
+                _source: 'session-planner',
+              };
+              roundAutoAssignCourtGameSeq(match, courtSeqTracker);
+              return match;
+            }),
+          };
+          roundAutoState.turns = [activeTurn];
+          roundAutoState.turnNo = 1;
+          const normalized = roundAutoNormalizeTurnsState(roundAutoState);
+          roundAutoState = normalized.state;
+          roundAutoRenderMatches();
+          roundAutoRenderRanking();
+          roundAutoRenderPersonalRanking();
+          saveRoundAutoState();
+          return activeTurn;
+        }
+      }
+    }
+  }
+
+  // ── 세션 플래너 OFF: 기존 엔진으로 1턴 생성
   const activeTurnNo = (Number(roundAutoState.turnNo) || 0) + 1;
   const realStats = roundAutoCloneSessionStats();
   const activeTurn = roundAutoBuildTurnWithStats(activeTurnNo, 'active', realStats, true);
@@ -962,23 +1176,11 @@ function roundAutoStartSession() {
   if ((Number(roundAutoState.courtCount) || 1) <= 1) {
     const previewTurnNo = activeTurnNo + 1;
     const simulatedStats = roundAutoCloneSessionStats(activeTurn._planningStats);
-    console.debug('[round-auto][preview-rebuild][start-session-single]', {
-      selectedPlayersLength: Array.isArray(roundAutoState.selectedPlayers) ? roundAutoState.selectedPlayers.length : 0,
-      eligiblePoolLength: roundAutoGetSelectedEligiblePool().length,
-      courtCountUsed: Number(roundAutoState.courtCount) || 1,
-      requiredPlayers: (Number(roundAutoState.courtCount) || 1) * (roundAutoIsSingles() ? 2 : 4),
-    });
     const previewTurn = roundAutoBuildTurnWithStats(previewTurnNo, 'preview', simulatedStats, false);
     if (previewTurn) nextTurns.push(previewTurn);
   } else {
-    console.debug('[round-auto][preview-rebuild][start-session-multi]', {
-      selectedPlayersLength: Array.isArray(roundAutoState.selectedPlayers) ? roundAutoState.selectedPlayers.length : 0,
-      eligiblePoolLength: roundAutoGetSelectedEligiblePool().length,
-      courtCountUsed: Number(roundAutoState.courtCount) || 1,
-      requiredPlayers: (Number(roundAutoState.courtCount) || 1) * (roundAutoIsSingles() ? 2 : 4),
-    });
     const previewTurn = roundAutoBuildAllCourtPreviews(activeTurn, activeTurn._planningStats);
-    if (previewTurn) nextTurns.push(previewTurn);
+    if (previewTurn && Array.isArray(previewTurn.matches) && previewTurn.matches.length) nextTurns.push(previewTurn);
   }
 
   roundAutoState.turns = nextTurns;
@@ -1534,6 +1736,52 @@ function roundAutoRenderFilterUI() {
       };
     }
   }
+
+  // ── 세션 플래너 설정 UI ──────────────────────────────────────────────────
+    let spWrap = document.getElementById('round-auto-session-planner-wrap');
+    if (!spWrap) {
+      spWrap = document.createElement('div');
+      spWrap.id = 'round-auto-session-planner-wrap';
+      // mixedVsSameWrap 뒤에 삽입
+      const insertAfter = document.getElementById('round-auto-mixed-vs-same-wrap') || mixedBtn?.parentNode;
+      if (insertAfter) insertAfter.insertAdjacentElement('afterend', spWrap);
+    }
+    spWrap.style.cssText = 'margin-top:8px; margin-bottom:8px; padding:10px 12px; border:1px solid #E5E5EA; border-radius:12px; background:#FAFAFA;';
+    const spEnabled = roundAutoState.sessionPlannerEnabled !== false;
+    const spTurns   = roundAutoState.sessionPlannerTurns || 6;
+    spWrap.innerHTML = `
+      <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:#333; font-weight:600; cursor:pointer;">
+        <input id="round-auto-session-planner-chk" type="checkbox" ${spEnabled ? 'checked' : ''} />
+        세션 플래너 (${spTurns}턴 미리 짜기)
+      </label>
+      <div style="font-size:12px; color:#666; margin-top:4px;">(현재 턴만이 아니라 전체 일정표를 먼저 만든 뒤 진행)</div>
+      <div id="round-auto-sp-turns-row" style="display:${spEnabled ? 'flex' : 'none'}; gap:8px; margin-top:10px;">
+        ${[4, 6, 8].map(n => `
+          <button type="button" data-sp-turns="${n}"
+            style="flex:1; padding:8px 0; border-radius:10px; border:none; font-size:13px; font-weight:700; cursor:pointer;
+                   background:${spTurns === n ? 'var(--wimbledon-sage)' : '#E5E5EA'};
+                   color:${spTurns === n ? '#fff' : '#333'};">
+            ${n}턴
+          </button>`).join('')}
+      </div>
+      <div style="font-size:11px; color:#999; margin-top:6px;">4턴=2시간 · 6턴=3시간 · 8턴=4시간</div>
+    `;
+    const spChk = document.getElementById('round-auto-session-planner-chk');
+    if (spChk) {
+      spChk.onchange = () => {
+        roundAutoState.sessionPlannerEnabled = !!spChk.checked;
+        document.getElementById('round-auto-sp-turns-row').style.display = spChk.checked ? 'flex' : 'none';
+        saveRoundAutoState();
+        roundAutoRenderFilterUI();
+      };
+    }
+    spWrap.querySelectorAll('button[data-sp-turns]').forEach(btn => {
+      btn.onclick = () => {
+        roundAutoState.sessionPlannerTurns = Number(btn.dataset.spTurns);
+        saveRoundAutoState();
+        roundAutoRenderFilterUI();
+      };
+    });
 }
 function roundAutoOpenAddGuestModal() {
   gsEditName('', ({ name, gender }) => {
@@ -2063,7 +2311,75 @@ function roundAutoReasonText(match) {
 }
 
 // ✅ v5.90: 이 턴 재생성 — 결과 입력된 경기 보존, 미완료 경기만 재생성
+// 세션 플래너 재생성 시 현재 active 턴만 재빌드하는 내부 헬퍼
+function _roundAutoRegenActiveTurn() {
+  const turns = roundAutoState.turns || [];
+  const activeIdx = turns.findIndex(t => t?.status === 'active');
+  if (activeIdx < 0) return;
+  const activeTurn   = turns[activeIdx];
+  const activeTurnNo = activeTurn.turnNo;
+  const prevTurns    = turns.slice(0, activeIdx).filter(t => t?.status !== 'preview');
+  const doneMatches  = (activeTurn.matches || []).filter(m => m.winner === 'home' || m.winner === 'away' || m.winner === 'draw');
+  const eligiblePool = roundAutoGetSelectedEligiblePool();
+  const targetCourtCount = Math.max(1, Number(roundAutoState.courtCount) || 1);
+  const baselineTurns = [
+    ...prevTurns.filter(t => t?.status === 'done'),
+    { turnNo: activeTurnNo, matches: doneMatches },
+  ];
+  const baselineStats  = roundAutoRebuildSessionStatsBaseline(eligiblePool, baselineTurns);
+  const planningStats  = roundAutoCloneSessionStats(baselineStats);
+  const rebuiltActive  = roundAutoBuildTurnWithStats(activeTurnNo, 'active', planningStats, true, { eligiblePool, courtCount: targetCourtCount });
+  if (!rebuiltActive) return;
+  const preservedSeqTracker = roundAutoCreateCourtGameSeqTracker([
+    ...prevTurns.filter(t => t?.status === 'done'),
+    { turnNo: activeTurnNo, status: 'active', matches: doneMatches },
+  ]);
+  const regenStamp    = Date.now();
+  const rebuiltMatches = (rebuiltActive.matches || []).map((match, idx) => {
+    const m = { ...match, id: `ra-regen-${activeTurnNo}-${Number(match?.courtNo)||(idx+1)}-${regenStamp}-${idx+1}`, committed: false, winner: null, nextCourtAssigned: false, ts: undefined, logId: undefined, _courtDoneInFlight: false };
+    delete m.courtGameSeq;
+    roundAutoAssignCourtGameSeq(m, preservedSeqTracker);
+    return m;
+  });
+  roundAutoState.sessionStats = roundAutoCloneSessionStats(baselineStats);
+  const newActiveTurn = { ...activeTurn, matches: [...doneMatches, ...rebuiltMatches], status: 'active', _planningStats: rebuiltActive._planningStats || roundAutoCloneSessionStats(roundAutoState.sessionStats) };
+  roundAutoState.turns = [...prevTurns, newActiveTurn];
+  roundAutoState.turnNo = activeTurnNo;
+  const normalized = roundAutoNormalizeTurnsState(roundAutoState);
+  roundAutoState = normalized.state;
+}
+
 function roundAutoRegenerateCurrentTurn() {
+  // ── 세션 플래너 ON이면 전체 6턴 재생성
+  if (roundAutoState.sessionPlannerEnabled !== false && typeof sessionPlannerGenerate === 'function') {
+    gsConfirm('전체 세션 대진표를 다시 생성할까요?\n(완료된 경기는 유지되고 남은 턴이 새로 생성됩니다)', ok => {
+      if (!ok) return;
+      roundAutoSyncStateFromCurrentUI();
+      const pool       = roundAutoGetSelectedEligiblePool();
+      const courtCount = Math.max(1, Number(roundAutoState.courtCount) || 1);
+      const totalTurns = [4, 6, 8].includes(Number(roundAutoState.sessionPlannerTurns))
+        ? Number(roundAutoState.sessionPlannerTurns) : 6;
+      const config = {
+        allowMixed:        roundAutoState.config?.allowMixed !== false,
+        allowGenderBattle: roundAutoAllowGenderBattle(),
+        allowMixedVsSame:  roundAutoState.config?.allowMixedVsSame !== false,
+      };
+      if (pool.length < courtCount * 4) {
+        gsAlert('참가자 수가 부족합니다. 코트 수를 줄이거나 참가자를 더 선택해주세요.');
+        return;
+      }
+      const plan = sessionPlannerGenerate(pool, courtCount, totalTurns, config);
+      if (!plan) { gsAlert('전체 대진표 생성에 실패했습니다.'); return; }
+      roundAutoState.plannedTurns = plan;
+      // 현재 active 턴 재생성 (기존 로직 재사용)
+      _roundAutoRegenActiveTurn();
+      saveRoundAutoState();
+      roundAutoRenderMatches();
+      roundAutoRenderRanking();
+      roundAutoRenderPersonalRanking();
+    });
+    return;
+  }
   gsConfirm('현재 턴 대진표를 재생성할까요?\n(미완료 경기만 재생성되며, 결과 입력된 경기는 유지됩니다)', ok => {
     if (!ok) return;
     roundAutoSyncStateFromCurrentUI();
@@ -2213,7 +2529,10 @@ async function roundAutoCommitTurnToGlobalLog(activeTurn) {
 }
 
 function roundAutoSetWinner(matchId, side) {
-  const activeTurn = (roundAutoState.turns || []).find(turn => turn?.status === 'active');
+  // matchId가 속한 activeTurn을 정확히 찾음
+  const activeTurn = (roundAutoState.turns || []).find(turn =>
+    turn?.status === 'active' && (turn.matches || []).some(m => m?.id === matchId)
+  );
   if (!activeTurn) return;
   const match = (activeTurn.matches || []).find(item => item?.id === matchId);
   if (!match) return;
@@ -2304,17 +2623,25 @@ function roundAutoRenderMatches() {
   };
   const previewBadgeStyle = 'background:var(--roland-clay); color:#fff;';
   const pickLiveMatchForCourt = courtNo => {
-    // ✅ v6.41: nextCourtAssigned 필터 제거 — 렌더 시점에 이 플래그로 경기를 제외하면
-    // 진행중인 경기가 null로 처리돼 선수명 공백 버그 발생
-    const matches = (activeTurn?.matches || [])
-      .filter(match => Number(match?.courtNo) === Number(courtNo))
-      .sort((a, b) => (Number(a?.courtGameSeq) || 0) - (Number(b?.courtGameSeq) || 0) || (Number(a?.turnNo) || 0) - (Number(b?.turnNo) || 0));
-    const unresolved = matches.filter(match => match?.winner !== 'home' && match?.winner !== 'away' && match?.winner !== 'draw');
-    return unresolved.find(hasTeams) || unresolved[0] || matches.find(hasTeams) || matches[0] || null;
+    return roundAutoPickRenderableMatchForCourt(activeTurn, courtNo);
   };
   const renderTeamButtons = (match, clickable) => {
     if (!match || !hasTeams(match)) {
       return '<div style="font-size:12px; color:#9ca3af; text-align:center; padding:8px 0;">배정된 경기 없음.</div>';
+    }
+    // 세션 플래너 잠금: 다른 코트 진행중인 선수 있으면 결과 입력 차단
+    if (match._locked) {
+      const homeText = escapeHtml(renderSideText(match, 'home'));
+      const awayText = escapeHtml(renderSideText(match, 'away'));
+      return `
+        <div style="display:flex; align-items:center; gap:8px; opacity:0.7;">
+          <div style="flex:1; min-height:40px; border-radius:10px; background:#d0846c; color:#fff; padding:10px 8px; font-size:12px; font-weight:700; text-align:center;">${homeText}</div>
+          <div style="font-size:12px; font-weight:700; color:#94a3b8; flex-shrink:0;">vs</div>
+          <div style="flex:1; min-height:40px; border-radius:10px; background:#d0846c; color:#fff; padding:10px 8px; font-size:12px; font-weight:700; text-align:center;">${awayText}</div>
+        </div>
+        <div style="margin-top:8px; padding:8px 10px; background:#fff3cd; border-radius:8px; font-size:11px; color:#856404; text-align:center;">
+          ⏳ ${escapeHtml(match._lockedReason || '다른 코트 경기 종료 후 결과 입력 가능')}
+        </div>`;
     }
     const homeText = escapeHtml(renderSideText(match, 'home'));
     const awayText = escapeHtml(renderSideText(match, 'away'));
@@ -2358,6 +2685,8 @@ function roundAutoRenderMatches() {
       </div>`;
   };
   const renderPreviewQueue = () => {
+    // 세션 플래너 ON이면 미리보기 불필요 — 전체 대진표에서 다음 턴 확인
+    if (roundAutoState.sessionPlannerEnabled !== false) return '';
     const queueMatches = (previewTurn?.matches || []).filter(match => hasTeams(match));
     if (!queueMatches.length) {
       return `
@@ -2448,7 +2777,14 @@ function roundAutoRenderMatches() {
         <div style="margin-bottom:12px;">
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
             <div style="font-weight:700; font-size:13px; color:var(--wimbledon-sage);">현재 경기</div>
-            <span style="font-size:11px; color:#fff; background:var(--wimbledon-sage); border-radius:999px; padding:3px 8px;">코트별 독립 진행</span>
+            <div style="display:flex; gap:6px; align-items:center;">
+              ${roundAutoState.plannedTurns && roundAutoState.plannedTurns.length
+                ? `<button type="button" onclick="roundAutoShowSessionScheduleModal()" style="font-size:11px; color:#475569; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:999px; padding:3px 10px; cursor:pointer; font-weight:700;">📋 전체 대진표</button>`
+                : ''}
+              ${roundAutoState.sessionPlannerEnabled !== false
+                ? `<span style="font-size:11px; color:#fff; background:var(--wimbledon-sage); border-radius:999px; padding:3px 10px; font-weight:700;">🗓 세션 플래너 ON</span>`
+                : ''}
+            </div>
           </div>
           ${currentCards.join('')}
           ${renderPreviewQueue()}
@@ -2456,7 +2792,7 @@ function roundAutoRenderMatches() {
             style="width:100%; margin-top:8px; background:#b85c38; font-size:13px; padding:10px 12px;">
             🔄 현재 대진 재생성
           </button>
-          <div style="font-size:11px; color:#999; text-align:center; margin-top:6px;">코트 수나 참가선수 변화가 있으면 재생성해주세요</div>
+          <div style="font-size:11px; color:#999; text-align:center; margin-top:6px;">현재 생성이 마음에 들지 않는 경우나<br>코트 수나 참가 선수 변화가 있는 경우 재생성 해주세요.</div>
         </div>`;
       return;
     }
@@ -2465,7 +2801,14 @@ function roundAutoRenderMatches() {
       <div style="margin-bottom:12px;">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
           <div style="font-weight:700; font-size:13px; color:var(--wimbledon-sage);">현재 경기</div>
-          <span style="font-size:11px; color:#fff; background:var(--wimbledon-sage); border-radius:999px; padding:3px 8px;">진행중</span>
+          <div style="display:flex; gap:6px; align-items:center;">
+            ${roundAutoState.plannedTurns && roundAutoState.plannedTurns.length
+              ? `<button type="button" onclick="roundAutoShowSessionScheduleModal()" style="font-size:11px; color:#475569; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:999px; padding:3px 10px; cursor:pointer; font-weight:700;">📋 전체 대진표</button>`
+              : ''}
+            ${roundAutoState.sessionPlannerEnabled !== false
+              ? `<span style="font-size:11px; color:#fff; background:var(--wimbledon-sage); border-radius:999px; padding:3px 10px; font-weight:700;">🗓 세션 플래너 ON</span>`
+              : ''}
+          </div>
         </div>
         ${renderCurrentCourtCard(1)}
         ${renderPreviewQueue()}
@@ -2473,7 +2816,7 @@ function roundAutoRenderMatches() {
           style="width:100%; margin-top:8px; background:#b85c38; font-size:13px; padding:10px 12px;">
           🔄 현재 대진 재생성
         </button>
-        <div style="font-size:11px; color:#999; text-align:center; margin-top:6px;">코트 수나 참가선수 변화가 있으면 재생성해주세요</div>
+        <div style="font-size:11px; color:#999; text-align:center; margin-top:6px;">현재 생성이 마음에 들지 않는 경우나<br>코트 수나 참가 선수 변화가 있는 경우 재생성 해주세요.</div>
       </div>`;
       return;
   }
@@ -2494,6 +2837,25 @@ async function roundAutoGenerateNextTurn() {
   }
   roundAutoSyncStateFromCurrentUI();
   roundAutoState.turns = (roundAutoState.turns || []).filter(turn => turn?.status !== 'preview');
+
+  // ── 세션 플래너 ON + plannedTurns 없으면 지금 생성
+  if (roundAutoState.sessionPlannerEnabled !== false &&
+      typeof sessionPlannerGenerate === 'function' &&
+      (!Array.isArray(roundAutoState.plannedTurns) || roundAutoState.plannedTurns.length === 0)) {
+    const pool       = roundAutoGetSelectedEligiblePool();
+    const courtCount = Math.max(1, Number(roundAutoState.courtCount) || 1);
+    const totalTurns = [4, 6, 8].includes(Number(roundAutoState.sessionPlannerTurns))
+      ? Number(roundAutoState.sessionPlannerTurns) : 6;
+    const config = {
+      allowMixed:        roundAutoState.config?.allowMixed !== false,
+      allowGenderBattle: roundAutoAllowGenderBattle(),
+      allowMixedVsSame:  roundAutoState.config?.allowMixedVsSame !== false,
+    };
+    if (pool.length >= courtCount * 4) {
+      const plan = sessionPlannerGenerate(pool, courtCount, totalTurns, config);
+      if (plan) roundAutoState.plannedTurns = plan;
+    }
+  }
 
   const doneTurns = (roundAutoState.turns || []).filter(turn => turn?.status === 'done');
   if (doneTurns.length > 0 && Object.keys(roundAutoState.sessionStats || {}).length === 0) {
@@ -2517,6 +2879,44 @@ async function roundAutoGenerateNextTurn() {
   }
 
   const nextTurnNo = (Number(roundAutoState.turnNo) || 0) + 1;
+
+  // ── 세션 플래너 ON: plannedTurns에서 꺼내서 사용
+  if (roundAutoState.sessionPlannerEnabled !== false && Array.isArray(roundAutoState.plannedTurns) && roundAutoState.plannedTurns.length > 0) {
+    const plannedTurn = roundAutoState.plannedTurns.find(t => t.turnNo === nextTurnNo);
+    if (plannedTurn) {
+      const activeTurn = {
+        turnNo: nextTurnNo,
+        status: 'active',
+        matches: (plannedTurn.matches || []).map((m, idx) => ({
+          id: `sp-live-${nextTurnNo}-${m.courtNo || (idx+1)}-${Date.now()}`,
+          turnNo: nextTurnNo,
+          courtNo: m.courtNo || (idx + 1),
+          home: m.home,
+          away: m.away,
+          type: m.type,
+          winner: null,
+          committed: false,
+          _source: 'session-planner',
+        })),
+      };
+      const courtSeqTracker = roundAutoCreateCourtGameSeqTracker();
+      activeTurn.matches.forEach(m => roundAutoAssignCourtGameSeq(m, courtSeqTracker));
+
+      const nextTurns = (roundAutoState.turns || []).filter(turn => turn?.status === 'done');
+      nextTurns.push(activeTurn);
+      roundAutoState.turns = nextTurns;
+      roundAutoState.turnNo = nextTurnNo;
+      const normalized = roundAutoNormalizeTurnsState(roundAutoState);
+      roundAutoState = normalized.state;
+      roundAutoRenderMatches();
+      roundAutoRenderRanking();
+      roundAutoRenderPersonalRanking();
+      saveRoundAutoState();
+      return;
+    }
+  }
+
+  // ── 기존 엔진 (세션 플래너 OFF)
   const realStats = roundAutoCloneSessionStats();
   const activeTurn = roundAutoBuildTurnWithStats(nextTurnNo, 'active', realStats, true);
   if (!activeTurn) return;
@@ -2832,7 +3232,7 @@ function roundAutoManualAssignPlayer(name) {
 function roundAutoManualRemovePlayer(courtNo, name) {
   const court = roundAutoManualCourts.find(c => c.courtNo === courtNo);
   if (!court) return;
-  court.players = court.players.filter(p => !p.isGuest && p.status !== 'inactive');
+  court.players = court.players.filter(p => p !== name);
   roundAutoRenderManualCourts();
 }
 
@@ -3181,6 +3581,41 @@ async function roundAutoConfirmManual() {
   roundAutoRenderMatches();
   roundAutoRenderRanking();
   roundAutoRenderPersonalRanking();
+
+  // ── 세션 플래너 ON이고 첫 수동 턴(turnNo===1)이면 나머지 턴 자동 생성
+  if (
+    roundAutoState.sessionPlannerEnabled !== false &&
+    typeof sessionPlannerGenerate === 'function' &&
+    newTurnNo === 1 &&
+    (!Array.isArray(roundAutoState.plannedTurns) || roundAutoState.plannedTurns.length === 0)
+  ) {
+    const pool       = roundAutoGetSelectedEligiblePool();
+    const courtCount = Math.max(1, Number(roundAutoState.courtCount) || 1);
+    const totalTurns = [4, 6, 8].includes(Number(roundAutoState.sessionPlannerTurns))
+      ? Number(roundAutoState.sessionPlannerTurns) : 6;
+    const config = {
+      allowMixed:        roundAutoState.config?.allowMixed !== false,
+      allowGenderBattle: roundAutoAllowGenderBattle(),
+      allowMixedVsSame:  roundAutoState.config?.allowMixedVsSame !== false,
+    };
+    if (pool.length >= courtCount * 4 && totalTurns > 1) {
+      // 수동 1턴 매치를 completedMatches로 전달 → 파트너/출전횟수 반영
+      const completedMatches = matches;
+      // 나머지 턴만 생성 (totalTurns - 1턴)
+      const plan = sessionPlannerGenerate(pool, courtCount, totalTurns - 1, config, completedMatches);
+      if (plan) {
+        // turnNo를 2번부터 시작하도록 조정
+        const adjustedPlan = plan.map((t, idx) => ({ ...t, turnNo: idx + 2 }));
+        // ③ 기존 preview 턴 제거 (세션 플래너가 이어받으므로 불필요)
+        roundAutoState.turns = (roundAutoState.turns || []).filter(t => t?.status !== 'preview');
+        roundAutoState.plannedTurns = adjustedPlan;
+        console.log('[round-auto] 수동 1턴 후 세션 플래너 이어받기 성공:', adjustedPlan.length, '턴 생성');
+        // ② 재렌더 — 전체 대진표 버튼 즉시 활성화
+        roundAutoRenderMatches();
+      }
+    }
+  }
+
   saveRoundAutoState();
 }
 
@@ -3243,3 +3678,190 @@ window.roundAutoConfirmManual = roundAutoConfirmManual;
 window.roundAutoManualAssignPlayer = roundAutoManualAssignPlayer;
 window.roundAutoManualRemovePlayer = roundAutoManualRemovePlayer;
 
+
+// ════════════════════════════════════════════════════════
+// 세션 플래너 — 실행 + 모달
+// ════════════════════════════════════════════════════════
+
+// 세션 플래너 실행
+function roundAutoRunSessionPlanner() {
+  const pool       = roundAutoGetSelectedEligiblePool();
+  const courtCount = Math.max(1, Number(roundAutoState.courtCount) || 1);
+  const totalTurns = [4, 6, 8].includes(Number(roundAutoState.sessionPlannerTurns))
+    ? Number(roundAutoState.sessionPlannerTurns) : 6;
+  const config = {
+    allowMixed:       roundAutoState.config?.allowMixed !== false,
+    allowGenderBattle: roundAutoAllowGenderBattle(),
+    allowMixedVsSame:  roundAutoState.config?.allowMixedVsSame !== false,
+  };
+
+  if (pool.length < 4) {
+    gsAlert('참가 선수가 너무 적습니다. 최소 4명이 필요합니다.');
+    return;
+  }
+  if (pool.length < courtCount * 4) {
+    gsAlert(`참가자 수(${pool.length}명)가 코트 수(${courtCount})에 비해 부족합니다.\n코트 수를 줄이거나 참가자를 더 선택해주세요.`);
+    return;
+  }
+
+  if (typeof sessionPlannerGenerate !== 'function') {
+    gsAlert('세션 플래너 엔진을 불러올 수 없습니다. (round_auto_session_planner.js 확인 필요)');
+    return;
+  }
+
+  const plan = sessionPlannerGenerate(pool, courtCount, totalTurns, config);
+  if (!plan) {
+    gsAlert('전체 일정 생성에 실패했습니다. 참가자 수나 코트 수 설정을 확인해주세요.');
+    return;
+  }
+
+  // plannedTurns에 저장
+  roundAutoState.plannedTurns = plan;
+  saveRoundAutoState();
+  roundAutoRenderMatches();
+
+  // 생성 완료 후 바로 전체 일정 모달 오픈
+  roundAutoShowSessionScheduleModal();
+}
+
+// 전체 일정 보기 모달
+function roundAutoShowSessionScheduleModal() {
+  const plannedTurns = Array.isArray(roundAutoState.plannedTurns) ? roundAutoState.plannedTurns : [];
+  if (!plannedTurns.length) {
+    gsAlert('생성된 전체 일정이 없습니다. 세션 플래너를 먼저 실행해주세요.');
+    return;
+  }
+
+  // 완료/진행중 턴(수동 포함)을 plannedTurns 앞에 합쳐서 전체 표시
+  const doneTurnNos = new Set(plannedTurns.map(t => t.turnNo));
+  const completedTurns = (roundAutoState.turns || [])
+    .filter(t => t && (t.status === 'done' || t.status === 'active') && !doneTurnNos.has(t.turnNo))
+    .map(t => ({
+      turnNo:  t.turnNo,
+      matches: (t.matches || []).map(m => ({
+        courtNo: m.courtNo,
+        home:    m.home,
+        away:    m.away,
+        type:    m.type || (m.matchType === 'single' ? 'S' : 'M'),
+      })),
+    }))
+    .sort((a, b) => a.turnNo - b.turnNo);
+
+  // 완료 턴 + plannedTurns 합치기
+  const plan = [...completedTurns, ...plannedTurns].sort((a, b) => a.turnNo - b.turnNo);
+
+  const courtCount = Math.max(1, Number(roundAutoState.courtCount) || 1);
+  const totalTurns = plan.length;
+
+  // 타입 한글 변환
+  const typeLabel = t => t === 'M' ? '남복' : t === 'F' ? '여복' : t === 'X' ? '혼복' : '복식';
+
+  // 코트별 섹션 생성
+  const courtSections = [];
+  for (let c = 1; c <= courtCount; c++) {
+    const rows = plan.map(turn => {
+      const match = (turn.matches || []).find(m => m.courtNo === c);
+      if (!match) return `<tr><td style="padding:8px 6px; text-align:center; color:#999; border-bottom:1px solid #f0f0f0;">${turn.turnNo}턴</td><td colspan="3" style="padding:8px 6px; color:#ccc; border-bottom:1px solid #f0f0f0;">-</td></tr>`;
+      const homeNames = (match.home || []).map(n => roundAutoPlayerLabel(n, '')).join(' / ');
+      const awayNames = (match.away || []).map(n => roundAutoPlayerLabel(n, '')).join(' / ');
+      const typeTxt   = typeLabel(match.type);
+      // 완료 턴 하이라이트
+      const doneTurns = (roundAutoState.turns || []).filter(t => t.status === 'done').map(t => t.turnNo);
+      const isDone    = doneTurns.includes(turn.turnNo);
+      const rowBg     = isDone ? '#f0fdf4' : '#fff';
+      const turnBadge = isDone
+        ? `<span style="font-size:10px; background:#22c55e; color:#fff; border-radius:999px; padding:1px 6px; margin-left:4px;">완료</span>`
+        : '';
+      return `
+        <tr style="background:${rowBg};">
+          <td style="padding:8px 6px; text-align:center; font-weight:700; font-size:12px; border-bottom:1px solid #f0f0f0; white-space:nowrap;">
+            ${turn.turnNo}턴${turnBadge}
+          </td>
+          <td style="padding:8px 6px; text-align:center; font-size:11px; color:#64748b; border-bottom:1px solid #f0f0f0;">${typeTxt}</td>
+          <td style="padding:8px 6px; font-size:12px; font-weight:700; border-bottom:1px solid #f0f0f0; text-align:center;">${homeNames}</td>
+          <td style="padding:8px 6px; text-align:center; font-size:11px; color:#94a3b8; border-bottom:1px solid #f0f0f0; white-space:nowrap;">vs</td>
+          <td style="padding:8px 6px; font-size:12px; font-weight:700; border-bottom:1px solid #f0f0f0; text-align:center;">${awayNames}</td>
+        </tr>`;
+    }).join('');
+
+    courtSections.push(`
+      <div style="margin-bottom:20px;">
+        <div style="background:var(--wimbledon-sage); color:#fff; padding:8px 14px; border-radius:10px 10px 0 0; font-weight:800; font-size:14px;">
+          🎾 코트 ${c}
+        </div>
+        <table style="width:100%; border-collapse:collapse; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 10px 10px; overflow:hidden;">
+          <thead>
+            <tr style="background:#f8fafc;">
+              <th style="padding:7px 6px; font-size:11px; color:#64748b; font-weight:700; text-align:center; border-bottom:2px solid #e5e7eb;">턴</th>
+              <th style="padding:7px 6px; font-size:11px; color:#64748b; font-weight:700; text-align:center; border-bottom:2px solid #e5e7eb;">종류</th>
+              <th style="padding:7px 6px; font-size:11px; color:#64748b; font-weight:700; border-bottom:2px solid #e5e7eb;">홈팀</th>
+              <th style="padding:7px 6px; border-bottom:2px solid #e5e7eb;"></th>
+              <th style="padding:7px 6px; font-size:11px; color:#64748b; font-weight:700; border-bottom:2px solid #e5e7eb;">어웨이팀</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`);
+  }
+
+  // 참가 횟수 요약
+  const playCounts = {};
+  plan.forEach(turn => {
+    (turn.matches || []).forEach(m => {
+      [...(m.home || []), ...(m.away || [])].forEach(name => {
+        playCounts[name] = (playCounts[name] || 0) + 1;
+      });
+    });
+  });
+  const playRows = Object.entries(playCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, cnt]) => `
+      <span style="display:inline-flex; align-items:center; gap:4px; background:#f1f5f9; border-radius:999px; padding:3px 10px; font-size:12px; font-weight:700; margin:3px;">
+        ${roundAutoPlayerLabel(name, '')}
+        <span style="background:var(--wimbledon-sage); color:#fff; border-radius:999px; padding:0 6px; font-size:11px;">${cnt}회</span>
+      </span>`).join('');
+
+  // 모달 생성
+  let overlay = document.getElementById('sp-schedule-modal-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'sp-schedule-modal-overlay';
+    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9000; display:flex; align-items:flex-start; justify-content:center; padding:20px 0; overflow-y:auto;';
+    overlay.onclick = e => { if (e.target === overlay) roundAutoCloseSessionScheduleModal(); };
+    document.body.appendChild(overlay);
+  }
+
+  overlay.innerHTML = `
+    <div style="background:#fff; border-radius:20px; width:92%; max-width:520px; padding:20px; box-shadow:0 8px 40px rgba(0,0,0,0.18); margin:auto;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+        <div>
+          <div style="font-size:16px; font-weight:900; color:#0f172a;">📋 전체 세션 대진표</div>
+          <div style="font-size:12px; color:#64748b; margin-top:2px;">${totalTurns}턴 · 코트 ${courtCount}개</div>
+        </div>
+        <button onclick="roundAutoCloseSessionScheduleModal()" style="border:none; background:#f1f5f9; border-radius:999px; width:32px; height:32px; font-size:18px; cursor:pointer; color:#475569;">✕</button>
+      </div>
+
+      ${courtSections.join('')}
+
+      <div style="margin-top:12px; padding:12px; background:#f8fafc; border-radius:12px;">
+        <div style="font-size:12px; font-weight:700; color:#475569; margin-bottom:8px;">📊 참가 횟수 요약</div>
+        <div style="display:flex; flex-wrap:wrap;">${playRows}</div>
+      </div>
+
+      <button onclick="roundAutoCloseSessionScheduleModal()"
+        style="width:100%; margin-top:16px; padding:12px; border-radius:12px; border:none; background:var(--wimbledon-sage); color:#fff; font-size:14px; font-weight:800; cursor:pointer;">
+        닫기
+      </button>
+    </div>`;
+
+  overlay.style.display = 'flex';
+}
+
+function roundAutoCloseSessionScheduleModal() {
+  const overlay = document.getElementById('sp-schedule-modal-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+window.roundAutoRunSessionPlanner         = roundAutoRunSessionPlanner;
+window.roundAutoShowSessionScheduleModal  = roundAutoShowSessionScheduleModal;
+window.roundAutoCloseSessionScheduleModal = roundAutoCloseSessionScheduleModal;
