@@ -3,7 +3,7 @@
 // ========================================
 
 // ✅ 버전 상수 — 버전업 시 여기만 바꾸면 전체 반영
-const APP_VERSION = 'v7.56';
+const APP_VERSION = 'v7.58';
 
 
 // ----------------------------------------
@@ -635,32 +635,63 @@ function hofIcon(type, size, color, isMuted, overlayLabel) {
   const px = size || 24;
   const c = color || '#D4A24C';
   const opacity = isMuted ? '0.45' : '1';
-  const icons = {
-    hall: '<path d="M12 2l7 3v4c0 4.7-2.9 8.8-7 10.2C7.9 17.8 5 13.7 5 9V5l7-3Zm0 2.2L7 6.3v2.6c0 3.6 2.1 6.8 5 8 2.9-1.2 5-4.4 5-8V6.3l-5-2.1Zm-2.2 4.3h4.4v1.6h-1.4v3.7h-1.6v-3.7H9.8V8.5Z"/>',
-    firstWin: '<path d="M9 4h6v2h-1v3.3a3.5 3.5 0 0 1-2 3.2V15h2v2H8v-2h2v-2.5a3.5 3.5 0 0 1-2-3.2V6H7V4h2Zm1 2v3.3a1.5 1.5 0 0 0 3 0V6h-3Z"/><path d="M17 5h2v2a3 3 0 0 1-3 3h-1V8h1a1 1 0 0 0 1-1V5ZM7 5v2a1 1 0 0 0 1 1h1v2H8a3 3 0 0 1-3-3V5h2Z"/>',
-    monthAward: '<path d="M12 3a7 7 0 1 1 0 14 7 7 0 0 1 0-14Zm0 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10Z"/><path d="m12 7 1.2 2.5 2.8.3-2.1 1.9.6 2.9-2.5-1.4-2.5 1.4.6-2.9-2.1-1.9 2.8-.3L12 7Z"/><path d="M9 16.2 7.2 21l2.8-1.6 2 1.1v-4.1H9Zm6 0h-3v4.1l2-1.1 2.8 1.6-1.8-4.8Z"/>',
-    weekAward: '<path d="M12 9a5 5 0 1 1 0 10A5 5 0 0 1 12 9Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/><path d="m12 11 .9 1.8 2 .3-1.5 1.4.4 2L12 15.6l-1.8 1-.4-2L8.1 13.1l2-.3L12 11Z"/><path d="M10 3h4l1 6h-6L10 3Z"/><path d="M9 3h6v1.5l-1 1h-4l-1-1V3Z"/>',
-    star: '<path d="m12 3 2.1 4.6 5 .6-3.7 3.5 1 5-4.4-2.5L7.6 17l1-5L5 8.2l5-.6L12 3Z"/>',
-    spark: '<path d="M12 2.5 14.2 8l5.8.5-4.4 3.8 1.3 5.7L12 15.1 7.1 18l1.3-5.7L4 8.5 9.8 8 12 2.5Z"/><path d="M18.8 3.8 20 6l2.2 1.2L20 8.4l-1.2 2.2-1.2-2.2-2.2-1.2L17.6 6l1.2-2.2Z"/>',
-    trophy: '<path d="M8 4h8v2h1a2 2 0 0 1 2 2v1a4 4 0 0 1-4 4h-.6A5.5 5.5 0 0 1 13 14.6V17h3v2H8v-2h3v-2.4A5.5 5.5 0 0 1 9.6 13H9a4 4 0 0 1-4-4V8a2 2 0 0 1 2-2h1V4Zm0 2v3a3.5 3.5 0 0 0 7 0V6H8Zm9 2v1a2 2 0 0 1-2 2V8h2Zm-10 0v3a2 2 0 0 1-2-2V8h2Z"/>',
-    crown: '<path d="m4 17 1.6-9 4.1 3.2L12 5l2.3 6.2L18.4 8 20 17H4Zm2.4-2h11.2l-.5-3.2-2.4 1.8L12 9.5l-2.7 4.1-2.4-1.8L6.4 15Z"/>',
-    trident: '<path d="M11 2h2v4.6l1.3-1.3 1.4 1.4-2.7 2.7V18h3v2H8v-2h3V9.4L8.3 6.7l1.4-1.4L11 6.6V2Zm6.5 1.8L20.8 7 19.4 8.4l-1.9-1.9-1.9 1.9L14.2 7l3.3-3.2Zm-11 0L9.8 7 8.4 8.4 6.5 6.5 4.6 8.4 3.2 7l3.3-3.2Z"/>',
-    rate: '<path d="M5 17h14v2H3V5h2v12Zm2-3.5 2.8-2.8 2.2 2.2L17 8h2v2h-1.2l-4.8 4.8-2.2-2.2L8.4 15 7 13.5Z"/>',
-    wins: '<path d="M7 18h10v2H7v-2Zm5-16 6 3v4c0 4.3-2.5 8.1-6 9.6C8.5 17.1 6 13.3 6 9V5l6-3Zm0 2.2L8 6.3v2.6c0 3.1 1.7 5.9 4 7 2.3-1.1 4-3.9 4-7V6.3l-4-2.1Z"/>',
-    streak: '<path d="M13 2 6 13h4l-1 9 7-11h-4l1-9Z"/>',
-    calendarWeek: '<path d="M7 2h2v2h6V2h2v2h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2Zm12 8H5v8h14v-8ZM5 8h14V6H5v2Z"/>',
-    calendarMonth: '<path d="M7 2h2v2h6V2h2v2h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V2Zm12 6H5v10h14V8Zm-9 3h2v2h-2v-2Zm4 0h2v2h-2v-2Zm-4 4h2v2h-2v-2Zm4 0h2v2h-2v-2Z"/>',
-    calendarYear: '<path d="M6 3h12a2 2 0 0 1 2 2v14H4V5a2 2 0 0 1 2-2Zm12 6H6v8h12V9ZM8 5H6v2h12V5h-2v1h-2V5h-4v1H8V5Z"/>',
-    close: '<path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12 19 17.6 17.6 19 12 13.4 6.4 19 5 17.6 10.6 12 5 6.4 6.4 5Z"/>'
+
+  const iconMap = {
+    hall: 'fas fa-landmark',
+    firstWin: 'fas fa-medal',
+    monthAward: 'fas fa-crown',
+    weekAward: 'fas fa-trophy',
+    star: 'fas fa-star',
+    spark: 'fas fa-bolt',
+    trophy: 'fas fa-trophy',
+    crown: 'fas fa-crown',
+    trident: 'fas fa-shield-alt',
+    rate: 'fas fa-chart-line',
+    wins: 'fas fa-award',
+    streak: 'fas fa-fire',
+    calendarWeek: 'fas fa-calendar-week',
+    calendarMonth: 'fas fa-calendar-alt',
+    calendarYear: 'fas fa-calendar',
+    close: 'fas fa-times'
   };
-  const svg = icons[type] || icons.trophy;
-  // ✅ v6.682: overlayLabel — 별/트로피 위에 승수 숫자 오버레이 (별 안에 작게)
-  // viewBox가 24x24 기준 — 숫자는 4~5pt로 아주 작게, 별 중심(12, 11) 기준
-  const overlayFontSize = overlayLabel && overlayLabel.length >= 3 ? 3.6 : 4.8;
+
+  const faClass = iconMap[type] || 'fas fa-trophy';
+
+  // ✅ 달성(잠금 해제) 상태: 번쩍이는 프리미엄 뱃지 + Font Awesome 아이콘
+  if (!isMuted) {
+    let tierClass = 'silver';
+    if (['monthAward', 'crown', 'trident', 'star'].includes(type)) tierClass = 'gold';
+    else if (type === 'firstWin') tierClass = 'bronze';
+
+    // 뱃지마다 자연스럽게 다른 타이밍 (type 문자열 기반 시드 → 항상 동일하게 재현)
+    const seed = type.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    const glowDelay   = -((seed % 17) / 10).toFixed(1);          // -0.0 ~ -1.6s
+    const glowDur     = (1.6 + (seed % 13) / 10).toFixed(1);     // 1.6 ~ 2.8s
+    const sweepDelay  = -((seed % 23) / 10).toFixed(1);          // -0.0 ~ -2.2s
+    const sweepDur    = (2.4 + (seed % 19) / 10).toFixed(1);     // 2.4 ~ 4.2s
+    const glowAnim    = tierClass === 'gold' ? 'badge-glow-gold' : tierClass === 'bronze' ? 'badge-glow-bronze' : 'badge-glow-silver';
+
+    const overlayFontSize = overlayLabel && overlayLabel.length >= 3 ? 9 : 11;
+    const overlay = overlayLabel
+      ? `<div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:white; font-size:${overlayFontSize}px; font-weight:900; z-index:3; text-shadow:0 1px 3px rgba(0,0,0,0.9);">${overlayLabel}</div>`
+      : '';
+
+    return `<div class="shiny-badge-wrap ${tierClass}" style="width:${px}px; height:${px}px; position:relative; animation:${glowAnim} ${glowDur}s ${glowDelay}s infinite alternate; --sweep-dur:${sweepDur}s; --sweep-delay:${sweepDelay}s;">
+      <i class="${faClass}" style="font-size:${px * 0.55}px;"></i>
+      ${overlay}
+    </div>`;
+  }
+
+  // 🔒 달성 전(잠금): 기존 밋밋한 룩 유지
+  const overlayFontSize = overlayLabel && overlayLabel.length >= 3 ? 8 : 10;
   const overlay = overlayLabel
-    ? `<text x="12" y="11.5" text-anchor="middle" dominant-baseline="middle" fill="white" font-size="${overlayFontSize}" font-weight="900" font-family="sans-serif">${overlayLabel}</text>`
+    ? `<div style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:white; font-size:${overlayFontSize}px; font-weight:900; z-index:3;">${overlayLabel}</div>`
     : '';
-  return `<span style="display:inline-flex; align-items:center; justify-content:center; width:${px}px; height:${px}px; color:${c}; opacity:${opacity}; flex-shrink:0; line-height:1; vertical-align:middle;"><svg viewBox="0 0 24 24" width="${px}" height="${px}" fill="currentColor" aria-hidden="true">${svg}${overlay}</svg></span>`;
+
+  return `<span style="display:inline-flex; align-items:center; justify-content:center; width:${px}px; height:${px}px; color:${c}; opacity:${opacity}; flex-shrink:0; position:relative;">
+    <i class="${faClass}" style="font-size:${px * 0.8}px;"></i>
+    ${overlay}
+  </span>`;
 }
 
 
@@ -793,7 +824,7 @@ function _hofMilestoneTrackBadge(hof, milestoneN, opts) {
     background:${palette.bg}; border:1px solid ${palette.border}; box-shadow:${palette.shadow}, 0 10px 20px ${_hofGetClubPalette().halo};
     display:flex; flex-direction:column; align-items:center; text-align:center; gap:${compact ? '10px' : '12px'};">
     <div style="width:${compact ? '66px' : '84px'}; height:${compact ? '66px' : '84px'}; border-radius:${compact ? '20px' : '24px'}; background:#FFFFFF; display:flex; align-items:center; justify-content:center; border:1px solid rgba(15,23,42,0.05); box-shadow:inset 0 1px 0 rgba(255,255,255,0.92);">
-      <div style="width:${compact ? '48px' : '60px'}; height:${compact ? '48px' : '60px'}; border-radius:50%; background:${palette.iconBg}; display:flex; align-items:center; justify-content:center;">${icon}</div>
+      ${icon}
     </div>
     <div style="font-size:${compact ? '12px' : '14px'}; font-weight:600; color:${palette.title}; line-height:1.1; letter-spacing:-0.01em;">${title}</div>
     <div style="font-size:${compact ? '10px' : '11px'}; font-weight:500; color:${palette.sub}; line-height:1.35; white-space:nowrap;">${locked ? '다음 목표 ' + sub : sub}</div>
@@ -812,7 +843,7 @@ function _hofMilestoneDetailCard(hof, milestoneN) {
   return `<div style="background:#fff; border-radius:22px; padding:16px 18px; box-shadow:0 8px 22px rgba(20,32,58,0.07), 0 10px 24px ${_hofGetClubPalette().halo}; margin-bottom:10px; border:1px solid rgba(20,32,58,0.05);">
     <div style="display:flex; align-items:center; gap:14px;">
       <div style="width:86px; height:86px; border-radius:26px; background:#FFFFFF; border:1px solid ${palette.border}; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:inset 0 1px 0 rgba(255,255,255,0.9);">
-        <div style="width:60px; height:60px; border-radius:50%; background:${palette.iconBg}; display:flex; align-items:center; justify-content:center;">${hofIcon(iconType, 46, palette.iconColor, false, overlayLabel)}</div>
+        ${hofIcon(iconType, 46, palette.iconColor, false, overlayLabel)}
       </div>
       <div style="flex:1; min-width:0;">
         <div style="font-size:10px; color:${palette.sub}; font-weight:600; letter-spacing:0.8px; text-transform:uppercase; margin-bottom:4px;">${label}</div>
@@ -864,7 +895,7 @@ function _hofAwardHeroCard(type, labels, clubPalette) {
   return `<div style="display:flex; justify-content:center; overflow:hidden;">
     <div style="flex:0 0 auto; width:140px; padding:20px 18px 17px; border-radius:28px; background:linear-gradient(180deg,#FFFFFF 0%, #FBFCFE 100%); border:1px solid ${border}; box-shadow:0 12px 28px rgba(20,32,58,0.06), 0 10px 22px ${halo}; display:flex; flex-direction:column; align-items:center; text-align:center; gap:12px; box-sizing:border-box;">
       <div style="width:84px; height:84px; border-radius:24px; background:#FFFFFF; display:flex; align-items:center; justify-content:center; border:1px solid rgba(15,23,42,0.05); box-shadow:inset 0 1px 0 rgba(255,255,255,0.92);">
-        <div style="width:60px; height:60px; border-radius:50%; background:${iconBg}; display:flex; align-items:center; justify-content:center;">${hofIcon(iconType, 42, accent)}</div>
+        ${hofIcon(iconType, 42, accent)}
       </div>
       <div style="font-size:11.5px; font-weight:500; color:#1f2937; line-height:1.2; text-align:center;">${titleHtml}</div>
       <div style="font-size:10px; font-weight:500; color:#8a94a6; line-height:1.35; display:flex; align-items:center; justify-content:center;">${latest}</div>
