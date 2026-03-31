@@ -3,7 +3,7 @@
 // ========================================
 
 // ✅ 버전 상수 — 버전업 시 여기만 바꾸면 전체 반영
-const APP_VERSION = 'v7.58';
+const APP_VERSION = 'v7.59';
 
 
 // ----------------------------------------
@@ -732,13 +732,28 @@ function _applyHofClubChrome() {
 }
 
 function _hofBadge(icon, label, value, sub) {
-  return `<div style="background:linear-gradient(180deg,#FFFFFF 0%, #FAFBFD 100%); border-radius:20px; padding:15px 16px; box-shadow:0 8px 20px rgba(20,32,58,0.05); margin-bottom:12px; border:1px solid rgba(30,41,59,0.05);">
+  return `<div style="
+      background: linear-gradient(145deg, #FFFFFF 0%, #F8F6F0 60%, #FDF9F2 100%);
+      border-radius: 20px;
+      padding: 15px 16px;
+      box-shadow: 0 4px 6px rgba(20,32,58,0.04), 0 10px 24px rgba(20,32,58,0.08), inset 0 1px 0 rgba(255,255,255,1);
+      margin-bottom: 12px;
+      border: 1px solid rgba(218,165,32,0.18);
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s, box-shadow 0.2s;">
+    <!-- 상단 골드 하이라이트 라인 -->
+    <div style="position:absolute; top:0; left:16px; right:16px; height:1px; background:linear-gradient(90deg, transparent, rgba(218,165,32,0.35), transparent);"></div>
     <div style="display:flex; align-items:flex-start; gap:12px;">
-      <div style="width:46px; height:46px; border-radius:15px; background:rgba(244,247,252,0.88); display:flex; align-items:center; justify-content:center; line-height:1; flex-shrink:0; box-shadow:inset 0 1px 0 rgba(255,255,255,0.9);">${icon}</div>
+      <div style="width:46px; height:46px; border-radius:15px;
+          background: linear-gradient(145deg, #FDF8EE, #F5EDD8);
+          display:flex; align-items:center; justify-content:center; line-height:1; flex-shrink:0;
+          box-shadow: 0 2px 6px rgba(218,165,32,0.2), inset 0 1px 0 rgba(255,255,255,0.95);
+          border: 1px solid rgba(218,165,32,0.15);">${icon}</div>
       <div style="flex:1; min-width:0;">
-        <div style="font-size:10px; color:#A0AEC0; font-weight:600; letter-spacing:1px; text-transform:uppercase; margin-bottom:5px;">${label}</div>
-        <div style="font-size:16px; font-weight:600; color:#223047; line-height:1.3; letter-spacing:-0.01em;">${value}</div>
-        ${sub ? `<div style="font-size:11px; color:#7B8794; margin-top:6px; line-height:1.55; font-weight:400;">${sub}</div>` : ''}
+        <div style="font-size:10px; color:#B8975A; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; margin-bottom:5px;">${label}</div>
+        <div style="font-size:16px; font-weight:700; color:#1A2640; line-height:1.3; letter-spacing:-0.01em;">${value}</div>
+        ${sub ? `<div style="font-size:11px; color:#8A8A9A; margin-top:6px; line-height:1.55; font-weight:400;">${sub}</div>` : ''}
       </div>
     </div>
   </div>`;
