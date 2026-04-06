@@ -105,7 +105,17 @@ function shareContent(mode) {
 
   const courtName    = $('courtName')?.textContent || '';
   const courtAddress = $('courtAddress')?.textContent || '';
-  const dateDisp     = $('dateDisplay')?.textContent || '';
+
+  // ✅ v7.60 버그픽스: dateDisplay DOM은 날씨 탭 조회 시 덮어씌워지므로
+  // courtNotices 데이터에서 직접 오늘의 코트 날짜를 산출
+  const _todayStr  = new Date().toISOString().slice(0, 10);
+  const _upcoming  = (typeof courtNotices !== 'undefined' ? courtNotices : [])
+    .filter(n => n.date >= _todayStr)
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const _targetDate = _upcoming.length > 0 ? _upcoming[0].date : _todayStr;
+  const _d = new Date(_targetDate + 'T00:00:00');
+  const _dayNames = ['일','월','화','수','목','금','토'];
+  const dateDisp = `${_targetDate} ${_dayNames[_d.getDay()]}요일`;
 
   const slotRows = $('courtSlotDisplay')?.querySelectorAll('div') || [];
   const courtTimeWithNum = Array.from(slotRows).map(r => r.textContent.trim()).filter(Boolean).join(' / ');
