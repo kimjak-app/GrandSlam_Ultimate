@@ -137,6 +137,9 @@ async function enterTreasurer() {
 
 function resetTreasurerView() {
   if (treasurerUnlocked) {
+    // ✅ v7.71: PIN 화면 먼저 숨기고 main 열어준 뒤 QuickTarget 처리 (PIN 잔상 방지)
+    $('treasurer-pin-screen').style.display = 'none';
+    $('treasurer-main').style.display = 'block';
     if (_consumeTreasurerQuickTarget()) return;
     showTreasurerMenu();
   } else {
@@ -235,6 +238,17 @@ window.showTreasurerSection = function(section) {
     _origShowTreasurerSection(section);
     window._memberHistoryTab = 'active';
     renderMemberHistoryTabs('active');
+    // ✅ v7.71: 선수(회원) 관리에서 진입 시 헤더 배너 동적 교체
+    const iconEl = document.getElementById('treasurer-header-icon');
+    const textEl = document.getElementById('treasurer-header-text');
+    if (window._mhFromPlayerMgmt) {
+      if (iconEl) iconEl.textContent = 'person_search';
+      if (textEl) textEl.textContent = '선수(회원) 관리';
+    } else {
+      if (iconEl) iconEl.textContent = 'lock';
+      if (textEl) textEl.textContent = '총무 모드';
+    }
+    window._mhFromPlayerMgmt = false;
   } else {
     _origShowTreasurerSection(section);
   }

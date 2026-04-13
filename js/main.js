@@ -3,7 +3,7 @@
 // ========================================
 
 // ✅ 버전 상수 — 버전업 시 여기만 바꾸면 전체 반영
-const APP_VERSION = 'v7.60';
+const APP_VERSION = 'v7.71';
 
 
 // ----------------------------------------
@@ -1076,7 +1076,7 @@ const QUICK_MENU_ALL = [
   { id: 'court-notice-mgmt', label: '코트공지\n관리',      icon: '<path d=\"M19 3h-1V1h-2v2H8V1H6v2H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V5c0-1.1-.9-2-2-2Zm0 16H5V8h14v11Zm-7-9h5v5h-5v-5Z\"/>', action: () => { _openTreasurerQuick('court-mgmt'); } },
   { id: 'notice-mgmt',       label: '공지사항\n관리',      icon: '<path d=\"M20 2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4l4 4 4-4h4a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Zm-9 10H7v-2h4v2Zm6-4H7V6h10v2Z\"/>', action: () => { _openTreasurerQuick('notice-mgmt'); } },
   { id: 'monthly-report',    label: '월간운영\n리포트',    icon: '<path d=\"M19 3H5c-1.1 0-2 .9-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2Zm-8 14H7v-6h4v6Zm6 0h-4V7h4v10Z\"/>', action: () => { _openTreasurerQuick('report'); } },
-  { id: 'player-mgmt',       label: '선수관리',           icon: '<path d=\"M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3Zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3Zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5Zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5Z\"/>', action: () => { closeQuickMenuPanel(); checkAdminAndShow('player-mgmt'); } },
+  { id: 'player-mgmt',       label: '선수(회원) 관리',           icon: '<path d=\"M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3Zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3Zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5Zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5Z\"/>', action: () => { closeQuickMenuPanel(); checkAdminAndShow('player-mgmt'); } },
   { id: 'member-history',    label: '회원이력\n관리',      icon: '<path d=\"M12 12c2.76 0 5-2.24 5-5S14.76 2 12 2 7 4.24 7 7s2.24 5 5 5Zm0 2c-3.33 0-10 1.67-10 5v3h20v-3c0-3.33-6.67-5-10-5Zm6-1V7h2v6h-2Zm-4 4h6v2h-6v-2Z\"/>', action: () => { _openTreasurerQuick('member-history'); } },
   { id: 'record-reset',      label: '기록초기화',         icon: '<path d=\"M13 3a9 9 0 1 0 8.95 10h-2.02A7 7 0 1 1 13 5v4l5-5-5-5v4Z\"/>', action: () => { _openTreasurerQuick('record-reset'); } },
   { id: 'game',              label: '단일게임',           icon: '<path d=\"M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2Zm-1 14H9V8h2v8Zm4 0h-2V8h2v8Z\"/>', action: () => { closeQuickMenuPanel(); showView('game'); window.scrollTo({ top: 0, behavior: 'smooth' }); } },

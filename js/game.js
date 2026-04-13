@@ -246,7 +246,7 @@ function addP() {
 }
 
 function delP() {
-  gsAlert('회원 탈퇴/삭제는\n총무 메뉴 > 회원 이력 관리에서\n처리해 주세요.');
+  gsAlert('회원 탈퇴/삭제는\n선수(회원) 관리 > 회원 이력 관리에서\n처리해 주세요.');
 }
 
 function toggleGuest(n) {
@@ -413,6 +413,15 @@ window.resetWeeklyOnly = resetWeeklyOnly;
 window.adminResetAll = adminResetAll;
 window.switchView = switchView;
 window.checkAdminAndShow = checkAdminAndShow;
+
+// ✅ v7.71: 선수(회원) 관리에서 회원 이력 관리 진입 — 비번 없이 바로 진입 (선수(회원) 관리 진입 시 이미 인증됨)
+function enterMemberHistoryFromPlayerMgmt() {
+  window._mhFromPlayerMgmt = true;
+  window._treasurerQuickTarget = 'member-history';
+  treasurerUnlocked = true;
+  showView('treasurer');
+}
+window.enterMemberHistoryFromPlayerMgmt = enterMemberHistoryFromPlayerMgmt;
 window.showView = showView;
 window.openSingleGame = openSingleGame;
 window.openPlayerManager = openPlayerManager;
