@@ -225,10 +225,11 @@ function showTreasurerSection(section) {
 const _origShowTreasurerSection = showTreasurerSection;
 window.showTreasurerSection = function(section) {
   if (section === 'finance') {
-    fetchFinanceData().then(() => _origShowTreasurerSection(section));
+    fetchFinanceData().then(() => { syncFeeToFinance(); _origShowTreasurerSection(section); });
   } else if (section === 'report') {
     // ✅ v5.237: 리포트 진입 시 financeData 먼저 로드
     fetchFinanceData().then(() => {
+      syncFeeToFinance();
       _origShowTreasurerSection(section);
       const el = document.getElementById('reportMonth');
       if (el && !el.value) el.value = new Date().toISOString().slice(0, 7);
@@ -296,6 +297,31 @@ function _getFeeCellView(status) {
   return { text: '❌', extraClass: ' fee-unpaid', style: '' };
 }
 
+function _getLocalTodayString() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function _splitFeeMonthKey(key) {
+  const [year, month] = String(key || '').split('-');
+  return { year, month };
+}
+
+function _isFeeTargetForKey(p, key) {
+  const { year, month } = _splitFeeMonthKey(key);
+  if (!year || !month) return false;
+  return _isFeeEligibleForMonth(p, year, month) && _isJoinedByFeeMonth(p, year, month);
+}
+
+function _isJoinedByFeeMonth(p, year, month) {
+  if (!p || !p.joinedAt) return true;
+  const monthLastDay = new Date(parseInt(year, 10), parseInt(month, 10), 0).toISOString().slice(0, 10);
+  return p.joinedAt <= monthLastDay;
+}
+
 function _getSelectedFeeMonthKey() {
   const year = $('feeYear')?.value || String(new Date().getFullYear());
   const monthSel = $('feePartialMonth');
@@ -333,9 +359,10 @@ function renderFeeTable() {
   // 납부율 요약
   const summaryEl = $('feeSummary');
   if (summaryEl) {
-    const key       = `${year}-${String(curMonth).padStart(2, '0')}`;
+    const curMonthStr = String(curMonth).padStart(2, '0');
+    const key       = `${year}-${curMonthStr}`;
     const yearlyKey = `${year}-yearly`;
-    const targets   = members.filter(p => !p.isTreasurer && !p.isFeeExempt);
+    const targets   = members.filter(p => _isFeeEligibleForMonth(p, year, curMonthStr) && _isJoinedByFeeMonth(p, year, curMonthStr));
     let paidCount = 0, partialCount = 0;
     targets.forEach(p => {
       const pf = feeData[p.name] || {};
@@ -366,7 +393,7 @@ function renderFeeTable() {
       bodyHtml += '</tr>'; return;
     }
 
-    if (p.isFeeExempt) {
+    if (p.isFeeExempt && p.status !== 'dormant') {
       bodyHtml += `<tr><td>${escapeHtml(displayName(p.name))} <span style="font-size:10px; color:#FF9500;">[면제]</span></td>`;
       for (let m = 1; m <= 12; m++) {
         bodyHtml += `<td class="fee-check${(parseInt(year) === curYear && m === curMonth) ? ' fee-current-month' : ''}" style="color:#FF9500; font-size:11px;">면제</td>`;
@@ -383,9 +410,14 @@ function renderFeeTable() {
     bodyHtml += `<tr><td>${escapeHtml(displayName(p.name))}<button style="${yearlyBtnStyle}" onclick="toggleYearlyFee('${safeName}')">${isYearly ? '연납✓' : '연납'}</button></td>`;
     for (let m = 1; m <= 12; m++) {
       const key      = `${year}-${String(m).padStart(2, '0')}`;
+      const isCur    = (parseInt(year) === curYear && m === curMonth);
+      const monthStr = String(m).padStart(2, '0');
+      if (!_isFeeEligibleForMonth(p, year, monthStr) || !_isJoinedByFeeMonth(p, year, monthStr)) {
+        bodyHtml += `<td class="fee-check${isCur ? ' fee-current-month' : ''}" style="color:#FF9500; font-size:11px;">면제</td>`;
+        continue;
+      }
       const status   = _getFeeMonthStatus(pFee, key, `${year}-yearly`);
       const view     = _getFeeCellView(status);
-      const isCur    = (parseInt(year) === curYear && m === curMonth);
       const cellClass = (view.extraClass || '') + (isCur ? ' fee-current-month' : '');
       const autoStyle = isYearly ? ' opacity:0.75;' : '';
       const clickHandler = isYearly ? '' : `onclick="toggleFee('${safeName}','${key}')"`;
@@ -398,6 +430,11 @@ function renderFeeTable() {
 
 function toggleFee(name, key) {
   if (!currentUserAuth || !currentLoggedPlayer) { requireAuth(() => toggleFee(name, key)); return; }
+  const p = players.find(x => x.name === name);
+  if (!p || !_isFeeTargetForKey(p, key)) {
+    gsAlert('이 회원은 선택한 월의 회비 납부 대상이 아닙니다.');
+    return;
+  }
   if (!feeData[name]) feeData[name] = {};
   const cur = feeData[name][key];
   feeData[name][key] = (cur === 'Y') ? 'N' : 'Y';
@@ -412,16 +449,26 @@ function toggleFee(name, key) {
 function feeSetAll(value, scope) {
   const year     = $('feeYear').value;
   const curMonth = new Date().getMonth() + 1;
-  const members  = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt &&
+  const members  = players.filter(p => !p.isGuest && !p.isTreasurer &&
                                        (!p.status || p.status === 'active' || p.status === 'dormant'));
   if (scope === 'year') {
     members.forEach(p => {
       if (!feeData[p.name]) feeData[p.name] = {};
-      for (let m = 1; m <= 12; m++) feeData[p.name][`${year}-${String(m).padStart(2, '0')}`] = value;
+      for (let m = 1; m <= 12; m++) {
+        const monthStr = String(m).padStart(2, '0');
+        if (_isFeeEligibleForMonth(p, year, monthStr) && _isJoinedByFeeMonth(p, year, monthStr)) {
+          feeData[p.name][`${year}-${monthStr}`] = value;
+        }
+      }
     });
   } else {
-    const key = `${year}-${String(curMonth).padStart(2, '0')}`;
-    members.forEach(p => { if (!feeData[p.name]) feeData[p.name] = {}; feeData[p.name][key] = value; });
+    const monthStr = String(curMonth).padStart(2, '0');
+    const key = `${year}-${monthStr}`;
+    members.forEach(p => {
+      if (!_isFeeEligibleForMonth(p, year, monthStr) || !_isJoinedByFeeMonth(p, year, monthStr)) return;
+      if (!feeData[p.name]) feeData[p.name] = {};
+      feeData[p.name][key] = value;
+    });
   }
   renderFeeTable();
   renderPartialFeePicker();
@@ -436,8 +483,8 @@ function copyFeeStatus() {
   const curMonth = new Date().getMonth() + 1;
   const key       = `${year}-${String(curMonth).padStart(2, '0')}`;
   const yearlyKey = `${year}-yearly`;
-  const members   = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt &&
-                                        (!p.status || p.status === 'active' || p.status === 'dormant'))
+  const members   = players.filter(p => _isFeeEligibleForMonth(p, year, String(curMonth).padStart(2, '0')) &&
+                                        _isJoinedByFeeMonth(p, year, String(curMonth).padStart(2, '0')))
                            .sort((a, b) => a.name.localeCompare(b.name));
   const paid = [], partial = [], unpaid = [];
   members.forEach(p => {
@@ -476,9 +523,9 @@ function renderPartialFeePicker() {
   const el = $('feePartialPickerArea');
   if (!el) return;
   const key = _getSelectedFeeMonthKey();
-  const [, month] = key.split('-');
-  const partialMembers = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt && (feeData[p.name] || {})[key] === 'P');
-  const members = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt && (!p.status || p.status === 'active' || p.status === 'dormant')).sort((a, b) => a.name.localeCompare(b.name));
+  const [year, month] = key.split('-');
+  const partialMembers = players.filter(p => _isFeeEligibleForMonth(p, year, month) && _isJoinedByFeeMonth(p, year, month) && (feeData[p.name] || {})[key] === 'P');
+  const members = players.filter(p => _isFeeEligibleForMonth(p, year, month) && _isJoinedByFeeMonth(p, year, month)).sort((a, b) => a.name.localeCompare(b.name));
 
   let html = `<div style="margin-bottom:8px; font-size:13px; color:var(--text-gray);">현재 ${parseInt(month,10)}월 부분납 회원: <strong style="color:#FF9F0A;">${partialMembers.length > 0 ? partialMembers.map(p => escapeHtml(displayName(p.name))).join(', ') : '없음'}</strong></div>`;
   html += `<div style="display:flex; flex-wrap:wrap; gap:6px;">`;
@@ -498,6 +545,11 @@ function renderPartialFeePicker() {
 function togglePartialFee(name) {
   if (!currentUserAuth || !currentLoggedPlayer) { requireAuth(() => togglePartialFee(name)); return; }
   const key = _getSelectedFeeMonthKey();
+  const p = players.find(x => x.name === name);
+  if (!p || !_isFeeTargetForKey(p, key)) {
+    gsAlert('이 회원은 선택한 월의 회비 납부 대상이 아닙니다.');
+    return;
+  }
   if (!feeData[name]) feeData[name] = {};
   feeData[name][key] = feeData[name][key] === 'P' ? 'N' : 'P';
   const cid = getActiveClubId();
@@ -513,7 +565,7 @@ function clearPartialFee() {
   if (!currentUserAuth || !currentLoggedPlayer) { requireAuth(() => clearPartialFee()); return; }
   const key = _getSelectedFeeMonthKey();
   players.forEach(p => {
-    if (!p.isGuest && !p.isTreasurer && !p.isFeeExempt && feeData[p.name] && feeData[p.name][key] === 'P') feeData[p.name][key] = 'N';
+    if (_isFeeTargetForKey(p, key) && feeData[p.name] && feeData[p.name][key] === 'P') feeData[p.name][key] = 'N';
   });
   const cid = getActiveClubId();
   if (cid) localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
@@ -617,6 +669,13 @@ function clearFeeExempt() {
 function toggleYearlyFee(name) {
   const year = $('feeYear').value;
   const key  = `${year}-yearly`;
+  const p = players.find(x => x.name === name);
+  const hasEligibleMonth = p && Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'))
+    .some(monthStr => _isFeeEligibleForMonth(p, year, monthStr) && _isJoinedByFeeMonth(p, year, monthStr));
+  if (!hasEligibleMonth) {
+    gsAlert('이 회원은 선택한 연도의 회비 납부 대상 월이 없습니다.');
+    return;
+  }
   if (!feeData[name]) feeData[name] = {};
   feeData[name][key] = (feeData[name][key] === 'Y') ? 'N' : 'Y';
   const cid = getActiveClubId();
@@ -954,15 +1013,33 @@ function _confirmJoinDate(name) {
 function setDormant(name) {
   const p = players.find(x => x.name === name);
   if (!p) return;
-  gsConfirm(`${displayName(name)}님을 휴면 처리할까요?\n\n• 랭킹에서 제외됩니다\n• 회비가 자동 면제됩니다`, ok => {
+
+  const today = _getLocalTodayString();
+  const currentYM = today.slice(0, 7);
+
+  // ✅ v7.74: 휴면 처리 안내 모달 강화
+  // 회계 로직은 그대로 두고, 처리일이 속한 월부터 면제되는 운영 기준을 명확히 고지한다.
+  const msg = `${displayName(name)}님을 휴면 처리할까요?\n\n` +
+    `휴면은 처리일이 속한 월부터 회비가 면제됩니다.\n\n` +
+    `예)\n` +
+    `${currentYM}에 휴면 처리 → ${currentYM}부터 면제\n` +
+    `다음 달부터 면제하려면 다음 달 1일에 휴면 처리하세요.\n\n` +
+    `• 랭킹에서 제외됩니다\n` +
+    `• 회비가 자동 면제됩니다`;
+
+  gsConfirm(msg, ok => {
     if (!ok) return;
     p.status = 'dormant';
-    p.dormantAt = new Date().toISOString().slice(0, 10);
-    p.isFeeExempt = true;
+    p.dormantAt = today;
+    p.isFeeExempt = false;
     pushDataOnly();
     renderActiveMemberList();
     renderFeeTable();
     gsAlert(`${displayName(name)}님이 휴면 처리됐습니다.`);
+  }, {
+    title: '휴면 처리 안내',
+    okText: '이 월부터 휴면 처리',
+    cancelText: '취소'
   });
 }
 

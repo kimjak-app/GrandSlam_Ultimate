@@ -17,24 +17,45 @@ function makeOneTimePlayerObj(name) {
   };
 }
 
+// 특정 월에 해당 회원이 회비 납부 대상인지 판단
+// dormantAt 기준: 휴면 시작월부터 면제, 이전 달은 납부 대상 유지
+// 월 단위(YYYY-MM)로 비교 — 날짜 비교 시 월 중간 휴면처리 버그 방지
+function _isFeeEligibleForMonth(p, yearStr, monthStr) {
+  if (!p || p.isGuest || p.isTreasurer) return false;
+
+  const targetYM = `${yearStr}-${monthStr}`;
+
+  // ✅ v7.73 루트픽스:
+  // 휴면 회원은 dormantAt만으로 월별 납부 대상을 판단한다.
+  // 기존 Firebase/localStorage에 isFeeExempt:true가 남아 있어도
+  // dormantAt 이전 월의 납부 기록은 회계 수입에 정상 반영되어야 한다.
+  if (p.status === 'dormant') {
+    if (!p.dormantAt) return false;
+    const dormantYM = String(p.dormantAt).slice(0, 7);
+    return targetYM < dormantYM;
+  }
+
+  // isFeeExempt는 휴면이 아닌 회원의 영구/수동 면제 전용 기준이다.
+  if (p.isFeeExempt) return false;
+
+  return !p.status || p.status === 'active';
+}
+
 function syncFeeToFinance() {
   financeData = financeData.filter(f => !f.auto);
   if (!monthlyFeeAmount) return;
 
   const cache = _getTreasurerCache();
   const year = cache.feeYear || String(new Date().getFullYear());
-  const nonTreasurerNames = new Set(
-    players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt &&
-                        (!p.status || p.status === 'active' || p.status === 'dormant'))
-           .map(p => p.name)
-  );
 
   for (let m = 1; m <= 12; m++) {
-    const key       = `${year}-${String(m).padStart(2, '0')}`;
+    const monthStr  = String(m).padStart(2, '0');
+    const key       = `${year}-${monthStr}`;
     const yearlyKey = `${year}-yearly`;
     let paidCount = 0;
-    Object.entries(feeData).forEach(([name, pf]) => {
-      if (!nonTreasurerNames.has(name)) return;
+    players.forEach(p => {
+      if (!_isFeeEligibleForMonth(p, year, monthStr)) return;
+      const pf = feeData[p.name] || {};
       if (pf[key] === 'Y' || pf[yearlyKey] === 'Y') paidCount++;
     });
     if (paidCount > 0) {
@@ -49,12 +70,12 @@ function syncFeeToFinance() {
 function _buildFeeSection(ym) {
   const [year, month] = ym.split('-');
   const key = `${year}-${month}`, yearlyKey = `${year}-yearly`;
-  // 해당 월 말일 계산 (가입일 필터링 기준)
   const monthLastDay = new Date(parseInt(year), parseInt(month), 0).toISOString().slice(0, 10);
-  const members = players.filter(p => !p.isGuest && !p.isTreasurer && !p.isFeeExempt &&
-                                       (!p.status || p.status === 'active' || p.status === 'dormant') &&
-                                       (!p.joinedAt || p.joinedAt <= monthLastDay))
-                         .sort((a, b) => a.name.localeCompare(b.name));
+  const members = players.filter(p =>
+    _isFeeEligibleForMonth(p, year, month) &&
+    (!p.joinedAt || p.joinedAt <= monthLastDay)
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
   const paid = [], partial = [], unpaid = [];
   members.forEach(p => {
     const pf = feeData[p.name] || {};
@@ -63,24 +84,16 @@ function _buildFeeSection(ym) {
     else if (status === 'P') partial.push(displayName(p.name));
     else unpaid.push(displayName(p.name));
   });
-  // 납부율: 완납 + 부분납 모두 납부 완료로 계산
   const paidCount = paid.length + partial.length;
   const rate = members.length > 0 ? Math.round(paidCount / members.length * 100) : 0;
-  let txt = `💰 회비 납부 현황 (${parseInt(month)}월)
-━━━━━━━━━━
-`;
-  txt += `납부율: ${paidCount}/${members.length}명 (${rate}%)
-`;
-  txt += `✅ 납부 (${paid.length}명): ${paid.join(', ') || '없음'}
-`;
-  txt += `🟡 부분납 (${partial.length}명): ${partial.join(', ') || '없음'}
-`;
+  let txt = `💰 회비 납부 현황 (${parseInt(month)}월)\n━━━━━━━━━━\n`;
+  txt += `납부율: ${paidCount}/${members.length}명 (${rate}%)\n`;
+  txt += `✅ 납부 (${paid.length}명): ${paid.join(', ') || '없음'}\n`;
+  txt += `🟡 부분납 (${partial.length}명): ${partial.join(', ') || '없음'}\n`;
   txt += `❌ 미납 (${unpaid.length}명): ${unpaid.join(', ') || '없음'}`;
   if (monthlyFeeAmount) {
-    txt += `
-💵 자동 합산 납부액: ${(paid.length * monthlyFeeAmount).toLocaleString()}원`;
-    if (partial.length > 0) txt += `
-ℹ️ 부분납 금액은 재정관리 수입 항목에서 별도 반영`;
+    txt += `\n💵 자동 합산 납부액: ${(paid.length * monthlyFeeAmount).toLocaleString()}원`;
+    if (partial.length > 0) txt += `\nℹ️ 부분납 금액은 재정관리 수입 항목에서 별도 반영`;
   }
   return txt;
 }
@@ -241,6 +254,7 @@ function _buildExchangeSection(ym) {
 // window 전역 등록
 window.makeOneTimePlayerObj = makeOneTimePlayerObj;
 window.syncFeeToFinance = syncFeeToFinance;
+window._isFeeEligibleForMonth = _isFeeEligibleForMonth;
 window._buildFeeSection = _buildFeeSection;
 window._buildFinanceSection = _buildFinanceSection;
 window._buildAttendanceSection = _buildAttendanceSection;
