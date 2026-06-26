@@ -41,9 +41,69 @@ function _isFeeEligibleForMonth(p, yearStr, monthStr) {
   return !p.status || p.status === 'active';
 }
 
+
+// ✅ v7.75 루트픽스: 월회비는 현재값 하나가 아니라 월별 적용 이력으로 판단한다.
+// 예: 2026-01부터 80,000원, 2026-07부터 90,000원.
+function _normalizeFeeRateHistory(history, fallbackAmount) {
+  let list = Array.isArray(history) ? history : [];
+  list = list
+    .map(r => ({
+      startYm: String(r?.startYm || '').slice(0, 7),
+      amount: parseInt(r?.amount, 10) || 0,
+    }))
+    .filter(r => /^\d{4}-\d{2}$/.test(r.startYm) && r.amount > 0)
+    .sort((a, b) => a.startYm.localeCompare(b.startYm));
+
+  // v7.74 이전 클럽은 monthlyFeeAmount만 있으므로 과거 회비 기준으로 마이그레이션한다.
+  // 1900-01은 모든 과거 월에 기존 회비가 적용되도록 하는 안전 기준점이다.
+  const fallback = parseInt(fallbackAmount, 10) || 0;
+  if (list.length === 0 && fallback > 0) list.push({ startYm: '1900-01', amount: fallback });
+
+  // 같은 시작월이 중복되면 마지막 값을 채택한다.
+  const byMonth = {};
+  list.forEach(r => { byMonth[r.startYm] = r.amount; });
+  return Object.keys(byMonth).sort().map(startYm => ({ startYm, amount: byMonth[startYm] }));
+}
+
+function _ensureFeeRateHistory(fallbackAmount) {
+  feeRateHistory = _normalizeFeeRateHistory(feeRateHistory, fallbackAmount ?? monthlyFeeAmount);
+  return feeRateHistory;
+}
+
+function _getCurrentYearMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function _getLatestFeeRate() {
+  const history = _ensureFeeRateHistory(monthlyFeeAmount);
+  if (history.length === 0) return { startYm: _getCurrentYearMonth(), amount: monthlyFeeAmount || 0 };
+  return history[history.length - 1];
+}
+
+function upsertMonthlyFeeRate(startYm, amount) {
+  if (!/^\d{4}-\d{2}$/.test(String(startYm || ''))) return false;
+  amount = parseInt(amount, 10) || 0;
+  if (amount <= 0) return false;
+  _ensureFeeRateHistory(monthlyFeeAmount);
+  feeRateHistory = feeRateHistory.filter(r => r.startYm !== startYm);
+  feeRateHistory.push({ startYm, amount });
+  feeRateHistory = _normalizeFeeRateHistory(feeRateHistory, monthlyFeeAmount);
+  monthlyFeeAmount = amount;
+  return true;
+}
+
+function getMonthlyFeeAmountForMonth(yearStr, monthStr) {
+  const targetYM = `${yearStr}-${String(monthStr).padStart(2, '0')}`;
+  const history = _ensureFeeRateHistory(monthlyFeeAmount);
+  let amount = 0;
+  history.forEach(r => { if (r.startYm <= targetYM) amount = r.amount; });
+  return amount;
+}
+
 function syncFeeToFinance() {
   financeData = financeData.filter(f => !f.auto);
-  if (!monthlyFeeAmount) return;
+  _ensureFeeRateHistory(monthlyFeeAmount);
 
   const cache = _getTreasurerCache();
   const year = cache.feeYear || String(new Date().getFullYear());
@@ -52,6 +112,8 @@ function syncFeeToFinance() {
     const monthStr  = String(m).padStart(2, '0');
     const key       = `${year}-${monthStr}`;
     const yearlyKey = `${year}-yearly`;
+    const monthFeeAmount = getMonthlyFeeAmountForMonth(year, monthStr);
+    if (!monthFeeAmount) continue;
     let paidCount = 0;
     players.forEach(p => {
       if (!_isFeeEligibleForMonth(p, year, monthStr)) return;
@@ -61,7 +123,7 @@ function syncFeeToFinance() {
     if (paidCount > 0) {
       financeData.push({
         id: `auto-fee-${key}`, type: 'income', date: `${key}-01`,
-        desc: `${m}월 회비 (${paidCount}명)`, amount: paidCount * monthlyFeeAmount, auto: true
+        desc: `${m}월 회비 (${paidCount}명 × ${monthFeeAmount.toLocaleString()}원)`, amount: paidCount * monthFeeAmount, auto: true
       });
     }
   }
@@ -91,8 +153,10 @@ function _buildFeeSection(ym) {
   txt += `✅ 납부 (${paid.length}명): ${paid.join(', ') || '없음'}\n`;
   txt += `🟡 부분납 (${partial.length}명): ${partial.join(', ') || '없음'}\n`;
   txt += `❌ 미납 (${unpaid.length}명): ${unpaid.join(', ') || '없음'}`;
-  if (monthlyFeeAmount) {
-    txt += `\n💵 자동 합산 납부액: ${(paid.length * monthlyFeeAmount).toLocaleString()}원`;
+  const monthFeeAmount = getMonthlyFeeAmountForMonth(year, month);
+  if (monthFeeAmount) {
+    txt += `\n💵 월회비: ${monthFeeAmount.toLocaleString()}원`;
+    txt += `\n💵 자동 합산 납부액: ${(paid.length * monthFeeAmount).toLocaleString()}원`;
     if (partial.length > 0) txt += `\nℹ️ 부분납 금액은 재정관리 수입 항목에서 별도 반영`;
   }
   return txt;

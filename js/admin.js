@@ -354,6 +354,7 @@ async function masterBackup() {
           announcements:   noticeDoc.exists ? (noticeDoc.data().announcements || []) : [],
           feeData:         feeDoc.exists    ? (feeDoc.data().feeData          || {}) : {},
           monthlyFeeAmount: feeDoc.exists   ? (feeDoc.data().monthlyFeeAmount || 0)  : 0,
+          feeRateHistory:  feeDoc.exists    ? (feeDoc.data().feeRateHistory   || []) : [],
           financeData:     financeDoc.exists ? (financeDoc.data().financeData || []) : [],
           exchanges:       exchangeSnap.docs.map(d => ({ id: d.id, ...d.data() })),
         });
@@ -458,7 +459,7 @@ async function _confirmMasterSelectiveRestore(masterData) {
             courtNotices: clubData.courtNotices || [], announcements: clubData.announcements || [],
           });
           await _clubRef(clubId).collection('settings').doc('feeData').set({
-            feeData: clubData.feeData || {}, monthlyFeeAmount: clubData.monthlyFeeAmount || 0,
+            feeData: clubData.feeData || {}, monthlyFeeAmount: clubData.monthlyFeeAmount || 0, feeRateHistory: clubData.feeRateHistory || [],
           });
           const manualFinance = (clubData.financeData || []).filter(f => !f.auto);
           await _clubRef(clubId).collection('settings').doc('financeData').set({ financeData: manualFinance });

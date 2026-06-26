@@ -162,6 +162,7 @@ var currentFinTab = 'income';
 var financeData = [];
 var feeData = {};
 var monthlyFeeAmount = 0;
+var feeRateHistory = []; // ✅ v7.75: 월회비 변경 이력 [{ startYm:'YYYY-MM', amount:number }]
 var courtPresets = [];
 
 var _clubFormSaving = false;

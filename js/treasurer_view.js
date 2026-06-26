@@ -268,20 +268,47 @@ function initFeeTable() {
     sel.innerHTML += `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}년</option>`;
   }
   fetchFeeData().then(() => {
-    $('monthlyFeeAmount').value = monthlyFeeAmount || '';
     _getTreasurerCache().feeYear = $('feeYear').value;
+    _ensureFeeRateHistory(monthlyFeeAmount);
+    _initPartialMonthDropdown();
+    _syncFeeRateEditor();
     syncFeeToFinance();
     renderFeeTable();
     renderPartialFeePicker();
   });
 }
 
+function _syncFeeRateEditor() {
+  const amountEl = $('monthlyFeeAmount');
+  const startEl  = $('feeEffectiveMonth');
+  if (!amountEl && !startEl) return;
+  const selectedKey = _getSelectedFeeMonthKey();
+  const [year, month] = selectedKey.split('-');
+  const selectedAmount = getMonthlyFeeAmountForMonth(year, month);
+  const latest = _getLatestFeeRate();
+  if (amountEl) amountEl.value = selectedAmount || latest.amount || monthlyFeeAmount || '';
+  if (startEl && !startEl.value) startEl.value = selectedKey || latest.startYm || _getCurrentYearMonth();
+}
+
 function saveMonthlyFee() {
   if (!currentUserAuth || !currentLoggedPlayer) { requireAuth(() => saveMonthlyFee()); return; }
-  monthlyFeeAmount = parseInt($('monthlyFeeAmount').value) || 0;
-  localStorage.setItem('grandslam_monthly_fee_' + getActiveClubId(), monthlyFeeAmount);
+  const amountEl = $('monthlyFeeAmount');
+  const startEl  = $('feeEffectiveMonth');
+  const amount = parseInt(amountEl?.value, 10) || 0;
+  const startYm = (startEl?.value || _getSelectedFeeMonthKey()).slice(0, 7);
+  if (!amount || amount <= 0) { gsAlert('월회비 금액을 입력하세요.'); return; }
+  if (!/^\d{4}-\d{2}$/.test(startYm)) { gsAlert('적용 시작월을 선택하세요.'); return; }
+  upsertMonthlyFeeRate(startYm, amount);
+  const cid = getActiveClubId();
+  if (cid) {
+    localStorage.setItem('grandslam_monthly_fee_' + cid, monthlyFeeAmount);
+    localStorage.setItem('grandslam_fee_rate_history_' + cid, JSON.stringify(feeRateHistory));
+  }
   syncFeeToFinance();
+  renderFeeTable();
+  renderPartialFeePicker();
   pushFeeData();
+  gsAlert(`월회비 ${amount.toLocaleString()}원이 ${startYm}부터 적용됩니다.\n기존 월의 회비 금액은 소급 변경되지 않습니다.`);
 }
 
 function _getFeeMonthStatus(pf, key, yearlyKey) {
@@ -332,23 +359,20 @@ function _getSelectedFeeMonthKey() {
 function _initPartialMonthDropdown() {
   const sel = $('feePartialMonth');
   if (!sel) return;
-  const year = $('feeYear')?.value || String(new Date().getFullYear());
   const curMonth = new Date().getMonth() + 1;
-  const curYear = new Date().getFullYear();
-  const selectedYear = parseInt(year);
-  const maxMonth = (selectedYear === curYear) ? curMonth : 12;
-  const prevVal = sel.value ? parseInt(sel.value) : curMonth;
+  const prevVal = sel.value ? parseInt(sel.value, 10) : curMonth;
   sel.innerHTML = '';
-  for (let m = 1; m <= maxMonth; m++) {
+  for (let m = 1; m <= 12; m++) {
     const opt = document.createElement('option');
     opt.value = m;
     opt.textContent = `${m}월`;
-    if (m === (prevVal <= maxMonth ? prevVal : curMonth)) opt.selected = true;
+    if (m === (prevVal >= 1 && prevVal <= 12 ? prevVal : curMonth)) opt.selected = true;
     sel.appendChild(opt);
   }
 }
 
 function renderFeeTable() {
+  _initPartialMonthDropdown();
   const year     = $('feeYear').value;
   _getTreasurerCache().feeYear = year;
   const curMonth = new Date().getMonth() + 1;
@@ -356,13 +380,15 @@ function renderFeeTable() {
   const members  = players.filter(p => !p.isGuest && (!p.status || p.status === 'active' || p.status === 'dormant'))
                           .sort((a, b) => a.name.localeCompare(b.name));
 
-  // 납부율 요약
+  // 납부율 요약 — ✅ v7.75: 현재월이 아니라 선택한 납부 처리월 기준
   const summaryEl = $('feeSummary');
   if (summaryEl) {
-    const curMonthStr = String(curMonth).padStart(2, '0');
-    const key       = `${year}-${curMonthStr}`;
+    const selectedKey = _getSelectedFeeMonthKey();
+    const [, selectedMonthStr] = selectedKey.split('-');
+    const key       = `${year}-${selectedMonthStr}`;
     const yearlyKey = `${year}-yearly`;
-    const targets   = members.filter(p => _isFeeEligibleForMonth(p, year, curMonthStr) && _isJoinedByFeeMonth(p, year, curMonthStr));
+    const monthFeeAmount = getMonthlyFeeAmountForMonth(year, selectedMonthStr);
+    const targets   = members.filter(p => _isFeeEligibleForMonth(p, year, selectedMonthStr) && _isJoinedByFeeMonth(p, year, selectedMonthStr));
     let paidCount = 0, partialCount = 0;
     targets.forEach(p => {
       const pf = feeData[p.name] || {};
@@ -370,7 +396,7 @@ function renderFeeTable() {
       if (status === 'Y') paidCount++;
       else if (status === 'P') partialCount++;
     });
-    summaryEl.textContent = `📊 ${curMonth}월 납부 현황: 완납 ${paidCount}명 · 부분납 ${partialCount}명 / 총 ${targets.length}명`;
+    summaryEl.textContent = `📊 ${parseInt(selectedMonthStr, 10)}월 납부 현황: 완납 ${paidCount}명 · 부분납 ${partialCount}명 / 총 ${targets.length}명${monthFeeAmount ? ` · 월회비 ${monthFeeAmount.toLocaleString()}원` : ''}`;
   }
 
   // 헤더
@@ -462,7 +488,8 @@ function feeSetAll(value, scope) {
       }
     });
   } else {
-    const monthStr = String(curMonth).padStart(2, '0');
+    const selectedKey = _getSelectedFeeMonthKey();
+    const [, monthStr] = selectedKey.split('-');
     const key = `${year}-${monthStr}`;
     members.forEach(p => {
       if (!_isFeeEligibleForMonth(p, year, monthStr) || !_isJoinedByFeeMonth(p, year, monthStr)) return;
@@ -480,11 +507,13 @@ function feeSetAll(value, scope) {
 
 function copyFeeStatus() {
   const year     = $('feeYear').value;
-  const curMonth = new Date().getMonth() + 1;
-  const key       = `${year}-${String(curMonth).padStart(2, '0')}`;
+  const selectedKey = _getSelectedFeeMonthKey();
+  const [, selectedMonthStr] = selectedKey.split('-');
+  const curMonth = parseInt(selectedMonthStr, 10);
+  const key       = `${year}-${selectedMonthStr}`;
   const yearlyKey = `${year}-yearly`;
-  const members   = players.filter(p => _isFeeEligibleForMonth(p, year, String(curMonth).padStart(2, '0')) &&
-                                        _isJoinedByFeeMonth(p, year, String(curMonth).padStart(2, '0')))
+  const members   = players.filter(p => _isFeeEligibleForMonth(p, year, selectedMonthStr) &&
+                                        _isJoinedByFeeMonth(p, year, selectedMonthStr))
                            .sort((a, b) => a.name.localeCompare(b.name));
   const paid = [], partial = [], unpaid = [];
   members.forEach(p => {
@@ -504,11 +533,12 @@ function copyFeeStatus() {
 `;
   text += `❌ 미납 (${unpaid.length}명): ${unpaid.join(', ') || '없음'}
 `;
-  if (monthlyFeeAmount) {
+  const monthFeeAmount = getMonthlyFeeAmountForMonth(year, selectedMonthStr);
+  if (monthFeeAmount) {
     text += `━━━━━━━━━━
-💰 월회비: ${monthlyFeeAmount.toLocaleString()}원
+💰 월회비: ${monthFeeAmount.toLocaleString()}원
 `;
-    text += `📥 자동 합산 납부액: ${(paid.length * monthlyFeeAmount).toLocaleString()}원`;
+    text += `📥 자동 합산 납부액: ${(paid.length * monthFeeAmount).toLocaleString()}원`;
     if (partial.length > 0) text += `
 ℹ️ 부분납 금액은 재정관리 수입 내역 기준으로 별도 반영`;
   }
@@ -527,7 +557,7 @@ function renderPartialFeePicker() {
   const partialMembers = players.filter(p => _isFeeEligibleForMonth(p, year, month) && _isJoinedByFeeMonth(p, year, month) && (feeData[p.name] || {})[key] === 'P');
   const members = players.filter(p => _isFeeEligibleForMonth(p, year, month) && _isJoinedByFeeMonth(p, year, month)).sort((a, b) => a.name.localeCompare(b.name));
 
-  let html = `<div style="margin-bottom:8px; font-size:13px; color:var(--text-gray);">현재 ${parseInt(month,10)}월 부분납 회원: <strong style="color:#FF9F0A;">${partialMembers.length > 0 ? partialMembers.map(p => escapeHtml(displayName(p.name))).join(', ') : '없음'}</strong></div>`;
+  let html = `<div style="margin-bottom:8px; font-size:13px; color:var(--text-gray);">선택한 ${parseInt(month,10)}월 부분납 회원: <strong style="color:#FF9F0A;">${partialMembers.length > 0 ? partialMembers.map(p => escapeHtml(displayName(p.name))).join(', ') : '없음'}</strong></div>`;
   html += `<div style="display:flex; flex-wrap:wrap; gap:6px;">`;
   members.forEach(p => {
     const isP = (feeData[p.name] || {})[key] === 'P';

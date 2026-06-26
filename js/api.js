@@ -6,7 +6,7 @@
 //   clubs/{clubId}/players           (선수 1명 = 문서 1개)
 //   clubs/{clubId}/matchLog          (경기 1건 = 문서 1개)
 //   clubs/{clubId}/settings/notices  (courtNotices, announcements)
-//   clubs/{clubId}/settings/feeData  (feeData, monthlyFeeAmount)
+//   clubs/{clubId}/settings/feeData  (feeData, monthlyFeeAmount, feeRateHistory)
 //   clubs/{clubId}/settings/financeData
 //   clubs/{clubId}/exchanges/{id}
 //
@@ -602,16 +602,19 @@ async function fetchFeeData() {
       const data = doc.data();
       feeData = data.feeData || {};
       monthlyFeeAmount = data.monthlyFeeAmount || 0;
+      feeRateHistory = Array.isArray(data.feeRateHistory) ? data.feeRateHistory : [];
       localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
       localStorage.setItem('grandslam_monthly_fee_' + cid, monthlyFeeAmount);
-      AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'fee', feeData, monthlyFeeAmount } }));
+      localStorage.setItem('grandslam_fee_rate_history_' + cid, JSON.stringify(feeRateHistory));
+      AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'fee', feeData, monthlyFeeAmount, feeRateHistory } }));
       return;
     }
   } catch (e) { console.warn('fetchFeeData Firestore error, using local:', e); }
   try { feeData = JSON.parse(localStorage.getItem('grandslam_fee_data_' + cid)) || {}; } catch (e) { feeData = {}; }
   const savedFee = localStorage.getItem('grandslam_monthly_fee_' + cid);
   if (savedFee) monthlyFeeAmount = parseInt(savedFee) || 0;
-  AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'fee', feeData, monthlyFeeAmount } }));
+  try { feeRateHistory = JSON.parse(localStorage.getItem('grandslam_fee_rate_history_' + cid)) || []; } catch (e) { feeRateHistory = []; }
+  AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'fee', feeData, monthlyFeeAmount, feeRateHistory } }));
 }
 
 async function pushFeeData() {
@@ -619,10 +622,11 @@ async function pushFeeData() {
   if (cid) {
     localStorage.setItem('grandslam_fee_data_' + cid, JSON.stringify(feeData));
     localStorage.setItem('grandslam_monthly_fee_' + cid, monthlyFeeAmount);
+    localStorage.setItem('grandslam_fee_rate_history_' + cid, JSON.stringify(feeRateHistory || []));
   }
   if (!currentClub) return false;
   try {
-    await _clubRef(cid).collection('settings').doc('feeData').set({ feeData, monthlyFeeAmount });
+    await _clubRef(cid).collection('settings').doc('feeData').set({ feeData, monthlyFeeAmount, feeRateHistory: feeRateHistory || [] });
     return true;
   } catch (e) { console.warn('pushFeeData error:', e); return false; }
 }
@@ -701,6 +705,7 @@ async function exportBackup() {
       announcements:    noticeDoc.exists ? (noticeDoc.data().announcements  || []) : [],
       feeData:          feeDoc.exists    ? (feeDoc.data().feeData           || {}) : {},
       monthlyFeeAmount: feeDoc.exists    ? (feeDoc.data().monthlyFeeAmount  || 0)  : 0,
+      feeRateHistory:   feeDoc.exists    ? (feeDoc.data().feeRateHistory   || []) : [],
       financeData:      financeDoc.exists ? (financeDoc.data().financeData  || []) : [],
       exchanges:        exchangeSnap.docs.map(d => ({ id: d.id, ...d.data() })),
       mvpHistory:       mvpDoc.exists ? (mvpDoc.data() || { monthly: {}, weekly: {} }) : { monthly: {}, weekly: {} },
@@ -774,10 +779,11 @@ async function _doRestore(data) {
 
     // feeData 복원
     await _clubRef(clubId).collection('settings').doc('feeData').set({
-      feeData: data.feeData || {}, monthlyFeeAmount: data.monthlyFeeAmount || 0,
+      feeData: data.feeData || {}, monthlyFeeAmount: data.monthlyFeeAmount || 0, feeRateHistory: data.feeRateHistory || [],
     });
     feeData          = data.feeData          || {};
     monthlyFeeAmount = data.monthlyFeeAmount || 0;
+    feeRateHistory   = data.feeRateHistory   || [];
 
     // financeData 복원 (수동 항목만)
     const manualFinance = (data.financeData || []).filter(f => !f.auto);
