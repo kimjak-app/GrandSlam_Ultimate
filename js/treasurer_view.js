@@ -282,15 +282,21 @@ function _syncFeeRateEditor() {
   const amountEl = $('monthlyFeeAmount');
   const startEl  = $('feeEffectiveMonth');
   if (!amountEl && !startEl) return;
+
+  // ✅ v7.76 핫픽스:
+  // 월회비 변경 입력칸은 납부 처리월이 아니라 "적용 시작월" 기준 금액을 보여줘야 한다.
+  // 예: 납부 처리월이 6월이어도 적용 시작월이 7월이면 7월 기준 회비(90,000원)를 표시한다.
   const selectedKey = _getSelectedFeeMonthKey();
-  const [year, month] = selectedKey.split('-');
-  const selectedAmount = getMonthlyFeeAmountForMonth(year, month);
   const latest = _getLatestFeeRate();
-  if (amountEl) amountEl.value = selectedAmount || latest.amount || monthlyFeeAmount || '';
   if (startEl && !startEl.value) startEl.value = selectedKey || latest.startYm || _getCurrentYearMonth();
+
+  const editorKey = (startEl?.value || selectedKey || latest.startYm || _getCurrentYearMonth()).slice(0, 7);
+  const [year, month] = editorKey.split('-');
+  const editorAmount = getMonthlyFeeAmountForMonth(year, month);
+  if (amountEl) amountEl.value = editorAmount || latest.amount || monthlyFeeAmount || '';
 }
 
-function saveMonthlyFee() {
+async function saveMonthlyFee() {
   if (!currentUserAuth || !currentLoggedPlayer) { requireAuth(() => saveMonthlyFee()); return; }
   const amountEl = $('monthlyFeeAmount');
   const startEl  = $('feeEffectiveMonth');
@@ -304,10 +310,18 @@ function saveMonthlyFee() {
     localStorage.setItem('grandslam_monthly_fee_' + cid, monthlyFeeAmount);
     localStorage.setItem('grandslam_fee_rate_history_' + cid, JSON.stringify(feeRateHistory));
   }
+
+  // ✅ v7.76: 클라우드 저장 완료를 기다린 뒤 성공 안내를 표시한다.
+  const saved = await pushFeeData();
+  if (currentClub && !saved) {
+    gsAlert('월회비 변경값을 이 기기에는 저장했지만, 클라우드 저장에 실패했습니다. 네트워크를 확인한 뒤 다시 저장해 주세요.');
+    return;
+  }
+
   syncFeeToFinance();
   renderFeeTable();
   renderPartialFeePicker();
-  pushFeeData();
+  _syncFeeRateEditor();
   gsAlert(`월회비 ${amount.toLocaleString()}원이 ${startYm}부터 적용됩니다.\n기존 월의 회비 금액은 소급 변경되지 않습니다.`);
 }
 
