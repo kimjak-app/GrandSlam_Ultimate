@@ -23,22 +23,16 @@ function makeOneTimePlayerObj(name) {
 function _isFeeEligibleForMonth(p, yearStr, monthStr) {
   if (!p || p.isGuest || p.isTreasurer) return false;
 
-  const targetYM = `${yearStr}-${monthStr}`;
+  // ✅ v7.77 루트픽스:
+  // 버튼을 누른 날짜가 아니라, 해당 월에 실제로 적용되는 회원 상태를 기준으로 회비 대상을 판단한다.
+  // 예) 6월 30일에 7월 휴면/복귀 예약 → 6월 회계는 유지, 7월 회비표만 변경.
+  const effectiveStatus = getMemberStatusForMonth(p, yearStr, monthStr);
+  if (effectiveStatus === 'inactive' || effectiveStatus === 'dormant') return false;
 
-  // ✅ v7.73 루트픽스:
-  // 휴면 회원은 dormantAt만으로 월별 납부 대상을 판단한다.
-  // 기존 Firebase/localStorage에 isFeeExempt:true가 남아 있어도
-  // dormantAt 이전 월의 납부 기록은 회계 수입에 정상 반영되어야 한다.
-  if (p.status === 'dormant') {
-    if (!p.dormantAt) return false;
-    const dormantYM = String(p.dormantAt).slice(0, 7);
-    return targetYM < dormantYM;
-  }
-
-  // isFeeExempt는 휴면이 아닌 회원의 영구/수동 면제 전용 기준이다.
+  // isFeeExempt는 현재/해당월 정회원의 영구/수동 면제 전용 기준이다.
   if (p.isFeeExempt) return false;
 
-  return !p.status || p.status === 'active';
+  return effectiveStatus === 'active';
 }
 
 
@@ -73,6 +67,114 @@ function _ensureFeeRateHistory(fallbackAmount) {
 function _getCurrentYearMonth() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+
+// ✅ v7.77: 회원 상태 변경 이력/예약 유틸리티
+// 버튼을 누른 날과 실제 적용월을 분리해 휴면 예약·복귀 예약을 처리한다.
+function _getLocalTodayStringForMemberStatus() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function _addMonthsToYm(ym, delta) {
+  const [y, m] = String(ym || _getCurrentYearMonth()).split('-').map(Number);
+  const d = new Date(y, (m || 1) - 1 + Number(delta || 0), 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function _ymToFirstDate(ym) {
+  return `${String(ym || _getCurrentYearMonth()).slice(0, 7)}-01`;
+}
+
+function _normalizeMemberStatusHistory(p) {
+  if (!p) return [];
+  let list = Array.isArray(p.memberStatusHistory) ? p.memberStatusHistory : [];
+  list = list.map(r => {
+      const type = String(r?.type || r?.status || '').trim();
+      const startYm = String(r?.startYm || r?.startDate || r?.date || '').slice(0, 7);
+      return { type, startYm };
+    })
+    .filter(r => ['active', 'dormant', 'inactive'].includes(r.type) && /^\d{4}-\d{2}$/.test(r.startYm));
+
+  // 레거시 데이터 마이그레이션: 기존 dormantAt/restoreAt/leftAt도 월별 이력으로 읽는다.
+  if (p.dormantAt && /^\d{4}-\d{2}/.test(String(p.dormantAt))) {
+    list.push({ type: 'dormant', startYm: String(p.dormantAt).slice(0, 7) });
+  }
+  if (p.restoreAt && /^\d{4}-\d{2}/.test(String(p.restoreAt))) {
+    list.push({ type: 'active', startYm: String(p.restoreAt).slice(0, 7) });
+  }
+  if (p.status === 'inactive' && p.leftAt && /^\d{4}-\d{2}/.test(String(p.leftAt))) {
+    list.push({ type: 'inactive', startYm: String(p.leftAt).slice(0, 7) });
+  }
+
+  // 같은 적용월이 있으면 마지막 저장값을 채택한다.
+  const byMonth = {};
+  list.sort((a, b) => a.startYm.localeCompare(b.startYm)).forEach(r => { byMonth[r.startYm] = r.type; });
+  const normalized = Object.keys(byMonth).sort().map(startYm => ({ startYm, type: byMonth[startYm] }));
+  p.memberStatusHistory = normalized;
+  return normalized;
+}
+
+function upsertMemberStatusHistory(p, type, startYm) {
+  if (!p || !['active', 'dormant', 'inactive'].includes(type) || !/^\d{4}-\d{2}$/.test(String(startYm || ''))) return false;
+  const history = _normalizeMemberStatusHistory(p).filter(r => r.startYm !== startYm);
+  history.push({ type, startYm });
+  history.sort((a, b) => a.startYm.localeCompare(b.startYm));
+  p.memberStatusHistory = history;
+  return true;
+}
+
+function getMemberStatusForMonth(p, yearStr, monthStr) {
+  if (!p) return 'inactive';
+  if (p.isGuest) return 'active';
+  const targetYM = `${yearStr}-${String(monthStr).padStart(2, '0')}`;
+  const history = _normalizeMemberStatusHistory(p);
+
+  // 첫 이력 이전은 기본적으로 정회원으로 본다. 단 탈퇴만 있는 사람은 inactive 유지.
+  let status = p.status === 'inactive' ? 'inactive' : 'active';
+  history.forEach(r => { if (r.startYm <= targetYM) status = r.type; });
+  return status || 'active';
+}
+
+function getMemberCurrentStatus(p) {
+  const [y, m] = _getCurrentYearMonth().split('-');
+  return getMemberStatusForMonth(p, y, m);
+}
+
+function getNextMemberStatusChange(p) {
+  const currentYM = _getCurrentYearMonth();
+  const history = _normalizeMemberStatusHistory(p);
+  return history.find(r => r.startYm > currentYM) || null;
+}
+
+function getMemberScheduleLabel(p) {
+  if (!p) return '';
+  const current = getMemberCurrentStatus(p);
+  const next = getNextMemberStatusChange(p);
+  if (current === 'active' && next?.type === 'dormant') return `휴면 예정: ${_ymToFirstDate(next.startYm)}`;
+  if (current === 'dormant' && next?.type === 'active') return `복귀 예정: ${_ymToFirstDate(next.startYm)}`;
+  if (current === 'inactive' && next?.type === 'active') return `재가입 예정: ${_ymToFirstDate(next.startYm)}`;
+  if (current === 'dormant') return p.dormantAt ? `휴면 시작: ${p.dormantAt}` : '휴면 처리됨';
+  return '';
+}
+
+function applyMemberStatusSchedules(shouldPush) {
+  let changed = false;
+  (players || []).forEach(p => {
+    if (!p || p.isGuest) return;
+    const effective = getMemberCurrentStatus(p);
+    if (effective && p.status !== effective) {
+      p.status = effective;
+      if (effective === 'active') p.isFeeExempt = false;
+      changed = true;
+    }
+  });
+  if (changed && shouldPush && typeof pushDataOnly === 'function') pushDataOnly();
+  return changed;
 }
 
 function _getLatestFeeRate() {
@@ -327,3 +429,11 @@ window._buildGamesSection = _buildGamesSection;
 window._buildWinrateSection = _buildWinrateSection;
 window._buildExchangeSection = _buildExchangeSection;
 window._getTreasurerCache = _getTreasurerCache;
+window.getMemberStatusForMonth = getMemberStatusForMonth;
+window.getMemberCurrentStatus = getMemberCurrentStatus;
+window.getNextMemberStatusChange = getNextMemberStatusChange;
+window.getMemberScheduleLabel = getMemberScheduleLabel;
+window.upsertMemberStatusHistory = upsertMemberStatusHistory;
+window.applyMemberStatusSchedules = applyMemberStatusSchedules;
+window._addMonthsToYm = _addMonthsToYm;
+window._ymToFirstDate = _ymToFirstDate;

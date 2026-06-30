@@ -189,6 +189,13 @@ async function _doSync(clubId) {
     }
     // ✅ v6.5: setter로 클럽별 격리 저장 + 전역변수 동기화
     setClubPlayers(clubId, (rawPlayers || []).map(ensure));
+    // ✅ v7.77: 휴면/복귀 예약 적용월이 도래하면 현재 상태를 자동 반영한다.
+    try {
+      if (typeof applyMemberStatusSchedules === 'function') {
+        const changed = applyMemberStatusSchedules(false);
+        if (changed) setTimeout(() => { try { pushDataOnly(); } catch(e) { console.warn('member status schedule auto-save error:', e); } }, 0);
+      }
+    } catch(e) { console.warn('applyMemberStatusSchedules error:', e); }
     setClubMatchLog(clubId, []); // 클럽 전환 시 이전 matchLog 즉시 초기화
     try { AppEvents.dispatchEvent(new CustomEvent('gs:state:changed', { detail: { type: 'players', players } })); } catch (e) {}
 

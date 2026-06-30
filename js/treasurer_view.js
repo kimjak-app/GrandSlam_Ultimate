@@ -932,19 +932,28 @@ function renderMemberHistoryTabs(tab) {
 function renderActiveMemberList() {
   const el = document.getElementById('mh-list');
   if (!el) return;
-  const actives    = players.filter(p => !p.isGuest && (!p.status || p.status === 'active'));
+  if (typeof applyMemberStatusSchedules === 'function') applyMemberStatusSchedules(false);
+
+  const currentStatusOf = (p) => (typeof getMemberCurrentStatus === 'function') ? getMemberCurrentStatus(p) : (p.status || 'active');
+  const scheduleLabelOf = (p) => (typeof getMemberScheduleLabel === 'function') ? getMemberScheduleLabel(p) : '';
+
+  const actives    = players.filter(p => !p.isGuest && currentStatusOf(p) === 'active');
   const associates = players.filter(p => p.isGuest  && (!p.status || p.status === 'active'));
-  const dormants   = players.filter(p => !p.isGuest && p.status === 'dormant');
+  const dormants   = players.filter(p => !p.isGuest && currentStatusOf(p) === 'dormant');
   let html = '';
 
   if (actives.length > 0) {
     html += `<div style="font-size:12px; font-weight:700; color:var(--text-gray); margin:8px 0 6px;">🟢 정회원 (${actives.length}명)</div>`;
     actives.sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
       const safe = escapeHtml(p.name).replace(/'/g, "&#39;");
+      const schedule = scheduleLabelOf(p);
+      const joined = p.joinedAt ? `가입: ${p.joinedAt}` : '가입일 미등록';
+      const meta = schedule ? `${joined} · ${schedule}` : joined;
+      const metaColor = schedule ? '#FF9500' : 'var(--text-gray)';
       html += `<div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#F9F9F9; border-radius:12px; margin-bottom:6px;">
         <div>
           <div style="font-size:14px; font-weight:600;">${escapeHtml(displayName(p.name))}</div>
-          <div style="font-size:11px; color:var(--text-gray); margin-top:2px;">${p.joinedAt ? `가입: ${p.joinedAt}` : '가입일 미등록'}</div>
+          <div style="font-size:11px; color:${metaColor}; margin-top:2px;">${escapeHtml(meta)}</div>
         </div>
         <div style="display:flex; gap:6px;">
           <button onclick="editJoinDate('${safe}')" style="padding:5px 9px; background:#E5E5EA; border:none; border-radius:8px; font-size:11px; cursor:pointer;">📅 가입일</button>
@@ -976,10 +985,11 @@ function renderActiveMemberList() {
     html += `<div style="font-size:12px; font-weight:700; color:#FF9500; margin:12px 0 6px;">🟡 휴면 (${dormants.length}명)</div>`;
     dormants.sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
       const safe = escapeHtml(p.name).replace(/'/g, "&#39;");
+      const schedule = scheduleLabelOf(p) || (p.dormantAt ? `휴면 시작: ${p.dormantAt}` : '휴면 처리됨');
       html += `<div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#FFF8EE; border-radius:12px; margin-bottom:6px;">
         <div>
           <div style="font-size:14px; font-weight:600;">${escapeHtml(displayName(p.name))}</div>
-          <div style="font-size:11px; color:#FF9500; margin-top:2px;">${p.dormantAt ? `휴면 시작: ${p.dormantAt}` : '휴면 처리됨'}</div>
+          <div style="font-size:11px; color:#FF9500; margin-top:2px;">${escapeHtml(schedule)}</div>
         </div>
         <div style="display:flex; gap:6px;">
           <button onclick="restoreActive('${safe}')" style="padding:5px 9px; background:var(--wimbledon-sage); color:#fff; border:none; border-radius:8px; font-size:11px; cursor:pointer;">✅ 복귀</button>
@@ -1054,37 +1064,101 @@ function _confirmJoinDate(name) {
   renderActiveMemberList();
 }
 
-function setDormant(name) {
+// ✅ v7.77: 휴면/복귀는 버튼 클릭일이 아니라 적용 시작월을 선택해 예약 처리한다.
+function _openMemberStatusMonthModal(name, mode) {
   const p = players.find(x => x.name === name);
   if (!p) return;
+  const existing = document.getElementById('memberStatusMonthModal');
+  if (existing) existing.remove();
+
+  const isDormant = mode === 'dormant';
+  const currentYM = (typeof _getCurrentYearMonth === 'function') ? _getCurrentYearMonth() : new Date().toISOString().slice(0, 7);
+  const nextYM = (typeof _addMonthsToYm === 'function') ? _addMonthsToYm(currentYM, 1) : currentYM;
+  const defaultYM = nextYM;
+  const title = isDormant ? '😴 휴면 적용월 선택' : (p.status === 'inactive' ? '🔄 재가입 적용월 선택' : '✅ 복귀 적용월 선택');
+  const verb = isDormant ? '휴면' : (p.status === 'inactive' ? '재가입' : '복귀');
+  const desc = isDormant
+    ? '선택한 달 1일부터 회비가 면제됩니다. 이번 달 회계는 그대로 유지하고, 다음 달 휴면도 오늘 미리 예약할 수 있어요.'
+    : '선택한 달 1일부터 정회원 회비 납부 대상이 됩니다. 다음 달 복귀 회원도 오늘 미리 예약하고 선납 체크할 수 있어요.';
+
+  const modal = document.createElement('div');
+  modal.id = 'memberStatusMonthModal';
+  modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.48); z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px;';
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div style="background:#fff; border-radius:22px; padding:22px; width:min(360px, 92vw); box-shadow:0 18px 50px rgba(0,0,0,0.22);" onclick="event.stopPropagation()">
+      <div style="font-size:17px; font-weight:800; margin-bottom:6px; color:var(--text-dark);">${title}</div>
+      <div style="font-size:13px; color:var(--text-gray); line-height:1.55; margin-bottom:14px;">
+        <b>${escapeHtml(displayName(name))}</b>님<br>${desc}
+      </div>
+      <label style="display:block; font-size:12px; color:var(--text-gray); margin-bottom:6px; font-weight:700;">${verb} 적용 시작월</label>
+      <input id="memberStatusMonthInput" type="month" value="${defaultYM}"
+        style="width:100%; box-sizing:border-box; padding:12px; border:2px solid #E5E5EA; border-radius:12px; font-size:16px; margin-bottom:10px;" />
+      <div style="display:flex; gap:8px; margin-bottom:16px;">
+        <button id="memberStatusThisMonth" style="flex:1; padding:9px; border:1px solid #E5E5EA; background:#fff; border-radius:10px; font-size:12px; cursor:pointer;">이번 달</button>
+        <button id="memberStatusNextMonth" style="flex:1; padding:9px; border:1px solid #E5E5EA; background:#fff; border-radius:10px; font-size:12px; cursor:pointer;">다음 달</button>
+      </div>
+      <div style="font-size:12px; color:#FF9500; background:#FFF8EE; padding:10px; border-radius:12px; margin-bottom:16px; line-height:1.45;">
+        예: 2026년 7월 선택 → 7월 1일부터 ${verb} 적용
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button id="memberStatusCancel" style="flex:1; padding:12px; border:2px solid #E5E5EA; background:#fff; border-radius:12px; font-size:14px; cursor:pointer;">취소</button>
+        <button id="memberStatusOk" style="flex:1; padding:12px; background:${isDormant ? '#FF9500' : 'var(--wimbledon-sage)'}; color:#fff; border:none; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer;">${verb} 예약/처리</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  const input = document.getElementById('memberStatusMonthInput');
+  document.getElementById('memberStatusThisMonth').onclick = () => { input.value = currentYM; };
+  document.getElementById('memberStatusNextMonth').onclick = () => { input.value = nextYM; };
+  document.getElementById('memberStatusCancel').onclick = () => { modal.remove(); };
+  document.getElementById('memberStatusOk').onclick = () => {
+    const startYm = input.value;
+    modal.remove();
+    _confirmMemberStatusMonth(name, mode, startYm);
+  };
+}
+
+function _confirmMemberStatusMonth(name, mode, startYm) {
+  const p = players.find(x => x.name === name);
+  if (!p) return;
+  if (!/^\d{4}-\d{2}$/.test(String(startYm || ''))) { gsAlert('적용 시작월을 선택해주세요.'); return; }
 
   const today = _getLocalTodayString();
-  const currentYM = today.slice(0, 7);
+  const currentYM = (typeof _getCurrentYearMonth === 'function') ? _getCurrentYearMonth() : today.slice(0, 7);
+  const startDate = (typeof _ymToFirstDate === 'function') ? _ymToFirstDate(startYm) : `${startYm}-01`;
+  const isDormant = mode === 'dormant';
+  const type = isDormant ? 'dormant' : 'active';
+  const label = isDormant ? '휴면' : (p.status === 'inactive' ? '재가입' : '복귀');
 
-  // ✅ v7.74: 휴면 처리 안내 모달 강화
-  // 회계 로직은 그대로 두고, 처리일이 속한 월부터 면제되는 운영 기준을 명확히 고지한다.
-  const msg = `${displayName(name)}님을 휴면 처리할까요?\n\n` +
-    `휴면은 처리일이 속한 월부터 회비가 면제됩니다.\n\n` +
-    `예)\n` +
-    `${currentYM}에 휴면 처리 → ${currentYM}부터 면제\n` +
-    `다음 달부터 면제하려면 다음 달 1일에 휴면 처리하세요.\n\n` +
-    `• 랭킹에서 제외됩니다\n` +
-    `• 회비가 자동 면제됩니다`;
+  if (typeof upsertMemberStatusHistory === 'function') upsertMemberStatusHistory(p, type, startYm);
+  else p.memberStatusHistory = [{ type, startYm }];
 
-  gsConfirm(msg, ok => {
-    if (!ok) return;
-    p.status = 'dormant';
-    p.dormantAt = today;
+  if (isDormant) {
+    p.dormantAt = startDate;
+    p.dormantRequestedAt = today;
     p.isFeeExempt = false;
-    pushDataOnly();
-    renderActiveMemberList();
-    renderFeeTable();
-    gsAlert(`${displayName(name)}님이 휴면 처리됐습니다.`);
-  }, {
-    title: '휴면 처리 안내',
-    okText: '이 월부터 휴면 처리',
-    cancelText: '취소'
-  });
+  } else {
+    p.restoreAt = startDate;
+    p.restoreRequestedAt = today;
+    p.isFeeExempt = false;
+  }
+
+  if (typeof getMemberCurrentStatus === 'function') p.status = getMemberCurrentStatus(p);
+  else p.status = (startYm <= currentYM) ? type : (p.status || 'active');
+
+  pushDataOnly();
+  renderMemberHistoryTabs(window._memberHistoryTab || 'active');
+  renderPartialFeePicker();
+  renderFeeTable();
+  syncFeeToFinance();
+
+  const actionText = startYm <= currentYM ? `${label} 처리` : `${label} 예약`;
+  gsAlert(`${displayName(name)}님 ${actionText} 완료\n적용 시작월: ${startYm}`);
+}
+
+function setDormant(name) {
+  _openMemberStatusMonthModal(name, 'dormant');
 }
 
 function setInactive(name) {
@@ -1103,19 +1177,7 @@ function setInactive(name) {
 }
 
 function restoreActive(name) {
-  const p = players.find(x => x.name === name);
-  if (!p) return;
-  const label = p.status === 'inactive' ? '재가입' : '복귀';
-  gsConfirm(`${displayName(name)}님을 ${label} 처리할까요?\n\n• 정회원으로 복귀됩니다\n• 회비 면제가 해제됩니다`, ok => {
-    if (!ok) return;
-    p.status = 'active';
-    p.isFeeExempt = false;
-    p.dormantAt = null;
-    pushDataOnly();
-    renderMemberHistoryTabs(window._memberHistoryTab || 'active');
-    renderFeeTable();
-    gsAlert(`${displayName(name)}님이 ${label} 처리됐습니다.`);
-  });
+  _openMemberStatusMonthModal(name, 'active');
 }
 
 function promoteToActive(name) {
