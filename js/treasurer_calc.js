@@ -231,10 +231,25 @@ function syncFeeToFinance() {
   }
 }
 
+function _getDormantMemberNamesForMonth(yearStr, monthStr) {
+  const monthLastDay = new Date(parseInt(yearStr), parseInt(monthStr), 0).toISOString().slice(0, 10);
+  return (players || [])
+    .filter(p =>
+      p &&
+      !p.isGuest &&
+      !p.isTreasurer &&
+      (!p.joinedAt || p.joinedAt <= monthLastDay) &&
+      getMemberStatusForMonth(p, yearStr, monthStr) === 'dormant'
+    )
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(p => displayName(p.name));
+}
+
 function _buildFeeSection(ym) {
   const [year, month] = ym.split('-');
   const key = `${year}-${month}`, yearlyKey = `${year}-yearly`;
   const monthLastDay = new Date(parseInt(year), parseInt(month), 0).toISOString().slice(0, 10);
+  const dormantNames = _getDormantMemberNamesForMonth(year, month);
   const members = players.filter(p =>
     _isFeeEligibleForMonth(p, year, month) &&
     (!p.joinedAt || p.joinedAt <= monthLastDay)
@@ -252,6 +267,7 @@ function _buildFeeSection(ym) {
   const rate = members.length > 0 ? Math.round(paidCount / members.length * 100) : 0;
   let txt = `💰 회비 납부 현황 (${parseInt(month)}월)\n━━━━━━━━━━\n`;
   txt += `납부율: ${paidCount}/${members.length}명 (${rate}%)\n`;
+  txt += `🟡 휴면 회원 (${dormantNames.length}명): ${dormantNames.join(', ') || '없음'}\n`;
   txt += `✅ 납부 (${paid.length}명): ${paid.join(', ') || '없음'}\n`;
   txt += `🟡 부분납 (${partial.length}명): ${partial.join(', ') || '없음'}\n`;
   txt += `❌ 미납 (${unpaid.length}명): ${unpaid.join(', ') || '없음'}`;
@@ -421,6 +437,7 @@ function _buildExchangeSection(ym) {
 window.makeOneTimePlayerObj = makeOneTimePlayerObj;
 window.syncFeeToFinance = syncFeeToFinance;
 window._isFeeEligibleForMonth = _isFeeEligibleForMonth;
+window._getDormantMemberNamesForMonth = _getDormantMemberNamesForMonth;
 window._buildFeeSection = _buildFeeSection;
 window._buildFinanceSection = _buildFinanceSection;
 window._buildAttendanceSection = _buildAttendanceSection;
