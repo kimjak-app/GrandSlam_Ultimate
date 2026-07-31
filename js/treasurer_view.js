@@ -1006,7 +1006,11 @@ function renderActiveMemberList() {
 function renderInactiveMemberList() {
   const el = document.getElementById('mh-list');
   if (!el) return;
-  const inactives = players.filter(p => !p.isGuest && p.status === 'inactive');
+  if (typeof applyMemberStatusSchedules === 'function') applyMemberStatusSchedules(false);
+  // ✅ v7.79: 탈퇴 목록도 저장된 p.status만 보지 않고 현재 적용월 기준 상태로 판단한다.
+  // 같은 달 탈퇴 취소/재가입 처리 후에도 정회원 목록으로 즉시 복귀하도록 맞춘다.
+  const currentStatusOf = (p) => (typeof getMemberCurrentStatus === 'function') ? getMemberCurrentStatus(p) : (p.status || 'active');
+  const inactives = players.filter(p => !p.isGuest && currentStatusOf(p) === 'inactive');
   if (inactives.length === 0) { el.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-gray);">탈퇴 회원이 없습니다.</div>'; return; }
 
   let html = `<div style="font-size:12px; font-weight:700; color:var(--roland-clay); margin:8px 0 6px;">🔴 탈퇴 회원 (${inactives.length}명)</div>`;
@@ -1129,7 +1133,8 @@ function _confirmMemberStatusMonth(name, mode, startYm) {
   const startDate = (typeof _ymToFirstDate === 'function') ? _ymToFirstDate(startYm) : `${startYm}-01`;
   const isDormant = mode === 'dormant';
   const type = isDormant ? 'dormant' : 'active';
-  const label = isDormant ? '휴면' : (p.status === 'inactive' ? '재가입' : '복귀');
+  const wasInactive = p.status === 'inactive' || ((typeof getMemberCurrentStatus === 'function') && getMemberCurrentStatus(p) === 'inactive');
+  const label = isDormant ? '휴면' : (wasInactive ? '재가입' : '복귀');
 
   if (typeof upsertMemberStatusHistory === 'function') upsertMemberStatusHistory(p, type, startYm);
   else p.memberStatusHistory = [{ type, startYm }];
@@ -1142,6 +1147,12 @@ function _confirmMemberStatusMonth(name, mode, startYm) {
     p.restoreAt = startDate;
     p.restoreRequestedAt = today;
     p.isFeeExempt = false;
+    // ✅ v7.79: 같은 달 탈퇴 취소/재가입은 leftAt 레거시 값이 active 복구를 덮지 않게 즉시 정리한다.
+    if (startYm <= currentYM) {
+      p.status = 'active';
+      p.leftAt = '';
+      p.leftReason = '';
+    }
   }
 
   if (typeof getMemberCurrentStatus === 'function') p.status = getMemberCurrentStatus(p);
@@ -1165,11 +1176,14 @@ function setInactive(name) {
   const p = players.find(x => x.name === name);
   if (!p) return;
   gsEditName('', reason => {
+    const today = new Date().toISOString().slice(0, 10);
     p.isGuest    = false; // 준회원도 탈퇴 시 정회원 계보로 편입해 탈퇴 목록에 노출
     p.status     = 'inactive';
-    p.leftAt     = new Date().toISOString().slice(0, 10);
+    p.leftAt     = today;
     p.leftReason = (reason || '').trim() || '';
     p.isFeeExempt = true;
+    // ✅ v7.79: 탈퇴도 월별 상태 이력에 명시해 탈퇴 취소/재가입과 같은 월 충돌을 안정적으로 처리한다.
+    if (typeof upsertMemberStatusHistory === 'function') upsertMemberStatusHistory(p, 'inactive', today.slice(0, 7));
     pushDataOnly();
     renderMemberHistoryTabs(window._memberHistoryTab || 'active');
     gsAlert(`${displayName(name)}님이 탈퇴 처리됐습니다.`);

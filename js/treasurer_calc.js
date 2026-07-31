@@ -108,7 +108,13 @@ function _normalizeMemberStatusHistory(p) {
     list.push({ type: 'active', startYm: String(p.restoreAt).slice(0, 7) });
   }
   if (p.status === 'inactive' && p.leftAt && /^\d{4}-\d{2}/.test(String(p.leftAt))) {
-    list.push({ type: 'inactive', startYm: String(p.leftAt).slice(0, 7) });
+    // ✅ v7.79 루트픽스:
+    // 탈퇴 취소/재가입을 같은 적용월로 처리한 경우, 기존 leftAt 레거시 값이
+    // active 이력을 다시 inactive로 덮어써 정회원 명단에 복귀하지 못하는 문제가 있었다.
+    // 같은 월에 명시적 active 이력이 있으면 leftAt은 과거 기록으로만 보고 상태 계산에 넣지 않는다.
+    const leftYm = String(p.leftAt).slice(0, 7);
+    const hasActiveSameMonth = list.some(r => r.startYm === leftYm && r.type === 'active');
+    if (!hasActiveSameMonth) list.push({ type: 'inactive', startYm: leftYm });
   }
 
   // 같은 적용월이 있으면 마지막 저장값을 채택한다.
